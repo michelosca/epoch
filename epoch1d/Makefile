@@ -379,7 +379,7 @@ endif
 -include $(PETSC_DIR)/lib/petsc/conf/variables
 -include $(PETSC_DIR)/lib/petsc/conf/rules
 CFLAGS = $(PETSC_CC_INCLUDES)
-FFLAGS += $(PETSC_FC_INCLUDES)
+FFLAGS += $(PETSC_FC_INCLUDES) -fopenmp
 LDFLAGS +=$(PETSC_LIB)
 
 # Rule to build the fortran files
