@@ -188,6 +188,9 @@ CONTAINS
         IF (psd_diag_cellx < 1) THEN
           errcode = c_err_bad_setup
           PRINT*, 'ERROR: PSD diagnostic cell location is incorrect'      
+        ELSE IF (psd_diag_cellx > nx) THEN
+          errcode = c_err_bad_setup
+          PRINT*, 'ERROR: PSD diagnostic cell location is incorrect'      
         ELSE IF (psd_diag_sampling_period < dt) THEN
           psd_diag_sampling_period = dt
           PRINT*,'WARNING: PSD diagnostic sampling period must be at least = dt' 
