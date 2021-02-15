@@ -34,7 +34,7 @@ MODULE deck_species_block
   INTEGER(KIND=MPI_OFFSET_KIND) :: offset = 0
   CHARACTER(LEN=string_length), DIMENSION(:), POINTER :: species_names
   INTEGER, DIMENSION(:), POINTER :: species_blocks
-  LOGICAL :: got_name
+  LOGICAL :: got_name, reinjection_flag
   INTEGER :: check_block = c_err_none
   LOGICAL, DIMENSION(:), ALLOCATABLE :: species_charge_set
   INTEGER :: n_secondary_species_in_block
@@ -75,6 +75,7 @@ CONTAINS
       ALLOCATE(dumpmask_array(4))
       ALLOCATE(bc_particle_array(2*c_ndims,4))
       release_species = ''
+      energy_correction_species = -1
     END IF
 
   END SUBROUTINE species_deck_initialise
@@ -292,6 +293,7 @@ CONTAINS
     IF (deck_state == c_ds_first) RETURN
     species_id = species_blocks(current_block)
     offset = 0
+    reinjection_flag = .FALSE.
 
   END SUBROUTINE species_block_start
 
@@ -645,6 +647,15 @@ CONTAINS
     END IF
 
     ! *************************************************************
+    ! This section sets properties for neutral collisions
+    ! *************************************************************
+    IF (str_cmp(element, 'energy_correction_target')) THEN
+      IF (as_logical_print(value, element, errcode)) THEN
+        energy_correction_species = species_id
+      END IF
+      RETURN
+    END IF
+    ! *************************************************************
     ! This section sets properties for zero_current particles
     ! *************************************************************
     IF (str_cmp(element, 'zero_current') .OR. str_cmp(element, 'tracer')) THEN
@@ -737,6 +748,37 @@ CONTAINS
         .OR. str_cmp(element, 'demote_number_density')) THEN
       species_list(species_id)%migrate%demotion_density = &
           as_real_print(value, element, errcode)
+      RETURN
+    END IF
+
+    ! *************************************************************
+    ! This section sets properties for recombination boundary
+    ! *************************************************************
+    IF (str_cmp(element, 'recombination_id')) THEN
+      species_list(species_id)%recombination_id = &
+          as_integer_print(value, element, errcode)
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 'recombination_species')) THEN
+      species_list(species_id)%recombination_id = &
+          as_integer(value, errcode)
+      RETURN
+    END IF
+
+    ! *************************************************************
+    ! This section sets properties for particle reinjection
+    ! *************************************************************
+    IF (str_cmp(element, 'reinjection')) THEN
+      reinjection_flag = .FALSE.
+      DO i = 1, n_species
+        IF (str_cmp(species_list(i)%name,value)) THEN
+          species_list(species_id)%reinjection_id = i
+          reinjection_flag = .TRUE.
+          EXIT
+        END IF
+      END DO
+      IF (.NOT.reinjection_flag) errcode = c_err_bad_setup
       RETURN
     END IF
 
@@ -1096,7 +1138,7 @@ CONTAINS
   FUNCTION species_block_check() RESULT(errcode)
 
     INTEGER :: errcode
-    INTEGER :: i, io, iu
+    INTEGER :: i, io, iu, ix
 
     errcode = check_block
 
@@ -1137,6 +1179,20 @@ CONTAINS
         END IF
         species_list(i)%count = INT(species_list(i)%npart_per_cell, i8)
       END IF
+      DO ix = 1, 2*c_ndims
+        IF (species_list(i)%bc_particle(ix) == c_bc_recombine) THEN
+          IF (species_list(i)%recombination_id == -1) THEN
+            DO iu = 1, nio_units ! Print to stdout and to file
+              io = io_units(iu)
+              WRITE(io,*) '*** ERROR ***'
+              WRITE(io,*) 'Recombination boundary has been set for "', &
+                  TRIM(species_list(i)%name), ' but not the new species"'
+              WRITE(io,*) 'Use "recombination_id" for this purpose.'
+            END DO
+            errcode = c_err_missing_elements
+          END IF
+        END IF
+      END DO
     END DO
 
 #ifdef BREMSSTRAHLUNG

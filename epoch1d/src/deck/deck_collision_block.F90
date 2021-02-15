@@ -17,6 +17,7 @@ MODULE deck_collision_block
 
   USE strings_advanced
   USE collisions
+  USE nc_setup
 
   IMPLICIT NONE
   SAVE
@@ -37,10 +38,14 @@ CONTAINS
       use_collisions = .FALSE.
       use_collisional_ionisation = .FALSE.
       got_nanbu = .FALSE.
+      cross_section_table_location = &
+        'src/physics_packages/TABLES/neutral_collisions'
+      resolve_sheath = .FALSE.
     ELSE
       ALLOCATE(coll_pairs_touched(1:n_species, 1:n_species))
       coll_pairs_touched = .FALSE.
-      CALL setup_collisions
+      CALL setup_collisions ! Only coulomb collisions
+      CALL neutral_collisions_start
     END IF
 
   END SUBROUTINE collision_deck_initialise
@@ -50,6 +55,7 @@ CONTAINS
   SUBROUTINE collision_deck_finalise
 
     INTEGER :: i, j
+    REAL(num) :: qi, qj
     LOGICAL, SAVE :: first = .TRUE.
 
     IF (deck_state == c_ds_first) RETURN
@@ -57,14 +63,15 @@ CONTAINS
 
     IF (use_collisions) THEN
       use_collisions = .FALSE.
-      DO j = 1, n_species
-        DO i = 1, n_species
+      DO j = 1, n_species_bg
+        DO i = 1, n_species_bg
           IF (coll_pairs(i,j) > 0) THEN
             use_collisions = .TRUE.
             EXIT
           END IF
         END DO
       END DO
+      IF (n_backgrounds > 0) use_collisions = .TRUE.
       use_particle_lists = use_particle_lists .OR. use_collisions
       need_random_state = .TRUE.
 
@@ -86,6 +93,24 @@ CONTAINS
           END IF
         END IF
       END IF
+    END IF
+
+    ! Determines whether it is a Coulomb collision or not
+    IF ( use_collisions ) THEN
+      DO i = 1, n_species
+        qi = ABS(species_list(i)%charge)
+        DO j = i, n_species
+          IF ( coll_pairs(i,j) <= 0._num ) CYCLE
+          qj = ABS(species_list(j)%charge)
+          IF ( qi > TINY(0._num) .AND. qj > TINY(0._num) ) THEN
+            coulomb_coll(i,j) =.TRUE.
+            coulomb_coll(j,i) =.TRUE.
+          ELSE
+            neutral_coll(i,j) = .TRUE.
+            neutral_coll(j,i) = .TRUE.
+          END IF
+        END DO ! jspecies
+      END DO ! ispecies
     END IF
 
   END SUBROUTINE collision_deck_finalise
@@ -155,6 +180,16 @@ CONTAINS
         use_collisional_ionisation = .FALSE.
 #endif
       END IF
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 'cross_section_table_location')) THEN
+      cross_section_table_location = TRIM(ADJUSTL(value))
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 'resolve_sheath')) THEN
+      resolve_sheath = as_logical_print(value, element, errcode)
       RETURN
     END IF
 

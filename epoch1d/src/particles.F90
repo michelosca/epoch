@@ -20,11 +20,14 @@ MODULE particles
 #ifdef PREFETCH
   USE prefetch
 #endif
-
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
   IMPLICIT NONE
 
 CONTAINS
 
+#ifndef ELECTROSTATIC
   SUBROUTINE push_particles
 
     ! 2nd order accurate particle pusher using parabolic weighting
@@ -511,7 +514,288 @@ CONTAINS
 
   END SUBROUTINE push_particles
 
+#else
+  SUBROUTINE es_push_particles
 
+    ! PARTICLE WEIGHTING
+    ! Contains the integer cell position of the particle in x, y, z
+    INTEGER :: cell_x1, cell_x2
+    ! Floating point version of the cell number
+    REAL(num) :: cell_x_r
+    ! Cell fraction between the particle position and the cell boundary
+    REAL(num) :: cell_frac_x
+
+    ! PARTICLE PROPERTIES
+    REAL(num) :: part_x
+    REAL(num) :: part_q, part_m, ipart_m, cmratio, cmratiodto2
+
+    ! Weighting factors
+    REAL(num), DIMENSION(sf_min-1:sf_max+1) :: gx
+    REAL(num), DIMENSION(sf_min-1:sf_max+1) :: hx
+
+    ! Fields at particle location
+    REAL(num) :: ex_part, ey_part, ez_part, bx_part, by_part, bz_part
+    REAL(num), DIMENSION(3) :: part_e, part_b
+    ! t and s variables (Birdsall and Langdon 1991)
+    REAL(num), DIMENSION(3) :: part_u, part_u_temp, t_rot, s_rot
+
+    ! Temporary variables
+    REAL(num) :: idx
+    REAL(num) :: dto2, dtfac, t_rot_mod2
+    INTEGER :: ispecies, dcellx
+    INTEGER(i8) :: ipart
+    LOGICAL :: is_neutral
+   ! Particle weighting multiplication factor
+#ifdef PARTICLE_SHAPE_BSPLINE3
+    REAL(num) :: cf2
+    REAL(num), PARAMETER :: fac = (1.0_num / 24.0_num)**c_ndims
+#elif  PARTICLE_SHAPE_TOPHAT
+    REAL(num), PARAMETER :: fac = 1.0_num
+#else
+    REAL(num) :: cf2
+    REAL(num), PARAMETER :: fac = (0.5_num)**c_ndims
+#endif
+
+    TYPE(particle), POINTER :: current
+#ifdef PREFETCH
+    TYPE(particle), POINTER :: next
+    CALL prefetch_particle(species_list(1)%attached_list%head)
+#endif
+
+    gx = 0.0_num
+
+    ! Unvarying multiplication factors
+    idx = 1.0_num / dx
+    dto2 = dt * 0.5_num
+    dtfac = dto2 * fac
+
+    DO ispecies = 1, n_species
+      IF (species_list(ispecies)%immobile) CYCLE
+      IF (species_list(ispecies)%species_type == c_species_id_photon) THEN
+#ifdef PHOTONS
+        IF (photon_dynamics) CALL push_photons(ispecies)
+#endif
+        CYCLE
+      END IF
+
+#ifndef PER_PARTICLE_CHARGE_MASS
+      part_q   = species_list(ispecies)%charge
+      part_m   = species_list(ispecies)%mass
+      ipart_m  =  1._num/part_m
+      cmratio = part_q*ipart_m
+      cmratiodto2 = cmratio*dtfac
+      IF ( ABS(part_q) < TINY(0._num) ) THEN
+        is_neutral = .TRUE.
+      ELSE
+        is_neutral = .FALSE.
+      END IF
+#endif
+
+      current => species_list(ispecies)%attached_list%head
+      DO ipart = 1, species_list(ispecies)%attached_list%count
+
+#ifdef PREFETCH
+        next => current%next
+        CALL prefetch_particle(next)
+#endif
+
+#ifdef PER_PARTICLE_CHARGE_MASS
+        part_q   = current%charge
+        part_m   = current%mass
+        ipart_m  =  1._num/part_m
+        cmratio = part_q*ipart_m
+        cmratiodto2 = cmratio*dtfac
+        IF ( ABS(part_q) < TINY(0._num) ) THEN
+          is_neutral = .TRUE.
+        ELSE
+          is_neutral = .FALSE.
+        END IF
+#endif
+
+        ! Copy the particle properties out for speed
+        part_x  = current%part_pos - x_grid_min_local
+        part_u(1) = current%part_p(1) * ipart_m
+
+        ! Lorentz force only affects charged particles
+        IF ( .NOT.is_neutral ) THEN
+
+          part_u(2) = current%part_p(2) * ipart_m
+          part_u(3) = current%part_p(3) * ipart_m
+
+          ! Grid cell position as a fraction.
+#ifdef PARTICLE_SHAPE_TOPHAT
+          cell_x_r = part_x * idx - 0.5_num
+#else
+          cell_x_r = part_x * idx
+#endif
+          ! Round cell position to nearest cell
+          cell_x1 = FLOOR(cell_x_r + 0.5_num)
+          ! Calculate fraction of cell between nearest cell boundary and particle
+          cell_frac_x = REAL(cell_x1, num) - cell_x_r
+          cell_x1 = cell_x1 + 1
+
+          ! Particle weight factors as described in the manual, page25
+          ! These weight grid properties onto particles
+          ! Also used to weight particle properties onto grid, used later
+          ! to calculate J
+          ! NOTE: These weights require an additional multiplication factor!
+#ifdef PARTICLE_SHAPE_BSPLINE3
+#include "bspline3/gx.inc"
+#elif  PARTICLE_SHAPE_TOPHAT
+#include "tophat/gx.inc"
+#else
+#include "triangle/gx.inc"
+#endif
+
+          ! Now redo shifted by half a cell due to grid stagger.
+          ! Use shifted version for ex in X, ey in Y, ez in Z
+          ! And in Y&Z for bx, X&Z for by, X&Y for bz
+          cell_x2 = FLOOR(cell_x_r)
+          cell_frac_x = REAL(cell_x2, num) - cell_x_r + 0.5_num
+          cell_x2 = cell_x2 + 1
+
+          dcellx = 0
+          ! NOTE: These weights require an additional multiplication factor!
+#ifdef PARTICLE_SHAPE_BSPLINE3
+#include "bspline3/hx_dcell.inc"
+#elif  PARTICLE_SHAPE_TOPHAT
+#include "tophat/hx_dcell.inc"
+#else
+#include "triangle/hx_dcell.inc"
+#endif
+
+          ! These are the electric and magnetic fields interpolated to the
+          ! particle position. They have been checked and are correct.
+          ! Actually checking this is messy.
+#ifdef PARTICLE_SHAPE_BSPLINE3
+#include "bspline3/e_part.inc"
+#include "bspline3/b_part.inc"
+#elif  PARTICLE_SHAPE_TOPHAT
+#include "tophat/e_part.inc"
+#include "tophat/b_part.inc"
+#else
+#include "triangle/e_part.inc"
+#include "triangle/b_part.inc"
+#endif
+          part_e(1) = ex_part
+          part_e(2) = ey_part
+          part_e(3) = ez_part
+          part_b(1) = bx_part
+          part_b(2) = by_part
+          part_b(3) = bz_part
+
+          ! VELOCITY
+          ! 1st HALF ACCELERATION: update particle velocity using weighted E-field
+          part_u = part_u + cmratiodto2 * part_e
+
+          ! Rotation operators
+          t_rot = part_b*cmratiodto2
+          t_rot_mod2 = t_rot(1)**2 + t_rot(2)**2 + t_rot(3)**2
+          s_rot = 2._num*t_rot/(1._num + t_rot_mod2 )
+          ! ROTATION:
+          part_u_temp = part_u + crossproduct(part_u, t_rot)
+          part_u = part_u + crossproduct(part_u_temp, s_rot)
+
+          ! 2nd HALF ACCELERATION: Rotation over, go to full timestep
+          part_u = part_u + cmratiodto2 * part_e
+
+
+          ! Update particle MOMENTUM
+          current%part_p   = part_u * part_m
+        END IF
+
+        ! POSITION
+        ! Move particles to end of time step at 2nd order accuracy
+        part_x = part_x + part_u(1) * dto2
+
+
+        ! particle has now finished move to end of timestep, so copy back
+        ! into particle array
+        current%part_pos = part_x + x_grid_min_local
+
+        current => current%next
+      END DO
+
+    END DO
+
+    CALL particle_bcs
+
+  END SUBROUTINE es_push_particles
+
+
+  SUBROUTINE es_half_push_x
+    !This subroutine does half push of particle's position before
+    !doing charge density weighting, and potential and E-field calculations
+
+    ! PARTICLE PROPERTIES
+    REAL(num) :: part_x, part_u, part_m, ipart_m
+
+    ! Temporary variables
+    REAL(num) :: dto2
+    INTEGER :: ispecies
+    INTEGER(i8) :: ipart
+
+    TYPE(particle), POINTER :: current
+#ifdef PREFETCH
+    TYPE(particle), POINTER :: next
+    CALL prefetch_particle(species_list(1)%attached_list%head)
+#endif
+
+    ! Unvarying multiplication factors
+    dto2 = dt * 0.5_num
+
+    DO ispecies = 1, n_species
+      IF (species_list(ispecies)%immobile) CYCLE
+      IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
+
+#ifndef PER_PARTICLE_CHARGE_MASS
+      part_m   = species_list(ispecies)%mass
+      ipart_m  =  1._num/part_m
+#endif
+
+      current => species_list(ispecies)%attached_list%head
+      DO ipart = 1, species_list(ispecies)%attached_list%count
+#ifdef PREFETCH
+        next => current%next
+        CALL prefetch_particle(next)
+#endif
+
+#ifdef PER_PARTICLE_CHARGE_MASS
+        part_m   = current%mass
+        ipart_m  =  1._num/part_m
+#endif
+        ! Copy the particle properties out for speed
+        part_x  = current%part_pos
+        part_u = current%part_p(1) * ipart_m
+
+        ! Move particles to half timestep position to first order
+        part_x = part_x + part_u * dto2
+
+        ! Update particle position and calculate E-field
+        current%part_pos = part_x
+
+        current => current%next
+      END DO
+
+    END DO
+
+    CALL particle_bcs
+
+  END SUBROUTINE es_half_push_x
+
+
+  FUNCTION crossproduct(a, b)
+    ! Computes: a x b = crossproduct
+    REAL(num), DIMENSION(3) :: crossproduct
+    REAL(num),  DIMENSION(3), INTENT(IN) :: a, b
+
+    crossproduct(1) = a(2) * b(3) - a(3) * b(2)
+    crossproduct(2) = a(3) * b(1) - a(1) * b(3)
+    crossproduct(3) = a(1) * b(2) - a(2) * b(1)
+
+  END FUNCTION crossproduct
+
+#endif
 
   ! Background distribution function used for delta-f calculations.
   ! Specialise to a drifting (tri)-Maxwellian to simplify and ensure

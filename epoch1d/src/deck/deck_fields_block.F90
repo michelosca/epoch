@@ -32,6 +32,14 @@ CONTAINS
 
   SUBROUTINE fields_deck_initialise
 
+#ifdef ELECTROSTATIC
+    IF (deck_state == c_ds_first) THEN
+      ALLOCATE(ey_profile, ez_profile)
+      ey_profile%use_profile_function = .FALSE.
+      ez_profile%use_profile_function = .FALSE.
+    END IF
+#endif
+
   END SUBROUTINE fields_deck_initialise
 
 
@@ -63,6 +71,7 @@ CONTAINS
     CHARACTER(LEN=string_length) :: filename
     INTEGER :: err
     LOGICAL :: got_file
+    REAL(num) :: dummy
 
     errcode = c_err_none
     IF (deck_state == c_ds_first) RETURN
@@ -86,6 +95,7 @@ CONTAINS
       RETURN
     END IF
 
+#ifndef ELECTROSTATIC
     IF (str_cmp(element, 'ey')) THEN
       IF (got_file) THEN
         CALL load_single_array_from_file(filename, ey, offset, errcode)
@@ -97,6 +107,19 @@ CONTAINS
       RETURN
     END IF
 
+#else
+    IF (str_cmp(element, 'ey')) THEN
+      ALLOCATE(ey_profile)
+      CALL initialise_stack(ey_profile%profile_function)
+      CALL tokenize(value, ey_profile%profile_function, errcode)
+      ey_profile%use_profile_function = .TRUE.
+      ! evaluate it once to check that it's a valid block
+      dummy = evaluate(ey_profile%profile_function, errcode)
+      RETURN
+    END IF
+#endif
+
+#ifndef ELECTROSTATIC
     IF (str_cmp(element, 'ez')) THEN
       IF (got_file) THEN
         CALL load_single_array_from_file(filename, ez, offset, errcode)
@@ -107,6 +130,18 @@ CONTAINS
       END IF
       RETURN
     END IF
+
+#else
+    IF (str_cmp(element, 'ez')) THEN
+      ALLOCATE(ez_profile)
+      CALL initialise_stack(ez_profile%profile_function)
+      CALL tokenize(value, ez_profile%profile_function, errcode)
+      ez_profile%use_profile_function = .TRUE.
+      ! evaluate it once to check that it's a valid block
+      dummy = evaluate(ez_profile%profile_function, errcode)
+      RETURN
+    END IF
+#endif
 
     IF (str_cmp(element, 'bx')) THEN
       IF (got_file) THEN

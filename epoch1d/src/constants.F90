@@ -69,6 +69,7 @@ MODULE constants
   INTEGER, PARAMETER :: c_bc_cpml_outflow = 13
   INTEGER, PARAMETER :: c_bc_mixed = 14
   INTEGER, PARAMETER :: c_bc_heat_bath = 15
+  INTEGER, PARAMETER :: c_bc_recombine = 16
 
   ! Boundary location codes
   INTEGER, PARAMETER :: c_bd_x_min = 1
@@ -245,6 +246,7 @@ MODULE constants
   INTEGER(i8), PARAMETER :: c_def_use_isatty = 2**24
   INTEGER(i8), PARAMETER :: c_def_use_mpi3 = 2**25
   INTEGER(i8), PARAMETER :: c_def_bremsstrahlung = 2**26
+  INTEGER(i8), PARAMETER :: c_def_electrostatic = 2**27
 
   ! Stagger types
   INTEGER, PARAMETER :: c_stagger_ex = c_stagger_face_x
@@ -258,6 +260,7 @@ MODULE constants
   INTEGER, PARAMETER :: c_stagger_jx = c_stagger_ex
   INTEGER, PARAMETER :: c_stagger_jy = c_stagger_ey
   INTEGER, PARAMETER :: c_stagger_jz = c_stagger_ez
+  INTEGER, PARAMETER :: c_stagger_electrostatic = c_stagger_face_x
 
   ! Length of a standard string
   INTEGER, PARAMETER :: string_length = 256
@@ -268,6 +271,11 @@ MODULE constants
   INTEGER, PARAMETER :: idkind = i8
 #endif
 
+  ! Neutral collisions types
+  INTEGER, PARAMETER :: c_nc_elastic = 0
+  INTEGER, PARAMETER :: c_nc_excitation = 1
+  INTEGER, PARAMETER :: c_nc_ionisation = 2
+  INTEGER, PARAMETER :: c_nc_charge_exchange = 3
   !----------------------------------------------------------------------------
   ! Parser data
   !----------------------------------------------------------------------------
@@ -566,7 +574,10 @@ MODULE constants
   INTEGER, PARAMETER :: c_dump_part_work_y_total = 69
   INTEGER, PARAMETER :: c_dump_part_work_z_total = 70
   INTEGER, PARAMETER :: c_dump_part_opdepth_brem = 71
-  INTEGER, PARAMETER :: num_vars_to_dump         = 71
+  INTEGER, PARAMETER :: c_dump_es_potential      = 72
+  INTEGER, PARAMETER :: c_dump_es_current        = 73
+  INTEGER, PARAMETER :: c_dump_neutral_collision = 74
+  INTEGER, PARAMETER :: num_vars_to_dump         = 74
 
   INTEGER, PARAMETER :: c_subset_random     = 1
   INTEGER, PARAMETER :: c_subset_gamma_min  = 2
@@ -593,7 +604,7 @@ MODULE constants
   INTEGER, PARAMETER :: c_subset_id_max     = 23
   INTEGER, PARAMETER :: c_subset_max        = 23
 
-  INTEGER, PARAMETER :: c_max_string_length = 64
+  INTEGER, PARAMETER :: c_max_string_length = 68
   INTEGER, PARAMETER :: c_max_prefix = 16
   ! Maximum path length on Linux machines
   INTEGER, PARAMETER :: c_max_path_length = 4096 + c_max_prefix

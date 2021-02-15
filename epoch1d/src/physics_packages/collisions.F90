@@ -28,7 +28,7 @@ MODULE collisions
 
   PRIVATE
   PUBLIC :: particle_collisions, setup_collisions, collisional_ionisation
-  PUBLIC :: deallocate_collisions
+  PUBLIC :: deallocate_collisions, shuffle_particle_list_random
 
   ABSTRACT INTERFACE
 
@@ -2120,7 +2120,7 @@ CONTAINS
 
   SUBROUTINE setup_collisions
 
-    ALLOCATE(coll_pairs(n_species, n_species))
+    ALLOCATE(coll_pairs(n_species_bg, n_species_bg))
     coll_pairs = 1.0_num
     coll_sort_array_size = 1
     ALLOCATE(coll_sort_array(coll_sort_array_size))

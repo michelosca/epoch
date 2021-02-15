@@ -16,6 +16,9 @@
 MODULE mpi_routines
 
   USE helper
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
 
   IMPLICIT NONE
 
@@ -35,6 +38,9 @@ CONTAINS
     done_mpi_initialise = .FALSE.
 #ifdef MPI_DEBUG
     CALL mpi_set_error_handler
+#endif
+#ifdef ELECTROSTATIC
+    CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
 #endif
 
   END SUBROUTINE mpi_minimal_init
@@ -96,6 +102,10 @@ CONTAINS
       CALL MPI_GROUP_RANGE_EXCL(oldgroup, 1, ranges, newgroup, errcode)
       CALL MPI_COMM_CREATE(old_comm, newgroup, comm, errcode)
       IF (comm == MPI_COMM_NULL) THEN
+#ifdef ELECTROSTATIC
+        CALL destroy_petsc
+        CALL PetscFinalize(perr)
+#endif
         CALL MPI_FINALIZE(errcode)
         STOP
       END IF
@@ -248,6 +258,13 @@ CONTAINS
     ALLOCATE(jx(1-jng:nx+jng))
     ALLOCATE(jy(1-jng:nx+jng))
     ALLOCATE(jz(1-jng:nx+jng))
+#ifdef ELECTROSTATIC
+    ALLOCATE(es_current(1-ng:nx+ng))
+    ALLOCATE(es_potential(1-ng:nx+ng))
+    CALL setup_petsc_vector(es_potential_vec, nx, nx_global)
+    CALL setup_petsc_matrix(transform_mtrx, nx, nx_global)
+    CALL setup_petsc_ksp(transform_mtrx)
+#endif
 
     ! Setup the particle lists
     IF (n_species > 0) &

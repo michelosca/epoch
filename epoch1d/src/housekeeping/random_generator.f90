@@ -19,6 +19,7 @@ MODULE random_generator
   PRIVATE
   PUBLIC :: random, random_init, get_random_state, set_random_state
   PUBLIC :: random_box_muller, random_state_type, random_flush_cache
+  PUBLIC :: random_unit_vector
 
   INTEGER, PARAMETER :: init_x = 123456789
   INTEGER, PARAMETER :: init_y = 362436069
@@ -213,5 +214,26 @@ CONTAINS
     END IF
 
   END SUBROUTINE random_flush_cache
+
+
+
+  FUNCTION random_unit_vector(fact)
+
+    DOUBLE PRECISION , INTENT(IN), OPTIONAL :: fact
+    DOUBLE PRECISION , DIMENSION(3) :: random_unit_vector
+    DOUBLE PRECISION :: random_psi, random_phi
+    DOUBLE PRECISION, PARAMETER :: pi = 3.141592653589793238462643383279503D0
+
+    IF ( PRESENT(fact) ) THEN
+      random_phi = fact*pi*random()
+    ELSE
+      random_phi = 2.D0*pi*random()
+    END IF
+    random_psi = pi*random()
+    random_unit_vector(1) = sin(random_psi)*cos(random_phi)
+    random_unit_vector(2) = sin(random_psi)*sin(random_phi)
+    random_unit_vector(3) = cos(random_psi)
+
+  END FUNCTION random_unit_vector
 
 END MODULE random_generator

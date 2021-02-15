@@ -31,6 +31,7 @@ MODULE deck
   USE deck_subset_block
   USE deck_collision_block
   USE deck_part_from_file_block
+  USE deck_psd_diagnostics_block
 #ifdef PHOTONS
   USE photons
 #endif
@@ -47,6 +48,12 @@ MODULE deck
 #ifndef NO_PARTICLE_PROBES
   USE deck_particle_probe_block
 #endif
+  ! Electrostatic solver block
+#ifdef ELECTROSTATIC
+  USE deck_electrostatic_block
+#endif
+  ! Neutral background block
+  USE deck_background_block
   ! Custom blocks
   USE custom_deck
   USE utilities
@@ -106,6 +113,11 @@ CONTAINS
     CALL species_deck_initialise
     CALL window_deck_initialise
     CALL part_from_file_deck_initialise
+#ifdef ELECTROSTATIC
+    CALL electrostatic_deck_initialise
+#endif
+    CALL background_deck_initialise
+    CALL psd_diagnostics_deck_initialise
 
   END SUBROUTINE deck_initialise
 
@@ -133,11 +145,15 @@ CONTAINS
 #endif
     CALL qed_deck_finalise
     CALL bremsstrahlung_deck_finalise
+    CALL background_deck_finalise
     CALL species_deck_finalise
     CALL part_from_file_deck_finalise ! Must be called after
                                       ! species_deck_finalise
     CALL window_deck_finalise
-
+#ifdef ELECTROSTATIC
+    CALL electrostatic_deck_finalise
+#endif
+    CALL psd_diagnostics_deck_finalise
   END SUBROUTINE deck_finalise
 
 
@@ -180,12 +196,20 @@ CONTAINS
       CALL qed_block_start
     ELSE IF (str_cmp(block_name, 'bremsstrahlung')) THEN
       CALL bremsstrahlung_block_start
+    ELSE IF (str_cmp(block_name, 'background')) THEN
+      CALL background_block_start
     ELSE IF (str_cmp(block_name, 'species')) THEN
       CALL species_block_start
     ELSE IF (str_cmp(block_name, 'window')) THEN
       CALL window_block_start
     ELSE IF (str_cmp(block_name, 'particles_from_file')) THEN
       CALL part_from_file_block_start
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
+      CALL electrostatic_block_start
+#endif
+    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
+      CALL psd_diagnostics_block_start
     END IF
 
   END SUBROUTINE start_block
@@ -231,12 +255,20 @@ CONTAINS
       CALL qed_block_end
     ELSE IF (str_cmp(block_name, 'bremsstrahlung')) THEN
       CALL bremsstrahlung_block_end
+    ELSE IF (str_cmp(block_name, 'background')) THEN
+      CALL background_block_end
     ELSE IF (str_cmp(block_name, 'species')) THEN
       CALL species_block_end
     ELSE IF (str_cmp(block_name, 'window')) THEN
       CALL window_block_end
     ELSE IF (str_cmp(block_name, 'particles_from_file')) THEN
       CALL part_from_file_block_end
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
+      CALL electrostatic_block_end
+#endif
+    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
+      CALL psd_diagnostics_block_end
     END IF
 
   END SUBROUTINE end_block
@@ -318,6 +350,10 @@ CONTAINS
       handle_block = bremsstrahlung_block_handle_element(block_element, &
           block_value)
       RETURN
+    ELSE IF (str_cmp(block_name, 'background')) THEN
+      handle_block = background_block_handle_element(block_element, &
+          block_value)
+      RETURN
     ELSE IF (str_cmp(block_name, 'species')) THEN
       handle_block = species_block_handle_element(block_element, block_value)
       RETURN
@@ -327,6 +363,16 @@ CONTAINS
     ELSE IF (str_cmp(block_name, 'particles_from_file')) THEN
       handle_block = &
           part_from_file_block_handle_element(block_element, block_value)
+      RETURN
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
+      handle_block = &
+          electrostatic_block_handle_element(block_element, block_value)
+      RETURN
+#endif
+    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
+      handle_block = &
+          psd_diagnostics_block_handle_element(block_element, block_value)
       RETURN
     END IF
 
@@ -382,6 +428,16 @@ CONTAINS
     errcode_deck = IOR(errcode_deck, species_block_check())
     errcode_deck = IOR(errcode_deck, window_block_check())
     errcode_deck = IOR(errcode_deck, part_from_file_block_check())
+
+#ifdef ELECTROSTATIC
+    errcode_deck = IOR(errcode_deck, electrostatic_block_check())
+#endif
+    errcode_deck = IOR(errcode_deck, psd_diagnostics_block_check())
+
+    ! Collision with neutral background
+    IF (n_species_bg > n_species) THEN
+      errcode_deck = IOR(errcode_deck, background_block_check())
+    END IF
 
     errcode_deck = IOR(errcode_deck, custom_blocks_check())
 

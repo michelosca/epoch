@@ -119,6 +119,7 @@ CONTAINS
     NULLIFY(partlist%head)
     NULLIFY(partlist%tail)
     partlist%count = 0
+    partlist%coll_counter = 0
     partlist%id_update = 0
     partlist%safe = .TRUE.
     IF (PRESENT(holds_copies)) THEN
