@@ -103,7 +103,7 @@ begin:collisions
   #collide = ions neutrals 1
   use_nanbu = T
   resolve_sheath = T
-  #cross_section_table_location = /scratch/moe505/electrostatic-solver/epoch1d/unsteady_forcing/Xe
+  #cross_section_table_location = 
 end:collisions
 
 
