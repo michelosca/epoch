@@ -28,6 +28,7 @@ MODULE electrostatic
   Mat, SAVE :: transform_mtrx
   PetscErrorCode, SAVE :: perr
   KSP, SAVE :: ksp
+  MatNullSpace, SAVE :: matnull
 
 
 CONTAINS
@@ -246,25 +247,37 @@ CONTAINS
 
   SUBROUTINE poisson_solver(data_array, nx_end)
 
+    ! This subroutine solves Poisson's equation
+    ! Input: charge_density array (data_array) and the length of the data array
+    ! Output: electric potential array (data_array)
     INTEGER, INTENT(IN) :: nx_end
     REAL(num), DIMENSION(1:nx_end), INTENT(INOUT) :: data_array
     REAL(num) :: charg0
-    PetscScalar, DIMENSION(1:nx_end) :: petsc_arr
+    INTEGER :: i
+    REAL(num), DIMENSION(:), POINTER :: vec_pointer
 
-    ! Set values in Petsc vector 'es_potential_vec'
+    ! Get array ready for solver
     charg0 = -dx*dx/epsilon0
     data_array = data_array*charg0
     data_array(1) = data_array(1) - set_potential_x_min()
     data_array(nx_end) = data_array(nx_end) - set_potential_x_max()
-    petsc_arr = data_array
-    CALL VecPlaceArray(es_potential_vec, petsc_arr, perr)
+
+    ! Get charge density data (data_array) into the Petsc vector
+    CALL VecGetArrayF90(es_potential_vec, vec_pointer, perr)
+    DO i = 1, nx_end
+      vec_pointer(i) = data_array(i)
+    END DO
+    CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
 
-    ! Pass 'es_potential_vec' values to 'petsc_arr'
-    CALL VecResetArray(es_potential_vec, perr)
-    data_array = petsc_arr
+    ! Pass electric potential data (es_potential_vec) to data_array
+    CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
+    DO i = 1, nx_end
+      data_array(i) = vec_pointer(i)
+    END DO
+    CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
 
   END SUBROUTINE poisson_solver
 
@@ -274,6 +287,7 @@ CONTAINS
     
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
     Vec, INTENT(OUT) :: vector
+    PetscScalar :: zero
     PetscInt :: nx_local, nx_glob
       
     ! Birdsall and Langdon, Appendix D:
@@ -285,8 +299,11 @@ CONTAINS
     nx_glob = ncells_global - 1 ! don't count for last global cell
       
     CALL VecCreateMPI(comm, nx_local, nx_glob, vector, perr)
-    CHKERRQ(perr)
     
+    ! Set initial vector values to zero
+    zero = 0._num
+    CALL VecSet(vector, zero, perr)
+
   END SUBROUTINE setup_petsc_vector
 
 
@@ -296,9 +313,9 @@ CONTAINS
     ! ncells_local: number of cells in the processor
     ! ncells_global: number of all cells (all processors)
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
-    Mat, INTENT(OUT) :: matrix
+    Mat, INTENT(INOUT) :: matrix
     INTEGER :: n_first, n_last
-    PetscInt :: nx_local, nx_glob
+    PetscInt :: nx_local, nx_glob!, zero
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
@@ -323,13 +340,10 @@ CONTAINS
     !             o_nnz-array -> same as o_nz but specifying each row
     CALL MatCreateAIJ(comm, nx_local, nx_local, nx_glob, nx_glob, 3, &
             PETSC_NULL_INTEGER, 1, PETSC_NULL_INTEGER, matrix, perr)
-    CHKERRQ(perr)
 
     ! Set matrix size
     CALL MatSetFromOptions(matrix, perr) 
-    CHKERRQ(perr)
     CALL MatSetUp(matrix, perr)
-    CHKERRQ(perr)
 
     ! Petsc matrix indexes (global). First index in Petsc is zero, hence
     ! Shift cell indexing so that it starts at 0
@@ -352,7 +366,6 @@ CONTAINS
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(matrix, 1, row, 2, col(1:2), values(2:3), &
               INSERT_VALUES, perr)
-      CHKERRQ(perr)
       ! Move to next row to be set
       n_first = n_first + 1
     END IF
@@ -367,7 +380,6 @@ CONTAINS
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(matrix, 1, row, 2, col(1:2), values(1:2), &
               INSERT_VALUES, perr)
-      CHKERRQ(perr)
       ! Move to last row to be set
       n_last = n_last - 1
     END IF
@@ -378,13 +390,18 @@ CONTAINS
       col(2) = row
       col(3) = row+1
       CALL MatSetValues(matrix, 1, row, 3, col, values, INSERT_VALUES, perr)
-      CHKERRQ(perr)
     END DO
 
     CALL MatAssemblyBegin(matrix, MAT_FINAL_ASSEMBLY, perr)
-    CHKERRQ(perr)
     CALL MatAssemblyEnd(matrix, MAT_FINAL_ASSEMBLY, perr)
-    CHKERRQ(perr)
+
+    ! Generate nullspace required for GAMG preconditioner
+    !zero = 0
+    !CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
+    !  PETSC_NULL_VEC, matnull, perr)
+    !CALL MatSetNearNullSpace(matrix, matnull, perr)
+
+    CALL MatSetOption(matrix, MAT_SYMMETRIC, PETSC_TRUE, perr)
 
   END SUBROUTINE setup_petsc_matrix
 
@@ -394,30 +411,18 @@ CONTAINS
 
     ! The actual KSP setup happens through the file
     ! 'housekeeping/petsc_runtime_options.opt'
-    Mat, INTENT(IN) :: matrix
-    PC :: pc
+    Mat, INTENT(INOUT) :: matrix
 
     ! Create linear solver context
     CALL KSPCreate(comm, ksp, perr)
-    CHKERRQ(perr)
 
     ! Set operators
     CALL KSPSetOperators(ksp, matrix, matrix, perr)
-    CHKERRQ(perr)
-
-    ! Optional, but required required if customization is required
-    CALL KSPSetUp(ksp, perr)
-    CHKERRQ(perr)
-
-    ! Pre conditioner
-    CALL KSPGetPC(ksp, pc, perr)  ! Get preconditioner for problem
-    CHKERRQ(perr)
 
     ! Setup solver
     CALL KSPSetFromOptions(ksp,perr)
-    CHKERRQ(perr)
     CALL KSPSetUp(ksp, perr)
-    CHKERRQ(perr)
+
 
   END SUBROUTINE setup_petsc_ksp
 
@@ -426,11 +431,9 @@ CONTAINS
   SUBROUTINE destroy_petsc
 
     CALL VecDestroy(es_potential_vec, perr)
-    CHKERRQ(perr)
     CALL MatDestroy(transform_mtrx, perr)
-    CHKERRQ(perr)
+    CALL MatNullSpaceDestroy(matnull, perr)
     CALL KSPDestroy(ksp, perr)
-    CHKERRQ(perr)
 
   END SUBROUTINE destroy_petsc
 

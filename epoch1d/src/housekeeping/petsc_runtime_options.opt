@@ -8,5 +8,5 @@
 #-ksp_max_it <its>   #is the max. number of iterations. Default: 1.e4
 #-pc_type gamg
 #-pc_gamg_type agg
-#-pc_gamg_agg_nsmooths 1
+#-pc_gamg_agg_nsmooths 1 
 #-gamg_est_ksp_type cg
