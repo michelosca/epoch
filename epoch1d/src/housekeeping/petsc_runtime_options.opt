@@ -9,4 +9,3 @@
 -pc_type gamg
 -pc_gamg_type agg
 -pc_gamg_agg_nsmooths 1
--gamg_est_ksp_type cg
