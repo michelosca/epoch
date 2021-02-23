@@ -315,7 +315,7 @@ CONTAINS
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
     Mat, INTENT(INOUT) :: matrix
     INTEGER :: n_first, n_last
-    PetscInt :: nx_local, nx_glob!, zero
+    PetscInt :: nx_local, nx_glob, zero
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
@@ -396,10 +396,10 @@ CONTAINS
     CALL MatAssemblyEnd(matrix, MAT_FINAL_ASSEMBLY, perr)
 
     ! Generate nullspace required for GAMG preconditioner
-    !zero = 0
-    !CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
-    !  PETSC_NULL_VEC, matnull, perr)
-    !CALL MatSetNearNullSpace(matrix, matnull, perr)
+    zero = 0
+    CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
+      PETSC_NULL_VEC, matnull, perr)
+    CALL MatSetNearNullSpace(matrix, matnull, perr)
 
     CALL MatSetOption(matrix, MAT_SYMMETRIC, PETSC_TRUE, perr)
 

@@ -40,6 +40,7 @@ CONTAINS
     CALL mpi_set_error_handler
 #endif
 #ifdef ELECTROSTATIC
+    PETSC_COMM_WORLD = comm
     CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
 #endif
 
