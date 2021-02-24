@@ -43,10 +43,6 @@ CONTAINS
     CALL close_files
     CALL close_psd_diagnostics_files
     IF (done_mpi_initialise) CALL deallocate_memory
-#ifdef ELECTROSTATIC
-    CALL destroy_petsc
-    CALL PetscFinalize(perr)
-#endif
     CALL MPI_FINALIZE(errcode)
     STOP
 
@@ -66,9 +62,6 @@ CONTAINS
     DEALLOCATE(x_grid_mins, x_grid_maxs, cell_x_min, cell_x_max)
 
     DEALLOCATE(total_particle_energy_species)
-#ifdef ELECTROSTATIC
-    CALL destroy_petsc
-#endif
     CALL deallocate_probes
 
     DO i = 1, n_species
@@ -135,6 +128,8 @@ CONTAINS
 #ifdef ELECTROSTATIC
     CALL deallocate_potentials
     CALL deallocate_efield_profiles
+    CALL destroy_petsc
+    CALL PetscFinalize(perr)
 #endif
     CALL MPI_COMM_FREE(comm, errcode)
 
