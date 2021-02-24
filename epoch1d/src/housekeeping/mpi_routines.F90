@@ -176,8 +176,7 @@ CONTAINS
     END DO
 
 #ifdef ELECTROSTATIC
-    PETSC_COMM_WORLD = comm
-    CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
+    CALL initialize_petsc(comm)
 #endif
 
   END SUBROUTINE setup_communicator
@@ -259,9 +258,7 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ALLOCATE(es_current(1-ng:nx+ng))
     ALLOCATE(es_potential(1-ng:nx+ng))
-    CALL setup_petsc_vector(es_potential_vec, nx, nx_global)
-    CALL setup_petsc_matrix(transform_mtrx, nx, nx_global)
-    CALL setup_petsc_ksp(transform_mtrx)
+    CALL setup_petsc_variables(nx, nx_global)
 #endif
 
     ! Setup the particle lists

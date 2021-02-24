@@ -449,9 +449,7 @@ CONTAINS
     ALLOCATE(es_potential(1-ng:nx_new+ng))
     es_potential = temp
     CALL destroy_petsc
-    CALL setup_petsc_vector(es_potential_vec, nx_new, nx_global)
-    CALL setup_petsc_matrix(transform_mtrx, nx_new, nx_global)
-    CALL setup_petsc_ksp(transform_mtrx)
+    CALL setup_petsc_variables(nx_new, nx_global)
 #endif
 
     IF (pre_loading) THEN

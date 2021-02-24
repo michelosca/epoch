@@ -24,6 +24,14 @@ MODULE electrostatic
   
   IMPLICIT NONE
 
+  PRIVATE
+
+  PUBLIC :: es_update_e_field, destroy_petsc, setup_electrostatic
+  PUBLIC :: init_potential, es_wall_current_diagnostic
+  PUBLIC :: attach_potential, setup_petsc_variables
+  PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
+  PUBLIC :: initialize_petsc, finalize_electrostatic_solver
+
   Vec, SAVE :: es_potential_vec
   Mat, SAVE :: transform_mtrx
   PetscErrorCode, SAVE :: perr
@@ -271,6 +279,11 @@ CONTAINS
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
+    CALL CHKERRQ(perr)
+    IF (perr .ne. 0) THEN
+      print*, 'Error in KSPSolve: ', perr
+      RETURN
+    END IF
 
     ! Pass electric potential data (es_potential_vec) to data_array
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
@@ -338,10 +351,8 @@ CONTAINS
     !             o_nz: number of non-zeros per row in the OFF-DIAGONAL portion
     !                   of local submatrix
     !             o_nnz-array -> same as o_nz but specifying each row
-    CALL MatCreateAIJ(comm, nx_local, nx_local, nx_glob, nx_glob, 3, &
-            PETSC_NULL_INTEGER, 1, PETSC_NULL_INTEGER, matrix, perr)
-
-    ! Set matrix size
+    CALL MatCreate(comm, matrix, perr)
+    CALL MatSetSizes(matrix, nx_local, nx_local, nx_glob, nx_glob, perr)
     CALL MatSetFromOptions(matrix, perr) 
     CALL MatSetUp(matrix, perr)
 
@@ -754,5 +765,37 @@ CONTAINS
     END DO
 
   END SUBROUTINE efield_update_profile
+
+
+  SUBROUTINE setup_petsc_variables(ncells_local, ncells_global)
+
+    INTEGER, INTENT(IN) :: ncells_local, ncells_global
+
+    CALL setup_petsc_vector(es_potential_vec, ncells_local, ncells_global)
+    CALL setup_petsc_matrix(transform_mtrx, ncells_local, ncells_global)
+    CALL setup_petsc_ksp(transform_mtrx)
+
+  END SUBROUTINE setup_petsc_variables
+
+
+
+  SUBROUTINE initialize_petsc(communicator)
+
+    INTEGER, INTENT(IN) :: communicator
+
+    PETSC_COMM_WORLD = communicator
+    CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
+
+  END SUBROUTINE initialize_petsc
+
+
+  SUBROUTINE finalize_electrostatic_solver
+
+    CALL deallocate_potentials
+    CALL deallocate_efield_profiles
+    CALL destroy_petsc
+    CALL PetscFinalize(perr)
+
+  END SUBROUTINE finalize_electrostatic_solver
 
 END MODULE electrostatic
