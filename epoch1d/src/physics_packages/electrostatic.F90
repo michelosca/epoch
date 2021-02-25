@@ -278,12 +278,9 @@ CONTAINS
     CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
+    IF (RANK==0) PRINT*, comm, PETSC_COMM_WORLD, MPI_COMM_WORLD
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
-    CALL CHKERRQ(perr)
-    IF (perr .ne. 0) THEN
-      print*, 'Error in KSPSolve: ', perr
-      RETURN
-    END IF
+    CALL chkerrq_petsc(perr, 'KSPSolve')
 
     ! Pass electric potential data (es_potential_vec) to data_array
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
@@ -294,6 +291,20 @@ CONTAINS
 
   END SUBROUTINE poisson_solver
 
+
+  SUBROUTINE chkerrq_petsc(errcode, funct_name)
+
+    PetscErrorCode, INTENT(IN) :: errcode
+    CHARACTER(LEN=*), INTENT(IN) :: funct_name
+    
+    IF (perr .ne. 0) THEN
+      PRINT*, 'ERROR in ', TRIM(ADJUSTL(funct_name))
+      PRINT*, 'Error code ', perr 
+      PRINT*, 'Rank ', rank 
+      RETURN
+    END IF
+
+  END SUBROUTINE chkerrq_petsc
 
 
   SUBROUTINE setup_petsc_vector(vector, ncells_local, ncells_global)
