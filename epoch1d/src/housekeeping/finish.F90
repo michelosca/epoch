@@ -126,10 +126,7 @@ CONTAINS
     CALL deallocate_eval_stack
     CALL deallocate_injectors
 #ifdef ELECTROSTATIC
-    CALL deallocate_potentials
-    CALL deallocate_efield_profiles
-    CALL destroy_petsc
-    CALL PetscFinalize(perr)
+    CALL finalize_electrostatic_solver
 #endif
     CALL MPI_COMM_FREE(comm, errcode)
 
