@@ -9,8 +9,38 @@
 
 #ifdef PARTICLE_SHAPE_BSPLINE3
 #include "bspline3/gxfac.inc"
+#ifdef ELECTROSTATIC
+        IF (x_min_boundary_open .AND. cell_x == 1) THEN
+          gx(0) = gx(0) + gx(-1) + gx(-2)
+          gx(-1) = 0._num
+          gx(-2) = 0._num
+        END IF
+        IF (x_max_boundary_open .AND. cell_x == nx) THEN
+          gx(0) = gx(0) + gx(1) + gx(2)
+          gx(1) = 0._num
+          gx(2) = 0._num
+        END IF
+#endif
+
 #elif  PARTICLE_SHAPE_TOPHAT
 #include "tophat/gxfac.inc"
+#ifdef ELECTROSTATIC
+        IF (x_max_boundary_open .AND. cell_x == nx) THEN
+          gx(0) = gx(0) + gx(1)
+          gx(1) = 0._num
+        END IF
+#endif
+
 #else
 #include "triangle/gxfac.inc"
+#ifdef ELECTROSTATIC
+        IF (x_min_boundary_open .AND. cell_x == 1) THEN
+          gx(0) = gx(0) + gx(-1)
+          gx(-1) = 0._num
+        END IF
+        IF (x_max_boundary_open .AND. cell_x == nx) THEN
+          gx(0) = gx(0) + gx(1)
+          gx(1) = 0._num
+        END IF
+#endif
 #endif

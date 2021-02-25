@@ -1,0 +1,11 @@
+#-ksp_view
+#-start_in_debugger
+-ksp_type cg
+#-ksp_rtol <rtol>    #is the decrease of the residual norm relative to the 
+                     #norm of the right hand side. Default: 1.e-5
+#-ksp_atol <atol>    #is the absolute size of the residual norm. Default: 1.e-50
+#-ksp_divtol <dtol>  #is the relative increase in the residual. Default: 1.e5
+#-ksp_max_it <its>   #is the max. number of iterations. Default: 1.e4
+-pc_type gamg
+-pc_gamg_type agg
+-pc_gamg_agg_nsmooths 1

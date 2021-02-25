@@ -22,11 +22,14 @@ MODULE finish
   USE window
   USE laser
   USE collisions
+  USE nc_setup
   USE dist_fn
   USE ionise
   USE injectors
   USE probes
-
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
   IMPLICIT NONE
 
   PRIVATE
@@ -38,6 +41,7 @@ CONTAINS
   SUBROUTINE finalise
 
     CALL close_files
+    CALL close_psd_diagnostics_files
     IF (done_mpi_initialise) CALL deallocate_memory
     CALL MPI_FINALIZE(errcode)
     STOP
@@ -58,7 +62,6 @@ CONTAINS
     DEALLOCATE(x_grid_mins, x_grid_maxs, cell_x_min, cell_x_max)
 
     DEALLOCATE(total_particle_energy_species)
-
     CALL deallocate_probes
 
     DO i = 1, n_species
@@ -74,6 +77,8 @@ CONTAINS
       IF (ASSOCIATED(species_list(i)%background_density)) &
           DEALLOCATE(species_list(i)%background_density, STAT=stat)
     END DO
+
+    CALL deallocate_neutral_collisions
 
     DEALLOCATE(species_list, STAT=stat)
 
@@ -120,9 +125,35 @@ CONTAINS
     CALL deallocate_partlists
     CALL deallocate_eval_stack
     CALL deallocate_injectors
-
+#ifdef ELECTROSTATIC
+    CALL finalize_electrostatic_solver
+#endif
     CALL MPI_COMM_FREE(comm, errcode)
 
   END SUBROUTINE deallocate_memory
+
+
+
+  SUBROUTINE close_psd_diagnostics_files
+
+    INTEGER :: i, dump_id, species_counter, file_unit
+
+    IF (psd_diag_rank == rank) THEN
+      species_counter = 1
+      DO i = 1, psd_diag_n_dumps
+        dump_id = psd_diag_dump_id(i)
+        IF (dump_id == c_dump_number_density) THEN
+          file_unit = dump_id + 100 + species_counter
+          species_counter = species_counter + 1
+        ELSE
+          file_unit = dump_id + 100
+        END IF
+
+        CLOSE(unit=file_unit)
+
+      END DO
+    END IF
+
+ END SUBROUTINE close_psd_diagnostics_files
 
 END MODULE finish

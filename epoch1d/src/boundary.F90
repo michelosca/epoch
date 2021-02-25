@@ -22,6 +22,7 @@ MODULE boundary
   USE utilities
   USE particle_id_hash_mod
   USE injectors
+  USE random_generator
 
   IMPLICIT NONE
 
@@ -127,7 +128,8 @@ CONTAINS
         .OR. boundary == c_bc_reflect &
         .OR. boundary == c_bc_thermal &
         .OR. boundary == c_bc_heat_bath &
-        .OR. boundary == c_bc_open) RETURN
+        .OR. boundary == c_bc_open &
+        .OR. boundary == c_bc_recombine) RETURN
 
     IF (rank == 0) THEN
       WRITE(*,*)
@@ -603,13 +605,18 @@ CONTAINS
     INTEGER :: xbd
     INTEGER(i8) :: ixp
     INTEGER, DIMENSION(2*c_ndims) :: bc_species
-    LOGICAL :: out_of_bounds
-    INTEGER :: sgn, bc, ispecies, i, ix
+    LOGICAL :: out_of_bounds, reinjection
+    INTEGER :: sgn, bc, ispecies, i, ix, n_injections
     REAL(num) :: temp(3)
     REAL(num) :: part_pos, boundary_shift
     REAL(num) :: x_min_outer, x_max_outer
     REAL(num) :: x_shift
-
+#ifdef ELECTROSTATIC
+    REAL(num) :: part_weight, part_charge
+#endif
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: injection_weight
+#endif
     boundary_shift = dx * REAL((1 + png + cpml_thickness) / 2, num)
     x_min_outer = x_min - boundary_shift
     x_max_outer = x_max + boundary_shift
@@ -619,6 +626,24 @@ CONTAINS
       cur => species_list(ispecies)%attached_list%head
 
       bc_species = species_list(ispecies)%bc_particle
+
+#ifdef ELECTROSTATIC
+#ifdef PER_SPECIES_WEIGHT
+      part_weight = species_list(ispecies)%weight
+#endif
+      part_charge = species_list(ispecies)%charge
+
+      ! In case reinjection is on
+      IF (species_list(ispecies)%reinjection_id > 0) THEN
+        reinjection = .TRUE.
+        n_injections = 0
+#ifndef PER_SPECIES_WEIGHT
+        injection_weight = 0._num
+#endif
+      ELSE
+        reinjection = .FALSE.
+      END IF
+#endif
 
       DO ix = -1, 1, 2
         CALL create_empty_partlist(send(ix))
@@ -655,10 +680,31 @@ CONTAINS
               bc = bc_species(c_bd_x_min)
               IF (bc == c_bc_reflect) THEN
                 cur%part_pos = 2.0_num * x_min - part_pos
+                part_pos = cur%part_pos
                 cur%part_p(1) = -cur%part_p(1)
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
+              ELSE IF (bc == c_bc_recombine) THEN
+                cur%part_pos = 2.0_num * x_min - part_pos
+                part_pos = cur%part_pos
+                cur%part_p(1) = -cur%part_p(1)
+                CALL particle_recombination_bcs(cur, species_list(ispecies))
+#ifdef ELECTROSTATIC
+              ELSE IF (bc == c_bc_open) THEN
+                out_of_bounds = .TRUE.
+#ifndef PER_SPECIES_WEIGHT
+                part_weight = cur%weight
+#endif
+                convect_curr_min = convect_curr_min + part_weight * part_charge
+
+                IF (reinjection) THEN
+                  n_injections = n_injections + 1
+#ifndef PER_SPECIES_WEIGHT
+                  injection_weight = injection_weight + part_weight 
+#endif
+                END IF
+#endif
               END IF
             END IF
             IF (part_pos < x_min_outer .AND. bc /= c_bc_periodic) THEN
@@ -686,10 +732,11 @@ CONTAINS
                     species_list(ispecies)%mass, temp(i), 0.0_num)
 
                 cur%part_pos = 2.0_num * x_min_outer - part_pos
-
+#ifndef ELECTROSTATIC
               ELSE
                 ! Default to open boundary conditions - remove particle
                 out_of_bounds = .TRUE.
+#endif
               END IF
             END IF
           END IF
@@ -718,10 +765,31 @@ CONTAINS
               bc = bc_species(c_bd_x_max)
               IF (bc == c_bc_reflect) THEN
                 cur%part_pos = 2.0_num * x_max - part_pos
+                part_pos = cur%part_pos
                 cur%part_p(1) = -cur%part_p(1)
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
+              ELSE IF (bc == c_bc_recombine) THEN
+                cur%part_pos = 2.0_num * x_max - part_pos
+                part_pos = cur%part_pos
+                cur%part_p(1) = -cur%part_p(1)
+                CALL particle_recombination_bcs(cur, species_list(ispecies))
+#ifdef ELECTROSTATIC
+              ELSE IF (bc == c_bc_open) THEN
+                out_of_bounds = .TRUE.
+#ifndef PER_SPECIES_WEIGHT
+                part_weight = cur%weight
+#endif
+                convect_curr_max = convect_curr_max + part_weight * part_charge
+
+                IF (reinjection) THEN
+                  n_injections = n_injections + 1
+#ifndef PER_SPECIES_WEIGHT
+                  injection_weight = injection_weight + part_weight
+#endif
+                END IF
+#endif
               END IF
             END IF
             IF (part_pos >= x_max_outer .AND. bc /= c_bc_periodic) THEN
@@ -749,10 +817,11 @@ CONTAINS
                     species_list(ispecies)%mass, temp(i), 0.0_num)
 
                 cur%part_pos = 2.0_num * x_max_outer - part_pos
-
+#ifndef ELECTROSTATIC
               ELSE
                 ! Default to open boundary conditions - remove particle
                 out_of_bounds = .TRUE.
+#endif
               END IF
             END IF
           END IF
@@ -778,6 +847,15 @@ CONTAINS
         ! Move to next particle
         cur => next
       END DO
+
+      IF (reinjection) THEN
+#ifndef PER_SPECIES_WEIGHT
+        CALL inject_electron_ion_pair(n_injections, species_list(ispecies), &
+          injection_weight)
+#else
+        CALL inject_electron_ion_pair(n_injections, species_list(ispecies))
+#endif
+      END IF
 
       ! swap Particles
       DO ix = -1, 1, 2
@@ -1104,5 +1182,193 @@ CONTAINS
     END IF
 
   END SUBROUTINE cpml_advance_b_currents
+
+
+
+  SUBROUTINE particle_recombination_bcs(ion, ion_species)
+
+    ! Generates a neutral particle with the same characteristics as the input
+    !particle 'ion'
+    TYPE(particle), POINTER, INTENT(IN) :: ion
+    TYPE(particle_species), INTENT(IN) :: ion_species
+    INTEGER :: neutral_id
+    TYPE(particle), POINTER :: neutral
+
+    neutral_id = ion_species%recombination_id
+
+    CALL create_particle(neutral)
+    neutral%part_p = ion%part_p
+    neutral%part_pos = ion%part_pos
+#ifndef PER_SPECIES_WEIGHT
+    neutral%weight = ion%weight
+#endif
+    CALL add_particle_to_partlist(species_list(neutral_id)%attached_list, &
+      neutral)
+    NULLIFY(neutral)
+
+  END SUBROUTINE particle_recombination_bcs
+
+
+
+  SUBROUTINE inject_electron_ion_pair(outflow_particles, part_species, &
+    total_weight)
+
+    INTEGER, INTENT(INOUT) :: outflow_particles
+    TYPE(particle_species), INTENT(INOUT) :: part_species
+    REAL(num), OPTIONAL, INTENT(INOUT) :: total_weight
+    INTEGER :: proc_x_min_boundary, proc_x_max_boundary
+    INTEGER :: injections_x_min, injections_x_max
+    INTEGER :: i, n_pairs
+    REAL(num) :: local_length_x, inject_prob
+    REAL(num) :: weight_x_min, weight_x_max
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: per_part_weight
+#endif
+
+    ! If no electron pair is defined reinjection does not happen
+    IF (part_species%reinjection_id <= 0) RETURN
+
+    ! Sets the processors where the boundaries are
+    proc_x_min_boundary = 0
+    proc_x_max_boundary = nproc-1
+
+    ! Injected particles = particles leaving the system
+    injections_x_min = 0
+    injections_x_max = 0
+    weight_x_min = 0._num
+    weight_x_max = 0._num
+    IF (x_min_boundary) THEN
+      injections_x_min = outflow_particles
+#ifndef PER_SPECIES_WEIGHT
+      weight_x_min = total_weight
+#endif
+    END IF
+    IF (x_max_boundary .AND. nproc > 1 ) THEN
+      injections_x_max = outflow_particles
+#ifndef PER_SPECIES_WEIGHT
+      weight_x_max = total_weight
+#endif
+    END IF
+
+    ! Send number of outflowing particles to all processors
+    CALL MPI_BCAST(injections_x_min, 1, MPI_INTEGER, proc_x_min_boundary, &
+      comm, errcode)
+    CALL MPI_BCAST(injections_x_max, 1, MPI_INTEGER, proc_x_max_boundary, &
+      comm, errcode)
+    ! Total number of particles leaving the system
+    outflow_particles = injections_x_min + injections_x_max
+
+#ifndef PER_SPECIES_WEIGHT
+    ! Send total weight of ejected particles to all processors
+    CALL MPI_BCAST(weight_x_min, 1, MPI_DOUBLE, proc_x_min_boundary, &
+      comm, errcode)
+    CALL MPI_BCAST(weight_x_max, 1, MPI_DOUBLE, proc_x_max_boundary, &
+      comm, errcode)
+#endif
+    ! Total weight leaving the system
+    total_weight = weight_x_min + weight_x_max
+
+
+    ! If no particles leave the system, no particles are reinjected
+    IF (outflow_particles <= 0) RETURN
+
+    local_length_x = x_max_local - x_min_local
+    inject_prob = local_length_x/length_x
+    n_pairs = 0
+    DO i = 1, outflow_particles
+      IF (random() < inject_prob) n_pairs = n_pairs + 1
+    END DO
+
+#ifndef PER_SPECIES_WEIGHT
+    per_part_weight = total_weight / REAL(outflow_particles,num)
+    CALL place_injected_particles(n_pairs, part_species, per_part_weight)
+#else
+    CALL place_injected_particles(n_pairs, part_species)
+#endif
+
+  END SUBROUTINE inject_electron_ion_pair
+
+
+
+  SUBROUTINE place_injected_particles(n_pairs, species, weigth)
+
+    INTEGER, INTENT(IN) :: n_pairs
+    TYPE(particle_species), INTENT(INOUT) :: species
+    REAL(num), OPTIONAL, INTENT(IN) :: weigth
+
+    INTEGER :: ipair, cell_x, i, j
+    INTEGER, DIMENSION(2) :: species_ids
+    REAL(num) :: local_length_x, x_pos
+    REAL(num), DIMENSION(3) ::temp
+    TYPE(parameter_pack) :: parameters
+    TYPE(particle), POINTER :: new_part
+    TYPE(particle_species), POINTER :: current_species
+
+    IF (n_pairs == 0) RETURN
+
+    species_ids(1) = species%id             ! Ejected species
+    species_ids(2) = species%reinjection_id ! Electron species
+    local_length_x = x_max_local - x_min_local
+
+      DO ipair = 1, n_pairs
+        ! Random position of the new particles
+        x_pos = random() * local_length_x
+        cell_x = FLOOR(x_pos/dx) + 1
+        parameters%pack_ix = cell_x
+
+        DO j = 1,2
+          current_species => species_list(species_ids(j))
+
+          ! Get temperature
+          DO i = 1, 3
+            temp(i) = evaluate_with_parameters(&
+              current_species%temperature_function(i), parameters, errcode)
+          END DO
+
+          ! New particle
+          CALL create_particle(new_part)
+          new_part%part_pos = x_pos + x_min_local
+          new_part%part_p = get_random_momentum(current_species, temp)
+#ifndef PER_SPECIES_WEIGHT
+          new_part%weight = weigth
+#endif
+
+          CALL add_particle_to_partlist(current_species%attached_list,new_part)
+
+          NULLIFY(new_part)
+
+        END DO ! species loop
+      END DO ! pairs loop
+
+  END SUBROUTINE place_injected_particles
+
+
+
+  FUNCTION get_random_momentum(species, temp)
+
+    TYPE(particle_species) :: species
+    REAL(num), DIMENSION(3) :: temp, momentum
+    REAL(num), DIMENSION(3) :: get_random_momentum, variance
+    REAL(num) :: ran1, ran2, mass
+
+    mass = species%mass
+
+    ! Box Muller method for random from Gaussian distribution
+    ! this is to ensure that 0 < ran1 < 1
+    ! ran1=0 gives NaN in logarithm
+    ! ran1=1 could give positive logarithm due to rounding errors
+    ran1 = (1.0_num - 1.0e-10_num) * random() + 0.5e-10_num
+    ran2 = 2.0_num * pi * random()
+    variance = SQRT(kb*temp*mass)! = SQRT(3._num*kb*temp/mass) * mass
+    momentum(1) = variance(1) * SQRT(-2.0_num * LOG(ran1)) * SIN(ran2)
+    momentum(2) = variance(2) * SQRT(-2.0_num * LOG(ran1)) * COS(ran2)
+
+    ran1 = (1.0_num - 1.0e-10_num) * random() + 0.5e-10_num
+    ran2 = 2.0_num * pi * random()
+    momentum(3) = variance(3) * SQRT(-2.0_num * LOG(ran1)) * SIN(ran2)
+
+    get_random_momentum = momentum
+
+  END FUNCTION get_random_momentum
 
 END MODULE boundary

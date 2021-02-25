@@ -16,6 +16,9 @@
 MODULE mpi_routines
 
   USE helper
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
 
   IMPLICIT NONE
 
@@ -172,6 +175,10 @@ CONTAINS
       IF (op) CALL MPI_CART_RANK(comm, test_coords, neighbour(ix), errcode)
     END DO
 
+#ifdef ELECTROSTATIC
+    CALL initialize_petsc(comm)
+#endif
+
   END SUBROUTINE setup_communicator
 
 
@@ -248,6 +255,11 @@ CONTAINS
     ALLOCATE(jx(1-jng:nx+jng))
     ALLOCATE(jy(1-jng:nx+jng))
     ALLOCATE(jz(1-jng:nx+jng))
+#ifdef ELECTROSTATIC
+    ALLOCATE(es_current(1-ng:nx+ng))
+    ALLOCATE(es_potential(1-ng:nx+ng))
+    CALL setup_petsc_variables(nx, nx_global)
+#endif
 
     ! Setup the particle lists
     IF (n_species > 0) &

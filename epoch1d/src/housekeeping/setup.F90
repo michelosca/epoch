@@ -30,6 +30,7 @@ MODULE setup
   USE mpi_routines
   USE sdf
   USE boundary
+  USE nc_setup
 
   IMPLICIT NONE
 
@@ -40,6 +41,7 @@ MODULE setup
   PUBLIC :: setup_species, after_deck_last, set_dt
   PUBLIC :: read_cpu_split, pre_load_balance
   PUBLIC :: open_status_file, close_status_file
+  PUBLIC :: setup_psd_diagnostics
 
   TYPE(particle), POINTER, SAVE :: iterator_list
 #ifndef NO_IO
@@ -113,6 +115,10 @@ CONTAINS
 
     run_date = get_unix_time()
 
+#ifdef ELECTROSTATIC
+    CALL min_init_electrostatic
+#endif
+
     CALL set_field_order(2)
 
     CALL timer_init
@@ -140,6 +146,11 @@ CONTAINS
     xb = 0.0_num
 
     CALL eval_stack_init
+
+    !Neutral collision parameters
+    dt_neutral_collisions = HUGE(0._num)
+    neutral_coll_freq_fact = 0.01_num
+    NULLIFY(background_list)
 
   END SUBROUTINE minimal_init
 
@@ -190,9 +201,13 @@ CONTAINS
 
     INTEGER :: i
 
+    IF (ANY(neutral_coll)) CALL load_neutral_collisions
     CALL setup_data_averaging
     CALL setup_split_particles
     CALL setup_field_boundaries
+#ifdef ELECTROSTATIC
+    CALL setup_electrostatic
+#endif
 
     cpml_x_min = .FALSE.
     cpml_x_max = .FALSE.
@@ -212,6 +227,7 @@ CONTAINS
         io_block_list(i)%dumpmask(c_dump_cpml_psi_bzx) = c_io_never
       END DO
     END IF
+
 
   END SUBROUTINE after_deck_last
 
@@ -253,8 +269,13 @@ CONTAINS
         nspec_local = 0
         IF (IAND(mask, c_io_no_sum) == 0) &
             nspec_local = 1
-        IF (IAND(mask, c_io_species) /= 0) &
+        IF (IAND(mask, c_io_species) /= 0) THEN
+          IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
+            nspec_local = nspec_local + SUM(total_collision_types)
+          ELSE
             nspec_local = nspec_local + n_species
+          END IF
+        END IF
 
         IF (nspec_local <= 0) CYCLE
         nspec_local = nspec_local * averaged_var_dims(io)
@@ -272,8 +293,13 @@ CONTAINS
         avg%n_species = 0
         IF (IAND(mask, c_io_no_sum) == 0) &
             avg%species_sum = averaged_var_dims(io)
-        IF (IAND(mask, c_io_species) /= 0) &
+        IF (IAND(mask, c_io_species) /= 0) THEN
+          IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
+            avg%n_species = SUM(total_collision_types)
+          ELSE
             avg%n_species = n_species * averaged_var_dims(io)
+          END IF
+        END IF
         avg%real_time = 0.0_num
         avg%started = .FALSE.
       END IF
@@ -313,6 +339,8 @@ CONTAINS
       NULLIFY(species_list(ispecies)%secondary_list)
       NULLIFY(species_list(ispecies)%background_density)
       species_list(ispecies)%bc_particle = c_bc_null
+      species_list(ispecies)%recombination_id = -1
+      species_list(ispecies)%reinjection_id = -1
     END DO
 
     DO ispecies = 1, n_species
@@ -354,6 +382,7 @@ CONTAINS
 #ifndef NO_PARTICLE_PROBES
       NULLIFY(species_list(ispecies)%attached_probes)
 #endif
+      NULLIFY(species_list(ispecies)%neutrals)
     END DO
 
   END SUBROUTINE setup_species
@@ -522,12 +551,13 @@ CONTAINS
     IF (ic_from_restart) RETURN
 
     min_dt = 1000000.0_num
-    k_max = 2.0_num * pi / dx
+    k_max = pi / dx
 
     ! Identify the plasma frequency (Bohm-Gross dispersion relation)
     ! Note that this doesn't get strongly relativistic plasmas right
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%species_type /= c_species_id_photon) THEN
+        IF (ABS(species_list(ispecies)%charge) <= TINY(0._num)) CYCLE
         CALL setup_ic_density(ispecies)
         CALL setup_ic_temp(ispecies)
 
@@ -564,6 +594,203 @@ CONTAINS
   END SUBROUTINE set_plasma_frequency_dt
 
 
+#ifdef ELECTROSTATIC
+  SUBROUTINE set_gyrofrequency_dt(dt_gyrofreq)
+
+    REAL(num), INTENT(OUT) :: dt_gyrofreq
+    INTEGER :: ispecies
+    REAL(num) :: gyrofrequency, gyrofrequency_temp, gyrofreq_all
+    REAL(num) :: part_q, part_m
+    REAL(num) :: max_bx, max_by, max_bz, max_b_field
+    REAL(num) :: min_bx, min_by, min_bz
+
+    dt_gyrofreq = 1.e100_num
+    gyrofrequency = 0._num
+
+    DO ispecies = 1, n_species
+      IF (species_list(ispecies)%species_type /= c_species_id_photon) THEN
+
+        ! Species charge and mass
+        part_q  = species_list(ispecies)%charge
+        IF (ABS(part_q) < TINY(0._num)) CYCLE
+        part_m  = species_list(ispecies)%mass
+
+        ! Pick the highest value of B in grid
+        max_bx = MAXVAL(bx)
+        min_bx = MINVAL(bx)
+        max_bx = MAX(max_bx, ABS(min_bx))
+        max_by = MAXVAL(by)
+        min_by = MINVAL(by)
+        max_by = MAX(max_by, ABS(min_by))
+        max_bz = MAXVAL(bz)
+        min_bz = MINVAL(bz)
+        max_bz = MAX(max_bz, ABS(min_bz))
+        max_b_field = MAX(max_bx, max_by, max_bz)
+
+        ! Maximum gyrofrequency in this processors and species
+        gyrofrequency_temp = ABS(part_q)/part_m*max_b_field
+
+      END IF
+
+      gyrofrequency = MAX(gyrofrequency_temp, gyrofrequency)
+    END DO
+
+    ! Pick the highest gyrofrequency between processors
+    CALL MPI_ALLREDUCE(gyrofrequency, gyrofreq_all, 1, mpireal, MPI_MAX, &
+      comm, errcode)
+
+    ! Must resolve particle gyrofrequency
+    IF (gyrofreq_all > TINY(0._num)) THEN
+      dt_gyrofreq = pi / gyrofreq_all
+    END IF
+
+  END SUBROUTINE set_gyrofrequency_dt
+
+
+
+  SUBROUTINE set_max_speed
+
+    INTEGER :: ispecies
+    INTEGER(8) :: n_part, ipart
+    REAL(num) :: mass, temp, thermal_speed, flow_speed
+    REAL(num) :: speed_local, max_speed_local, max_speed_global
+    REAL(num), DIMENSION(3) :: part_v, sum_flow_speed
+    TYPE(particle), POINTER :: current
+
+    max_speed_local = 0._num
+
+    DO ispecies = 1, n_species
+      IF (species_list(ispecies)%immobile) CYCLE
+      IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
+      IF (species_list(ispecies)%count == 0 ) CYCLE
+
+      CALL setup_ic_temp(ispecies)
+      mass = species_list(ispecies)%mass
+      temp = MAXVAL(species_temp)
+      thermal_speed = sqrt(kb*temp/mass)
+
+      current => species_list(ispecies)%attached_list%head
+      n_part = species_list(ispecies)%attached_list%count
+      sum_flow_speed = 0._num
+      DO ipart = 1, n_part
+        part_v = current%part_p
+        sum_flow_speed = part_v + sum_flow_speed
+        current => current%next
+      END DO
+      sum_flow_speed = sum_flow_speed/mass/REAL(n_part,num)
+      flow_speed = DOT_PRODUCT(sum_flow_speed,sum_flow_speed)
+      flow_speed = SQRT(flow_speed)
+
+      speed_local = norm_z_factor*thermal_speed + flow_speed
+
+      max_speed_local = MAX(max_speed_local, speed_local)
+
+    END DO
+
+    CALL MPI_ALLREDUCE(max_speed_local, max_speed_global, 1, MPIREAL, &
+      MPI_MAX, comm, errcode)
+
+    ! 'max_speed' variable can be defined in the input deck
+    max_speed = MAX(user_max_speed, max_speed_global)
+
+  END SUBROUTINE set_max_speed
+
+
+
+  SUBROUTINE set_dt        ! sets CFL limited step
+
+    REAL(num) :: dt_courant, dt_freq, dt_inputdeck
+    REAL(num) :: dt_gyrfreq, dt_upperhybrid, dt_uppercutofffreq
+    REAL(num) :: gyrofreq, plasmafreq, upperhybridfreq, uppercutofffreq
+    INTEGER :: io
+
+    dt = HUGE(0._num)
+
+    CALL set_plasma_frequency_dt
+    CALL set_gyrofrequency_dt(dt_gyrfreq)
+
+    ! Gyrofrequency (electrons)
+    gyrofreq = 1._num/dt_gyrfreq
+    dt_gyrfreq = es_dt_fact*dt_gyrfreq
+    ! Plasma frequency (electrons)
+    plasmafreq = 1._num/dt_plasma_frequency
+    dt_plasma_frequency = es_dt_fact*dt_plasma_frequency
+    ! Upper Hybrid oscillation frequency
+    upperhybridfreq = sqrt(plasmafreq**2 + gyrofreq**2)
+    dt_upperhybrid = es_dt_fact/upperhybridfreq
+    ! Upper cutoff frequency
+    uppercutofffreq = sqrt(gyrofreq**2*0.25_num + plasmafreq**2) + &
+      gyrofreq*0.5_num
+    dt_uppercutofffreq = es_dt_fact/uppercutofffreq
+
+    !Frequency time restrictions
+    dt_freq = MIN(dt_gyrfreq, dt_plasma_frequency, dt_upperhybrid, &
+      dt_uppercutofffreq)
+    dt = MIN(dt, dt_freq)
+
+    !Laser time restrictions
+    CALL set_laser_dt
+    dt = MIN(dt, dt_laser)
+
+    !Courant time restriction
+    CALL set_max_speed
+    IF (max_speed < TINY(0._num)) max_speed = TINY(0._num)
+    dt_courant = dt_multiplier*dx/max_speed
+    dt = MIN(dt, dt_courant)
+
+    !Check the maximum perturbation frequency defined in the input deck
+    dt_inputdeck = es_dt_fact/max_perturbation_freq
+    dt = MIN(dt, dt_inputdeck)
+
+    ! Neutral collisions
+    CALL set_dt_neutral_collisions
+    dt = MIN(dt, dt_neutral_collisions)
+
+
+    IF (rank == 0) THEN
+      WRITE(*,*) &
+       '************ELECTROSTATIC: TIME STEP RESTRICTIONS************'
+      WRITE(*, 987) 'Plasma frequency: ', dt_plasma_frequency
+      WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq
+      WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid
+      WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq
+      WRITE(*, 987) 'Laser time-step: ', dt_laser
+      WRITE(*, 987) 'CFL time-step: ', dt_courant
+      WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck
+      WRITE(*,*) ''
+      WRITE(*,*) &
+       '**********************SIMULATION TIME STEP*********************'
+      WRITE(*,*) 'Min. dt: ', dt
+      WRITE(*,*) ''
+    ENDIF
+
+    IF (.NOT. any_average) RETURN
+
+    DO io = 1, n_io_blocks
+      IF (.NOT. io_block_list(io)%any_average) CYCLE
+
+      io_block_list(io)%average_time = MAX(io_block_list(io)%dt_average, &
+          dt * io_block_list(io)%nstep_average)
+
+      IF (io_block_list(io)%dt_min_average > 0 &
+          .AND. io_block_list(io)%dt_min_average < dt) THEN
+        IF (rank == 0) THEN
+          PRINT*, '*** WARNING ***'
+          PRINT*, 'Time step is too small to satisfy "nstep_average"'
+          PRINT*, 'Averaging will occur over fewer time steps than specified'
+          PRINT*, 'Set "dt_multiplier" less than ', &
+              dt_multiplier * io_block_list(io)%dt_min_average / dt, &
+              ' to fix this'
+        END IF
+        io_block_list(io)%dt_min_average = -1
+      END IF
+    END DO
+
+987 FORMAT (A25, ES10.4)
+
+  END SUBROUTINE set_dt
+
+#else
 
   SUBROUTINE set_dt        ! sets CFL limited step
 
@@ -621,6 +848,21 @@ CONTAINS
 
     dt = dt_multiplier * dt
 
+    ! Neutral collisions
+    CALL set_dt_neutral_collisions
+    dt = MIN(dt, dt_neutral_collisions)
+
+    IF (rank==0) THEN
+      WRITE(*,*) &
+       '************ELECTROMAGNETIC: TIME STEP RESTRICTIONS************'
+      WRITE(*,987) 'Plasma frequency: ', dt_plasma_frequency
+      WRITE(*,*) ''
+      WRITE(*,*) &
+       '**********************SIMULATION TIME STEP*********************'
+      WRITE(*,987) 'Min. dt: ', dt
+      WRITE(*,*) ''
+    END IF
+
     IF (.NOT. any_average) RETURN
 
     DO io = 1, n_io_blocks
@@ -643,7 +885,149 @@ CONTAINS
       END IF
     END DO
 
+987 FORMAT (A25, ES10.4)
+
   END SUBROUTINE set_dt
+
+#endif
+
+  SUBROUTINE set_max_collision_frequency
+
+    INTEGER :: ispecies, jspecies
+    REAL(num) :: i_dens, j_dens, dens, ij_max_coll_freq, local_max_coll_freq
+    TYPE(neutrals_block), POINTER :: coll_block
+
+    local_max_coll_freq = 0._num
+    DO ispecies = 1, n_species
+
+      IF (species_list(ispecies)%count == 0) CYCLE
+
+      DO jspecies = ispecies, n_species_bg
+        IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
+        IF (species_list(ispecies)%count == 0) CYCLE
+
+        coll_block => species_list(ispecies)%neutrals(jspecies)
+        IF (coll_block%is_background) THEN
+          j_dens = coll_block%background%dens
+        ELSE
+          CALL setup_ic_density(jspecies)
+          j_dens = MAXVAL(species_density)
+        END IF
+        CALL setup_ic_density(ispecies)
+        i_dens = MAXVAL(species_density)
+        dens = MAX(i_dens, j_dens)
+        ij_max_coll_freq = coll_block%gsigma_max_total*dens
+
+        local_max_coll_freq = MAX(local_max_coll_freq, ij_max_coll_freq)
+      END DO
+
+    END DO
+
+    CALL MPI_ALLREDUCE(local_max_coll_freq, max_coll_freq, 1, MPIREAL, &
+      MPI_MAX, comm, errcode)
+
+    max_coll_freq = MAX(max_coll_freq, user_max_neutral_coll_freq)
+
+  END SUBROUTINE set_max_collision_frequency
+
+
+
+  SUBROUTINE set_dt_acceleration
+
+    INTEGER :: ix, ispecies
+    REAL(num) :: e_mod_max, b_mod_max, e_mod, b_mod
+    REAL(num) :: mass, charge
+    REAL(num) :: dt_local, e_dt, ie_dt, b_dt, ib_dt
+    REAL(num) :: mean_speed, temp
+    REAL(num), DIMENSION(3) :: e_field, b_field
+
+    e_mod_max = 0._num
+    b_mod_max = 0._num
+
+    !Calculate the strongest E and B-field
+    DO ix = 0, nx
+      e_field(1) = ex(ix)
+      e_field(2) = ey(ix)
+      e_field(3) = ez(ix)
+      e_mod = DOT_PRODUCT(e_field, e_field)
+      e_mod = SQRT(e_mod)
+      e_mod_max = MAX(e_mod_max, e_mod)
+
+      b_field(1) = bx(ix)
+      b_field(2) = by(ix)
+      b_field(3) = bz(ix)
+      b_mod = DOT_PRODUCT(b_field, b_field)
+      b_mod = SQRT(b_mod)
+      b_mod_max = MAX(b_mod_max, b_mod)
+    END DO
+
+    ! Check user-defined max. fields
+    b_mod_max = MAX(b_mod_max, user_max_b_field)
+    e_mod_max = MAX(e_mod_max, user_max_e_field)
+
+    e_dt = HUGE(0._num)
+    b_dt = HUGE(0._num)
+
+    DO ispecies = 1, n_species
+
+      IF ( species_list(ispecies)%count == 0) CYCLE
+
+      mass = species_list(ispecies)%mass
+      charge = ABS(species_list(ispecies)%charge)
+      IF (charge < TINY(0._num)) CYCLE
+
+      CALL setup_ic_temp(ispecies)
+      temp = MINVAL(species_temp)
+      mean_speed = SQRT(3._num*kb*temp/mass)
+
+      IF ( .NOT.(e_mod_max < TINY(0._num)) ) THEN
+        ie_dt = mean_speed * mass / charge / e_mod_max
+        e_dt = MIN(ie_dt, e_dt)
+      END IF
+      IF ( .NOT.(b_mod_max < TINY(0._num)) ) THEN
+        ib_dt = mean_speed * mass / charge / b_mod_max
+        b_dt = MIN(ib_dt, b_dt)
+      END IF
+
+    END DO
+
+    dt_local = MIN(e_dt, b_dt)
+
+    CALL MPI_ALLREDUCE(dt_local, dt_accel, 1, MPIREAL, &
+      MPI_MIN, comm, errcode)
+
+  END SUBROUTINE set_dt_acceleration
+
+
+
+  SUBROUTINE set_dt_neutral_collisions
+
+    ! For charged-neutral collisions
+    IF ( use_collisions .AND. ANY(neutral_coll) ) THEN
+
+      ! Nanbu (2000) force condition
+      CALL set_dt_acceleration
+      dt_accel = dt_multiplier * dt_accel
+
+      ! Collision frequency condition
+      CALL set_max_collision_frequency
+      IF (max_coll_freq <= TINY(0._num)) max_coll_freq = TINY(0._num)
+      dt_neutral_collisions = neutral_coll_freq_fact/max_coll_freq
+
+      IF (rank==0) THEN
+        WRITE(*,*) ''
+        WRITE(*,*) &
+          '*********NEUTRAL COLLISIONS: TIME STEP RESTRICTIONS**********'
+        WRITE(*,*) 'Max. acceleration: ', dt_accel
+        WRITE(*,*) 'Max. collision frequency: ', dt_neutral_collisions
+        WRITE(*,*) ''
+      END IF
+
+      dt_neutral_collisions = MIN(dt_accel, dt_neutral_collisions)
+
+    END IF
+
+  END SUBROUTINE set_dt_neutral_collisions
 
 
 
@@ -1844,5 +2228,106 @@ CONTAINS
     pre_loading = .FALSE.
 
   END SUBROUTINE pre_load_balance
+
+
+
+  SUBROUTINE setup_psd_diagnostics(time)
+
+    REAL(num), INTENT(IN) :: time
+    INTEGER :: i, j, dump_id, ios
+    CHARACTER(LEN=string_length) :: species_name, file_name
+
+    IF (rank == psd_diag_rank) THEN
+
+      IF (psd_diag_period_is_dt) THEN
+        ! Set sampling period in case it should be == dt
+        psd_diag_sampling_period = dt
+        av_over_sampling_period = .FALSE.
+        psd_diag_sampling_steps = 1
+      ELSE
+        ! Sampling steps
+        psd_diag_sampling_steps = FLOOR(psd_diag_sampling_period / dt + 0.5_num)
+        psd_diag_sampling_period = REAL(psd_diag_sampling_steps,num) * dt
+      END IF
+
+      ! Averaging time and collection start time
+      IF (.NOT.av_over_sampling_period) THEN
+        psd_diag_averaging_steps = 1
+      ELSE
+        psd_diag_averaging_steps = FLOOR(psd_diag_averaging_time / dt + 0.5_num)
+        ! Set diagnostic start step
+      END IF
+      psd_diag_averaging_time = REAL(psd_diag_averaging_steps, num) * dt
+
+      IF (psd_diag_averaging_steps == psd_diag_sampling_steps) THEN
+        psd_diag_concatenated = .TRUE.
+      END IF
+
+      ! Collection start and end step
+      psd_diag_start_av = step + 1
+      psd_diag_end_av = psd_diag_start_av + psd_diag_averaging_steps
+
+      ! Allocate data buffer array
+      ALLOCATE(psd_diag_data_buffer(psd_diag_n_dumps))
+      psd_diag_data_buffer = 0._num
+
+      ! Generate output files, one for each parameter & species
+      DO i = 1, psd_diag_n_dumps
+        dump_id = psd_diag_dump_id(i)
+
+        ! Number density dumps
+        IF (dump_id == c_dump_number_density) THEN
+          DO j = 1, n_species
+            species_name = TRIM(species_list(j)%name)
+            file_name='/number_density'//'_'//TRIM(ADJUSTL(species_name))// &
+              '.dat'
+            file_name = TRIM(data_dir) // file_name
+            OPEN(dump_id+100+j, FILE=TRIM(ADJUSTL(file_name)),IOSTAT=ios)
+            IF (ios /= 0) THEN
+              PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
+            END IF
+          END DO
+
+        ! Electric potential dumps
+        ELSE IF (dump_id == c_dump_es_potential) THEN
+          file_name = TRIM(data_dir) // '/es_potential.dat'
+          OPEN(dump_id+100, FILE=TRIM(ADJUSTL(file_name)), IOSTAT=ios)
+          IF (ios /= 0) THEN
+            PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
+          END IF
+
+        ! Electric field dumps
+        ELSE IF (dump_id == c_dump_ex) THEN
+          file_name = TRIM(data_dir) // '/ex.dat'
+          OPEN(dump_id+100, FILE=TRIM(ADJUSTL(file_name)), IOSTAT=ios)
+          IF (ios /= 0) THEN
+            PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
+          END IF
+        END IF
+      END DO
+
+      IF (psd_diag_print_setup) CALL print_psd_diagnostics_setup
+    END IF
+
+  END SUBROUTINE setup_psd_diagnostics
+
+
+
+  SUBROUTINE print_psd_diagnostics_setup
+
+    WRITE(*,*) &
+       '**************POWER SPECTRUM DENSITY DIAGNOSTICS*************'
+    WRITE(*,*) ' - Processor:                ', psd_diag_rank
+    WRITE(*,*) ' - Cell position:            ', psd_diag_cellx
+    WRITE(*,*) ' - X-position:               ', psd_diag_xpos
+    WRITE(*,*) ' - Sampling period (time):   ', psd_diag_sampling_period
+    WRITE(*,*) ' - Sampling period (steps):  ', psd_diag_sampling_steps
+    WRITE(*,*) ' - Sampling average (time):  ', psd_diag_averaging_time
+    WRITE(*,*) ' - Sampling average (steps): ', psd_diag_averaging_steps
+    WRITE(*,*) ' - Averaged sampling:        ', av_over_sampling_period
+    WRITE(*,*) ' - Concatenated sampling:    ', psd_diag_concatenated
+    WRITE(*,*) ' '
+
+  END SUBROUTINE print_psd_diagnostics_setup
 
 END MODULE setup

@@ -71,6 +71,14 @@ CONTAINS
     maxwell_solver = c_maxwell_solver_yee
     got_grid(:) = .FALSE.
     got_time = .FALSE.
+    user_max_speed = 0._num
+    norm_z_factor = 5._num
+    max_perturbation_freq = TINY(0._num)
+
+    !Neutral collisions
+    user_max_b_field = 0._num
+    user_max_e_field = 0._num
+    user_max_neutral_coll_freq = TINY(0._num)
 
   END SUBROUTINE control_deck_initialise
 
@@ -423,6 +431,26 @@ CONTAINS
     ELSE IF (str_cmp(element, 'deck_warnings_fatal')) THEN
       all_deck_errcodes_fatal = as_logical_print(value, element, errcode)
 
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(element, 'es_dt_fact')) THEN
+      es_dt_fact = as_real_print(value, element, errcode) 
+    ELSE IF (str_cmp(element, 'max_perturbation_frequency')) THEN
+      max_perturbation_freq = as_real_print(value, element, errcode) 
+    ELSE IF (str_cmp(element, 'max_speed')) THEN
+      user_max_speed = as_real_print(value, element, errcode)
+    ELSE IF (str_cmp(element, 'norm_z_factor')) THEN
+      norm_z_factor = as_real_print(value, element, errcode) 
+#endif
+
+    ! Neutral collisions
+    ELSE IF (str_cmp(element, 'neutral_coll_frequency_factor')) THEN
+      neutral_coll_freq_fact = as_real_print(value, element, errcode)
+    ELSE IF (str_cmp(element, 'max_b_field')) THEN
+      user_max_b_field = as_real_print(value, element, errcode)
+    ELSE IF (str_cmp(element, 'max_e_field')) THEN
+      user_max_e_field = as_real_print(value, element, errcode)
+    ELSE IF (str_cmp(element, 'max_neutral_coll_freq')) THEN
+      user_max_neutral_coll_freq = as_real_print(value, element, errcode)
     ELSE
       errcode = c_err_unknown_element
 

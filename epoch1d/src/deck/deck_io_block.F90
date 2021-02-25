@@ -47,6 +47,7 @@ CONTAINS
     dumpmask_warned = .FALSE.
 
     track_ejected_particles = .FALSE.
+    neutral_collision_counter = .FALSE.
     dump_absorption = .FALSE.
     averaged_var_block = 0
     new_style_io_block = .FALSE.
@@ -634,7 +635,13 @@ CONTAINS
 
     ELSE IF (str_cmp(element, 'jz')) THEN
       elementselected = c_dump_jz
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(element, 'potential')) THEN
+      elementselected = c_dump_es_potential
 
+    ELSE IF (str_cmp(element, 'wall_current')) THEN
+      elementselected = c_dump_es_current
+#endif
     ELSE IF (str_cmp(element, 'ekbar') &
         .OR. str_cmp(element, 'average_particle_energy')) THEN
       elementselected = c_dump_ekbar
@@ -717,6 +724,9 @@ CONTAINS
     ELSE IF (str_cmp(element, 'total_energy_sum')) THEN
       elementselected = c_dump_total_energy_sum
 
+    ELSE IF (str_cmp(element, 'neutral_collisions')) THEN
+      elementselected = c_dump_neutral_collision
+      neutral_collision_counter = .TRUE.
     ELSE
       got_element = .FALSE.
 
@@ -836,6 +846,8 @@ CONTAINS
         IF (mask_element == c_dump_jy) bad = .FALSE.
         IF (mask_element == c_dump_jz) bad = .FALSE.
         IF (mask_element == c_dump_total_energy_sum) bad = .FALSE.
+        IF (mask_element == c_dump_neutral_collision) bad = .FALSE.
+
         IF (bad) THEN
           IF (rank == 0 .AND. IAND(mask, c_io_species) /= 0) THEN
             DO iu = 1, nio_units ! Print to stdout and to file
@@ -866,6 +878,8 @@ CONTAINS
         IF (mask_element == c_dump_jy) bad = .FALSE.
         IF (mask_element == c_dump_jz) bad = .FALSE.
         IF (mask_element == c_dump_poynt_flux) bad = .FALSE.
+        IF (mask_element == c_dump_es_potential) bad = .FALSE.
+        IF (mask_element == c_dump_es_current) bad = .FALSE.
 
         ! Unset 'no_sum' dumpmask for grid variables
         IF (.NOT.bad) mask = IAND(mask, NOT(c_io_no_sum))
@@ -884,6 +898,7 @@ CONTAINS
         IF (mask_element == c_dump_temperature_y) bad = .FALSE.
         IF (mask_element == c_dump_temperature_z) bad = .FALSE.
         IF (mask_element == c_dump_ekflux) bad = .FALSE.
+        IF (mask_element == c_dump_neutral_collision) bad = .FALSE.
         IF (bad) THEN
           IF (rank == 0) THEN
             DO iu = 1, nio_units ! Print to stdout and to file
