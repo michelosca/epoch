@@ -26,9 +26,9 @@ MODULE electrostatic
 
   PRIVATE
 
-  PUBLIC :: es_update_e_field, destroy_petsc, setup_electrostatic
+  PUBLIC :: es_update_e_field, setup_electrostatic
   PUBLIC :: init_potential, es_wall_current_diagnostic
-  PUBLIC :: attach_potential, setup_petsc_variables
+  PUBLIC :: attach_potential, setup_petsc_variables, finalize_petsc
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: initialize_petsc, finalize_electrostatic_solver
 
@@ -799,12 +799,19 @@ CONTAINS
   END SUBROUTINE initialize_petsc
 
 
+  SUBROUTINE finalize_petsc
+
+    CALL destroy_petsc
+    CALL PetscFinalize(perr)
+
+  END SUBROUTINE finalize_petsc
+
+
   SUBROUTINE finalize_electrostatic_solver
 
     CALL deallocate_potentials
     CALL deallocate_efield_profiles
-    CALL destroy_petsc
-    CALL PetscFinalize(perr)
+    CALL finalize_petsc
 
   END SUBROUTINE finalize_electrostatic_solver
 
