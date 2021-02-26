@@ -278,7 +278,6 @@ CONTAINS
     CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
-    IF (RANK==0) PRINT*, comm, PETSC_COMM_WORLD, MPI_COMM_WORLD
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
     CALL chkerrq_petsc(perr, 'KSPSolve')
 
