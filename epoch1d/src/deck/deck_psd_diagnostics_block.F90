@@ -179,7 +179,7 @@ CONTAINS
   
   FUNCTION psd_diagnostics_block_check() RESULT(errcode)
   
-    INTEGER :: errcode
+    INTEGER :: errcode, io, iu
 
     errcode = c_err_none
 
