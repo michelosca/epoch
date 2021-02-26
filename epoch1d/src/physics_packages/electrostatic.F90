@@ -26,9 +26,9 @@ MODULE electrostatic
 
   PRIVATE
 
-  PUBLIC :: es_update_e_field, destroy_petsc, setup_electrostatic
+  PUBLIC :: es_update_e_field, setup_electrostatic
   PUBLIC :: init_potential, es_wall_current_diagnostic
-  PUBLIC :: attach_potential, setup_petsc_variables
+  PUBLIC :: attach_potential, setup_petsc_variables, finalize_petsc
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: initialize_petsc, finalize_electrostatic_solver
 
@@ -43,15 +43,9 @@ CONTAINS
 
   SUBROUTINE es_update_e_field
     
-    INTEGER :: ix
-    REAL(num) :: idx, ex_half, chargdens_0, chargdens_nx
-   
-    idx = 1._num/dx
+    REAL(num) :: chargdens_0, chargdens_nx
     es_potential = 0.0_num 
 
-    ! Update electric field in x-direction
-    ex = 0._num
-    
     ! Charge weighting from particles to the grid, i.e. charge density
     ! The following subroutine loads total chage density on es_potential
     CALL es_calc_charge_density
@@ -69,13 +63,33 @@ CONTAINS
     ! Charge density to electrostatic potential
     ! This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential
+
+    ! Calculate electric field in x-direction
+    CALL es_calc_ex(chargdens_0, chargdens_nx)
+    ! Update electric field in y- and z-direction
+    CALL set_ez
+    CALL set_ey
+
+
+  END SUBROUTINE es_update_e_field
+
+
+
+  SUBROUTINE es_calc_ex(chargdens_0, chargdens_nx)
+
+    INTEGER :: ix
+    REAL(num) :: idx, ex_half
+    REAL(num), INTENT(IN) :: chargdens_0, chargdens_nx
+
+    idx = 1._num/dx
+    ! Update electric field in x-direction
+    ex = 0._num
     
     ! Calculate the electric field: Div(E) = -Phi
     DO ix = 0, nx
       ex(ix) = es_potential(ix-1) - es_potential(ix+1)
     END DO
     ex = ex * 0.5_num * idx
-
 
     ! E-field boundaries
     ! For between-processors boundaries and external (periodic) bc
@@ -118,11 +132,7 @@ CONTAINS
       ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
     END IF
 
-    ! Update electric field in y- and z-direction
-    CALL set_ez
-    CALL set_ey
-
-  END SUBROUTINE es_update_e_field
+  END SUBROUTINE es_calc_ex
 
 
 
@@ -221,7 +231,10 @@ CONTAINS
       END DO
     END DO
 
+    ! Adds charge density values from adjacent processors
     CALL processor_summation_bcs(es_potential, ng)
+    ! Places charge density values from adjacent processor in ghost cells
+    CALL field_bc(es_potential, ng)
 
     es_potential = es_potential * idx
     IF (x_max_boundary_open) es_potential(nx) = es_potential(nx) * 2._num
@@ -278,7 +291,6 @@ CONTAINS
     CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
-    IF (RANK==0) PRINT*, comm, PETSC_COMM_WORLD, MPI_COMM_WORLD
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
     CALL chkerrq_petsc(perr, 'KSPSolve')
 
@@ -800,12 +812,19 @@ CONTAINS
   END SUBROUTINE initialize_petsc
 
 
+  SUBROUTINE finalize_petsc
+
+    CALL destroy_petsc
+    CALL PetscFinalize(perr)
+
+  END SUBROUTINE finalize_petsc
+
+
   SUBROUTINE finalize_electrostatic_solver
 
     CALL deallocate_potentials
     CALL deallocate_efield_profiles
-    CALL destroy_petsc
-    CALL PetscFinalize(perr)
+    CALL finalize_petsc
 
   END SUBROUTINE finalize_electrostatic_solver
 
