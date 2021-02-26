@@ -186,22 +186,38 @@ CONTAINS
     IF (psd_diag_n_dumps > 0 ) THEN
       IF (rank == psd_diag_rank) THEN
         IF (psd_diag_cellx < 1) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** ERROR ***'
+            WRITE(io,*) 'PSD diagnostic cell location is incorrect'
+          END DO
           errcode = c_err_bad_setup
-          PRINT*, 'ERROR: PSD diagnostic cell location is incorrect'      
         ELSE IF (psd_diag_cellx > nx) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** ERROR ***'
+            WRITE(io,*) 'PSD diagnostic cell location is incorrect'
+          END DO
           errcode = c_err_bad_setup
-          PRINT*, 'ERROR: PSD diagnostic cell location is incorrect'      
         ELSE IF (psd_diag_sampling_period < dt) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** WARNING ***'
+            WRITE(io,*) 'PSD diagnostic sampling period must be at least = dt'
+            WRITE(io,*) 'Sampling period is set T = dt'
+          END DO
           psd_diag_sampling_period = dt
-          PRINT*,'WARNING: PSD diagnostic sampling period must be at least = dt' 
-          PRINT*,' - sampling period is set T = dt'
         END IF
       END IF
       IF (psd_diag_xpos > x_max .OR. psd_diag_xpos < x_min) THEN
-        errcode = c_err_bad_setup
         IF (rank == 0) THEN
-          PRINT*, 'ERROR: PSD diagnotic x-position in out of bounds'
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** ERROR ***'
+            WRITE(io,*) 'PSD diagnotic x-position in out of bounds'
+          END DO
         END IF
+        errcode = c_err_bad_setup
       END IF
     END IF
 
