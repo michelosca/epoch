@@ -161,8 +161,10 @@ PROGRAM pic
 #ifndef ELECTROSTATIC
       time = time + dt / 2.0_num
       CALL update_eb_fields_final
-#endif
       CALL moving_window
+#else
+      CALL es_update_e_field
+#endif
     END IF
   ELSE
 #ifndef ELECTROSTATIC
@@ -173,6 +175,8 @@ PROGRAM pic
     dt = dt_store
 #else
     CALL bfield_final_bcs
+    CALL es_update_e_field
+    CALL es_particles_push_back
 #endif
   END IF
   CALL count_n_zeros
@@ -235,9 +239,8 @@ PROGRAM pic
       IF (use_balance) CALL balance_workload(.FALSE.)
 #ifdef ELECTROSTATIC
       CALL es_wall_current_diagnostic
-      CALL es_half_push_x
-      CALL es_update_e_field
       CALL es_push_particles
+      CALL es_update_e_field
 #else
       CALL push_particles
 #endif
@@ -277,11 +280,11 @@ PROGRAM pic
     CALL output_routines(step)
     time = time + dt / 2.0_num
     CALL update_eb_fields_final
+    CALL moving_window
 #else
     time = time + dt
     CALL output_routines(step)
 #endif
-    CALL moving_window
   END DO
 
   IF (rank == 0) runtime = MPI_WTIME() - walltime_started
