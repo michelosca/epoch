@@ -175,10 +175,6 @@ CONTAINS
       IF (op) CALL MPI_CART_RANK(comm, test_coords, neighbour(ix), errcode)
     END DO
 
-#ifdef ELECTROSTATIC
-    CALL initialize_petsc(comm)
-#endif
-
   END SUBROUTINE setup_communicator
 
 
@@ -258,6 +254,7 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ALLOCATE(es_current(1-ng:nx+ng))
     ALLOCATE(es_potential(1-ng:nx+ng))
+    CALL initialize_petsc(comm)
     CALL setup_petsc_variables(nx, nx_global)
 #endif
 
