@@ -1264,10 +1264,9 @@ CONTAINS
       comm, errcode)
     CALL MPI_BCAST(weight_x_max, 1, MPI_DOUBLE, proc_x_max_boundary, &
       comm, errcode)
-#endif
     ! Total weight leaving the system
     total_weight = weight_x_min + weight_x_max
-
+#endif
 
     ! If no particles leave the system, no particles are reinjected
     IF (outflow_particles <= 0) RETURN
