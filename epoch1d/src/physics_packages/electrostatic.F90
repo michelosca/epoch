@@ -44,6 +44,7 @@ CONTAINS
   SUBROUTINE es_update_e_field
     
     REAL(num) :: chargdens_0, chargdens_nx
+
     es_potential = 0.0_num 
 
     ! Charge weighting from particles to the grid, i.e. charge density
@@ -110,7 +111,7 @@ CONTAINS
       dwcharge_min = wcharge_min - dwcharge_min 
 
       !Update E-field at wall
-      ex(1-ng:0) = wcharge_min/epsilon0
+      ex(0) = wcharge_min/epsilon0
       ! Option two would be ex(0) = ex_half*2._num - ex(1)
     END IF
 
@@ -128,9 +129,13 @@ CONTAINS
       dwcharge_max = wcharge_max - dwcharge_max
 
       !Update E-field at wall
-      ex(nx:nx+ng) = wcharge_max/epsilon0
+      ex(nx) = wcharge_max/epsilon0
       ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
     END IF
+
+    DO ix = 1, 2*c_ndims
+      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
+    END DO
 
   END SUBROUTINE es_calc_ex
 
@@ -143,7 +148,7 @@ CONTAINS
     ! The data to be weighted onto the grid
     REAL(num) :: wdata
     REAL(num) :: part_weight, idx
-    INTEGER :: ispecies, ix
+    INTEGER :: ispecies, ix, i
     TYPE(particle), POINTER :: current
 #include "particle_head.inc"
 
@@ -192,35 +197,10 @@ CONTAINS
 
 #ifdef PARTICLE_SHAPE_BSPLINE3
 #include "bspline3/gxfac.inc"
-        IF (x_min_boundary_open .AND. cell_x == 0) THEN
-          gx(0) = gx(0) + gx(-1) + gx(-2)
-          gx(-1) = 0._num
-          gx(-2) = 0._num
-        END IF
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1) + gx(2)
-          gx(1) = 0._num
-          gx(2) = 0._num
-        END IF
-
 #elif  PARTICLE_SHAPE_TOPHAT
 #include "tophat/gxfac.inc"
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1)
-          gx(1) = 0._num
-        END IF
-
 #else
 #include "triangle/gxfac.inc"
-        IF (x_min_boundary_open .AND. cell_x == 0) THEN
-          gx(0) = gx(0) + gx(-1)
-          gx(-1) = 0._num
-        END IF
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1)
-          gx(1) = 0._num
-        END IF
-
 #endif
 
         DO ix = sf_min, sf_max
@@ -237,8 +217,20 @@ CONTAINS
     CALL field_bc(es_potential, ng)
 
     es_potential = es_potential * idx
-    IF (x_max_boundary_open) es_potential(nx) = es_potential(nx) * 2._num
-    IF (x_min_boundary_open) es_potential( 0) = es_potential( 0) * 2._num
+    IF (x_max_boundary_open) THEN
+      DO i = 1,ng-1
+        es_potential(nx-i) = es_potential(nx-i) + es_potential(nx+i)
+      END DO
+      es_potential(nx+1:) = 0._num
+      es_potential(nx) = es_potential(nx) * 2._num
+    END IF
+    IF (x_min_boundary_open) THEN
+      DO i = 1,ng-1
+        es_potential(i) = es_potential(i) + es_potential(-i)
+      END DO
+      es_potential(:-1) = 0._num
+      es_potential(0) = es_potential(0) * 2._num
+    END IF
 
   END SUBROUTINE es_calc_charge_density
 
