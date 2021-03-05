@@ -270,6 +270,33 @@ CONTAINS
 
 
 
+  SUBROUTINE field_clamp_wall(field, ng, stagger_type, boundary)
+
+    INTEGER, INTENT(IN) :: ng, stagger_type, boundary
+    REAL(num), DIMENSION(1-ng:), INTENT(INOUT) :: field
+    INTEGER :: i, nn
+
+    IF (bc_field(boundary) == c_bc_periodic) RETURN
+
+    IF (boundary == c_bd_x_min .AND. x_min_boundary) THEN
+      IF (stagger(c_dir_x,stagger_type)) THEN
+        DO i = 1, ng-1
+          field(i-ng) = 2._num*field(0)-field(ng-i)
+        END DO
+      END IF
+    ELSE IF (boundary == c_bd_x_max .AND. x_max_boundary) THEN
+      nn = nx
+      IF (stagger(c_dir_x,stagger_type)) THEN
+        DO i = 1, ng-1
+          field(nn+i) = 2._num*field(nn)-field(nn-i)
+        END DO
+      END IF
+    END IF
+
+  END SUBROUTINE field_clamp_wall
+
+
+
   SUBROUTINE field_clamp_zero(field, ng, stagger_type, boundary)
 
     INTEGER, INTENT(IN) :: ng, stagger_type, boundary
