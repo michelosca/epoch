@@ -43,7 +43,7 @@ CONTAINS
 
   SUBROUTINE es_update_e_field
     
-    REAL(num) :: chargdens_0, chargdens_nx
+    REAL(num) :: chargdens_half, chargdens_nxhalf
 
     es_potential = 0.0_num 
 
@@ -53,12 +53,12 @@ CONTAINS
 
     ! In case of non-periodic boundaries
     IF (x_min_boundary_open) THEN
-      ! chargdens_0 = rho_0*dx/2: charge surface density at wall (x-min)
-      chargdens_0 = es_potential(0) * dx * 0.5_num
+      ! chargdens_1/2 = (rho_0+rho_1)/2*dx: charge density near wall
+      chargdens_half = (es_potential(0)+es_potential(1)) * dx * 0.5_num
     END IF
     IF (x_max_boundary_open) THEN
-      ! chargdens_nx = rho_nx*dx/2: charge surface density at wall (x-max)
-      chargdens_nx = es_potential(nx) * dx * 0.5_num
+      ! chargdens_nx-1/2 = rho_nx*dx/2: charge density near wall
+      chargdens_nxhalf = (es_potential(nx)+es_potential(nx-1)) * dx * 0.5_num
     END IF
 
     ! Charge density to electrostatic potential
@@ -66,7 +66,7 @@ CONTAINS
     CALL es_calc_potential
 
     ! Calculate electric field in x-direction
-    CALL es_calc_ex(chargdens_0, chargdens_nx)
+    CALL es_calc_ex(chargdens_half, chargdens_nxhalf)
     ! Update electric field in y- and z-direction
     CALL set_ez
     CALL set_ey
@@ -79,7 +79,7 @@ CONTAINS
   SUBROUTINE es_calc_ex(chargdens_0, chargdens_nx)
 
     INTEGER :: ix
-    REAL(num) :: idx, ex_half
+    REAL(num) :: idx
     REAL(num), INTENT(IN) :: chargdens_0, chargdens_nx
 
     idx = 1._num/dx
@@ -98,15 +98,12 @@ CONTAINS
 
     ! For non-periodic boundaries
     IF (x_min_boundary_open) THEN
-      ! (E_{1/2} - E_0) / (dx/2) = rho_0/epsilon0
-      ! E-field half cell away from the wall: E_{1/2}
-      ex_half = (es_potential(0) - es_potential(1))*idx
-
+      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
       ! Wall charge and difference with respect to last time step
       ! Previous wall charge surface density value
       dwcharge_min = wcharge_min  
       ! Charge surface density at wall
-      wcharge_min = ex_half * epsilon0 - chargdens_0 
+      wcharge_min = ex(1) * epsilon0 - chargdens_0
       ! This is used for diagnostics
       dwcharge_min = wcharge_min - dwcharge_min 
 
@@ -116,15 +113,12 @@ CONTAINS
     END IF
 
     IF (x_max_boundary_open) THEN
-      ! (E_{nx} - E_{nx-1/2}) / (dx/2) = rho_{nx}/epsilon0
-      ! E-field half cell away from the wall
-      ex_half = (es_potential(nx-1) - es_potential(nx))*idx
-
+      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
       ! Wall charge and difference with respect to last time step
       ! Previous wall charge surface density value
       dwcharge_max = wcharge_max
       ! Charge surface density at wall
-      wcharge_max = ex_half * epsilon0 + chargdens_nx
+      wcharge_max = ex(nx-1) * epsilon0 + chargdens_nx
       ! This is used for diagnostics
       dwcharge_max = wcharge_max - dwcharge_max
 
