@@ -134,31 +134,15 @@ CONTAINS
  
     REAL(num), DIMENSION(3) :: random_background_velocity
     TYPE(current_collision_block) :: collision
-    REAL(num) :: temp, mass
-    REAL(num) :: ran1, ran2, variance, speed
+    REAL(num) :: var
     TYPE(background_block), POINTER :: background
 
     background => collision%collision_block%background
-    ! this is to ensure that 0 < ran1 < 1
-    ! ran1=0 gives NaN in logarithm
-    ! ran1=1 could give positive logarithm due to rounding errors
-    ran1 = (1.0_num - 1.0e-10_num) * random() + 0.5e-10_num
-    ran2 = 2.0_num * pi * random()
-    ! Box Muller method for random from Gaussian distribution,
-    ! mean is mean_velocity, variance from background gas temperature
-    ! Possible place for speed up by caching the second Box Muller number
-    ! and using it later
-    ! variance * SQRT(-2.0_num * LOG(ran1)) * COS(ran2) + mean_velocity
+    var = SQRT(kb*collision%ix_temp/background%mass)
 
-    mass = background%mass
-    temp = collision%ix_temp
-    variance = SQRT(2._num*kb*temp/mass)
-    speed = variance * SQRT(-2.0_num * LOG(ran1)) * SIN(ran2)
-
-    random_background_velocity = random_unit_vector(1._num)
-    random_background_velocity = random_background_velocity * speed
-    random_background_velocity = random_background_velocity + &
-      background%mean_velocity
+    random_background_velocity(1) = random_box_muller(var)
+    random_background_velocity(2) = random_box_muller(var)
+    random_background_velocity(3) = random_box_muller(var)
 
   END FUNCTION random_background_velocity  
   
