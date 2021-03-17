@@ -221,11 +221,11 @@ CONTAINS
 
     DOUBLE PRECISION , DIMENSION(3) :: random_unit_vector
     DOUBLE PRECISION :: norm
-    DOUBLE PRECISION, PARAMETER :: pi = 3.141592653589793238462643383279503D0
 
     random_unit_vector(1) = random()*2.D0-1.D0
     random_unit_vector(2) = random()*2.D0-1.D0
     random_unit_vector(3) = random()*2.D0-1.D0
+
     ! Normalize random vector
     norm = SQRT(DOT_PRODUCT(random_unit_vector, random_unit_vector))
     random_unit_vector = random_unit_vector / norm
