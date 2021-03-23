@@ -35,22 +35,22 @@ CONTAINS
 
 
 
-  SUBROUTINE crosssection_out_of_range(sigma, ke, coll_type_block)
+  SUBROUTINE crosssection_out_of_range(gsigma, g, coll_type_block)
 
-    REAL(num), INTENT(IN) :: ke
-    REAL(num), INTENT(INOUT) :: sigma
+    REAL(num), INTENT(IN) :: g
+    REAL(num), INTENT(INOUT) :: gsigma
     TYPE(collision_type_block), POINTER, INTENT(IN) :: coll_type_block
-    REAL(num) :: max_ke, min_ke
+    REAL(num) :: g_max, g_min
 
-    IF ( sigma < 0._num ) THEN
+    IF ( gsigma < 0._num ) THEN
 
-      min_ke = coll_type_block%energy(1)
-      max_ke = coll_type_block%energy(coll_type_block%table_len)
+      g_min = coll_type_block%energy(1)
+      g_max = coll_type_block%energy(coll_type_block%table_len)
 
-      IF (ke <= min_ke) THEN
-        sigma = coll_type_block%cross_section(1)
-      ELSE IF (ke >= max_ke) THEN
-        sigma = coll_type_block%cross_section(coll_type_block%table_len)
+      IF (g <= g_min) THEN
+        gsigma = coll_type_block%cross_section(1)
+      ELSE IF (g >= g_max) THEN
+        gsigma = coll_type_block%cross_section(coll_type_block%table_len)
       ELSE
         WRITE(*,*) 'ERROR: Cross-section out of range but energy is not!'
       END IF
@@ -61,15 +61,14 @@ CONTAINS
 
 
 
-  SUBROUTINE warning_pmax(collision, sigma_total, ke)
+  SUBROUTINE warning_pmax(collision, gsigma_total, g)
 
     TYPE(current_collision_block), POINTER ,INTENT(IN) :: collision
-    REAL(num), INTENT(IN) :: sigma_total, ke
+    REAL(num), INTENT(IN) :: gsigma_total, g
 
     INTEGER :: species1, species2, iu, io
-    REAL(num) :: dgsigma
     CHARACTER(14) :: time_str, pos_str, gsigma_str, gsigma_max_str
-    CHARACTER(14) :: sigma_str, ke_str, boyd_factor_str, dgsigma_str
+    CHARACTER(14) :: g_str, boyd_factor_str
     CHARACTER(len=string_length) :: ispecies_str, jspecies_str
     TYPE(neutrals_block), POINTER:: collision_block
 
@@ -80,14 +79,9 @@ CONTAINS
 
     WRITE(time_str, 987) time
     WRITE(pos_str, 987) collision%part1%part_pos
-    WRITE(gsigma_str, 987) sigma_total*collision%g_mag
+    WRITE(gsigma_str, 987) gsigma_total
     WRITE(gsigma_max_str, 987) collision_block%gsigma_max_total
-    dgsigma = (collision%prob_factor*sigma_total*collision%g_mag - &
-      collision_block%gsigma_max_total) /&
-      collision_block%gsigma_max_total * 100._num
-    WRITE(dgsigma_str, 987) dgsigma
-    WRITE(ke_str, 987) ke
-    WRITE(sigma_str, 987) sigma_total
+    WRITE(g_str, 987) g
     WRITE(boyd_factor_str, 987) collision%prob_factor
     ispecies_str = species_list(species1)%name
     IF (species2 > n_species) THEN
@@ -102,14 +96,12 @@ CONTAINS
       WRITE(io,*) '*** WARNING ***'
       WRITE(io,*) 'MAX(g*sigma) of species ', TRIM(ADJUSTL(ispecies_str)), &
         ' and ', TRIM(ADJUSTL(jspecies_str)), ' is lower than expected.'
-      WRITE(io,*) 'Position [m]: ', TRIM(ADJUSTL(pos_str))
-      WRITE(io,*) 'Time [s]: ', TRIM(ADJUSTL(time_str))
-      WRITE(io,*) 'Cross-section(sigma) [m^2]: ', TRIM(ADJUSTL(sigma_str))
-      WRITE(io,*) 'Relative K.E. [J]: ', TRIM(ADJUSTL(ke_str))
-      WRITE(io,*) 'g*sigma [m^3/s]: ', TRIM(ADJUSTL(gsigma_str))
+      WRITE(io,*) 'Position [m]:         ', TRIM(ADJUSTL(pos_str))
+      WRITE(io,*) 'Time [s]:             ', TRIM(ADJUSTL(time_str))
+      WRITE(io,*) 'g*sigma [m^3/s]:      ', TRIM(ADJUSTL(gsigma_str))
       WRITE(io,*) 'MAX(g*sigma) [m^3/s]: ', TRIM(ADJUSTL(gsigma_max_str))
-      WRITE(io,*) 'Delta(g*sigma) [%]: ', TRIM(ADJUSTL(dgsigma_str))
-      WRITE(io,*) 'Boyd factor []: ', TRIM(ADJUSTL(boyd_factor_str))
+      WRITE(io,*) 'g [m/s]:              ', TRIM(ADJUSTL(g_str))
+      WRITE(io,*) 'Boyd factor []:       ', TRIM(ADJUSTL(boyd_factor_str))
       WRITE(io,*)
     END DO
 
@@ -172,11 +164,11 @@ CONTAINS
       WRITE(io,*) '*** WARNING ***'
       WRITE(io,*) 'Too many collision pairs between species ', &
         TRIM(ADJUSTL(ispecies_str)), ' and ', TRIM(ADJUSTL(jspecies_str)),'.'
-      WRITE(io,*) 'Position [m]: ', TRIM(ADJUSTL(pos_str))
-      WRITE(io,*) 'Time [s]: ', TRIM(ADJUSTL(time_str))
-      WRITE(io,*) 'Number of super-particles: ', TRIM(ADJUSTL(n_ipart_str)), &
+      WRITE(io,*) 'Position [m]:    ', TRIM(ADJUSTL(pos_str))
+      WRITE(io,*) 'Time [s]:        ', TRIM(ADJUSTL(time_str))
+      WRITE(io,*) 'Number Sup-pcls: ', TRIM(ADJUSTL(n_ipart_str)), &
         ' and ', TRIM(ADJUSTL(n_jpart_str))
-      WRITE(io,*) 'Collision counter: ', TRIM(ADJUSTL(coll_icounter_str)), &
+      WRITE(io,*) 'Coll. counter:   ', TRIM(ADJUSTL(coll_icounter_str)), &
         ' and ', TRIM(ADJUSTL(coll_jcounter_str))
       WRITE(io,*) 'Collision pairs: ', TRIM(ADJUSTL(n_pairs_str))
       WRITE(io,*)
