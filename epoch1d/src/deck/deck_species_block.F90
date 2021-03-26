@@ -1194,6 +1194,19 @@ CONTAINS
           END IF
         END IF
       END DO
+
+      IF (species_list(i)%reinjection_id >= 0 .AND. &
+        species_list(i)%bc_particle(1) /= c_bc_open .AND. &
+        species_list(i)%bc_particle(2) /= c_bc_open) THEN
+        species_list(i)%reinjection_id = -1
+        IF (rank==0) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** WARNING ***'
+            WRITE(io,*) 'Reinjection is not possible with periodic boundaries'
+          END DO
+        END IF
+      END IF
     END DO
 
 #ifdef BREMSSTRAHLUNG

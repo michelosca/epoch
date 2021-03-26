@@ -26,9 +26,9 @@ MODULE electrostatic
 
   PRIVATE
 
-  PUBLIC :: es_update_e_field, destroy_petsc, setup_electrostatic
+  PUBLIC :: es_update_e_field, setup_electrostatic
   PUBLIC :: init_potential, es_wall_current_diagnostic
-  PUBLIC :: attach_potential, setup_petsc_variables
+  PUBLIC :: attach_potential, setup_petsc_variables, finalize_petsc
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: initialize_petsc, finalize_electrostatic_solver
 
@@ -43,32 +43,48 @@ CONTAINS
 
   SUBROUTINE es_update_e_field
     
-    INTEGER :: ix
-    REAL(num) :: idx, ex_half, chargdens_0, chargdens_nx
-   
-    idx = 1._num/dx
+    REAL(num) :: chargdens_half, chargdens_nxhalf
+
     es_potential = 0.0_num 
 
-    ! Update electric field in x-direction
-    ex = 0._num
-    
     ! Charge weighting from particles to the grid, i.e. charge density
     ! The following subroutine loads total chage density on es_potential
     CALL es_calc_charge_density
 
     ! In case of non-periodic boundaries
     IF (x_min_boundary_open) THEN
-      ! chargdens_0 = rho_0*dx/2: charge surface density at wall (x-min)
-      chargdens_0 = es_potential(0) * dx * 0.5_num
+      ! chargdens_1/2 = (rho_0+rho_1)/2*dx: charge density near wall
+      chargdens_half = (es_potential(0)+es_potential(1)) * dx * 0.5_num
     END IF
     IF (x_max_boundary_open) THEN
-      ! chargdens_nx = rho_nx*dx/2: charge surface density at wall (x-max)
-      chargdens_nx = es_potential(nx) * dx * 0.5_num
+      ! chargdens_nx-1/2 = rho_nx*dx/2: charge density near wall
+      chargdens_nxhalf = (es_potential(nx)+es_potential(nx-1)) * dx * 0.5_num
     END IF
 
     ! Charge density to electrostatic potential
     ! This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential
+
+    ! Calculate electric field in x-direction
+    CALL es_calc_ex(chargdens_half, chargdens_nxhalf)
+    ! Update electric field in y- and z-direction
+    CALL set_ez
+    CALL set_ey
+
+
+  END SUBROUTINE es_update_e_field
+
+
+
+  SUBROUTINE es_calc_ex(chargdens_0, chargdens_nx)
+
+    INTEGER :: ix
+    REAL(num) :: idx
+    REAL(num), INTENT(IN) :: chargdens_0, chargdens_nx
+
+    idx = 1._num/dx
+    ! Update electric field in x-direction
+    ex = 0._num
     
     ! Calculate the electric field: Div(E) = -Phi
     DO ix = 0, nx
@@ -76,53 +92,46 @@ CONTAINS
     END DO
     ex = ex * 0.5_num * idx
 
-
     ! E-field boundaries
     ! For between-processors boundaries and external (periodic) bc
     CALL field_bc(ex, ng)
 
     ! For non-periodic boundaries
     IF (x_min_boundary_open) THEN
-      ! (E_{1/2} - E_0) / (dx/2) = rho_0/epsilon0
-      ! E-field half cell away from the wall: E_{1/2}
-      ex_half = (es_potential(0) - es_potential(1))*idx
-
+      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
       ! Wall charge and difference with respect to last time step
       ! Previous wall charge surface density value
       dwcharge_min = wcharge_min  
       ! Charge surface density at wall
-      wcharge_min = ex_half * epsilon0 - chargdens_0 
+      wcharge_min = ex(1) * epsilon0 - chargdens_0
       ! This is used for diagnostics
       dwcharge_min = wcharge_min - dwcharge_min 
 
       !Update E-field at wall
-      ex(1-ng:0) = wcharge_min/epsilon0
+      ex(0) = wcharge_min/epsilon0
       ! Option two would be ex(0) = ex_half*2._num - ex(1)
     END IF
 
     IF (x_max_boundary_open) THEN
-      ! (E_{nx} - E_{nx-1/2}) / (dx/2) = rho_{nx}/epsilon0
-      ! E-field half cell away from the wall
-      ex_half = (es_potential(nx-1) - es_potential(nx))*idx
-
+      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
       ! Wall charge and difference with respect to last time step
       ! Previous wall charge surface density value
       dwcharge_max = wcharge_max
       ! Charge surface density at wall
-      wcharge_max = ex_half * epsilon0 + chargdens_nx
+      wcharge_max = ex(nx-1) * epsilon0 + chargdens_nx
       ! This is used for diagnostics
       dwcharge_max = wcharge_max - dwcharge_max
 
       !Update E-field at wall
-      ex(nx:nx+ng) = wcharge_max/epsilon0
+      ex(nx) = wcharge_max/epsilon0
       ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
     END IF
 
-    ! Update electric field in y- and z-direction
-    CALL set_ez
-    CALL set_ey
+    DO ix = 1, 2*c_ndims
+      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
+    END DO
 
-  END SUBROUTINE es_update_e_field
+  END SUBROUTINE es_calc_ex
 
 
 
@@ -133,7 +142,7 @@ CONTAINS
     ! The data to be weighted onto the grid
     REAL(num) :: wdata
     REAL(num) :: part_weight, idx
-    INTEGER :: ispecies, ix
+    INTEGER :: ispecies, ix, i
     TYPE(particle), POINTER :: current
 #include "particle_head.inc"
 
@@ -182,35 +191,10 @@ CONTAINS
 
 #ifdef PARTICLE_SHAPE_BSPLINE3
 #include "bspline3/gxfac.inc"
-        IF (x_min_boundary_open .AND. cell_x == 0) THEN
-          gx(0) = gx(0) + gx(-1) + gx(-2)
-          gx(-1) = 0._num
-          gx(-2) = 0._num
-        END IF
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1) + gx(2)
-          gx(1) = 0._num
-          gx(2) = 0._num
-        END IF
-
 #elif  PARTICLE_SHAPE_TOPHAT
 #include "tophat/gxfac.inc"
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1)
-          gx(1) = 0._num
-        END IF
-
 #else
 #include "triangle/gxfac.inc"
-        IF (x_min_boundary_open .AND. cell_x == 0) THEN
-          gx(0) = gx(0) + gx(-1)
-          gx(-1) = 0._num
-        END IF
-        IF (x_max_boundary_open .AND. cell_x == nx) THEN
-          gx(0) = gx(0) + gx(1)
-          gx(1) = 0._num
-        END IF
-
 #endif
 
         DO ix = sf_min, sf_max
@@ -221,11 +205,26 @@ CONTAINS
       END DO
     END DO
 
+    ! Adds charge density values from adjacent processors
     CALL processor_summation_bcs(es_potential, ng)
+    ! Places charge density values from adjacent processor in ghost cells
+    CALL field_bc(es_potential, ng)
 
     es_potential = es_potential * idx
-    IF (x_max_boundary_open) es_potential(nx) = es_potential(nx) * 2._num
-    IF (x_min_boundary_open) es_potential( 0) = es_potential( 0) * 2._num
+    IF (x_max_boundary_open) THEN
+      DO i = 1,ng-1
+        es_potential(nx-i) = es_potential(nx-i) + es_potential(nx+i)
+      END DO
+      es_potential(nx+1:) = 0._num
+      es_potential(nx) = es_potential(nx) * 2._num
+    END IF
+    IF (x_min_boundary_open) THEN
+      DO i = 1,ng-1
+        es_potential(i) = es_potential(i) + es_potential(-i)
+      END DO
+      es_potential(:-1) = 0._num
+      es_potential(0) = es_potential(0) * 2._num
+    END IF
 
   END SUBROUTINE es_calc_charge_density
 
@@ -278,7 +277,6 @@ CONTAINS
     CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
-    IF (RANK==0) PRINT*, comm, PETSC_COMM_WORLD, MPI_COMM_WORLD
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
     CALL chkerrq_petsc(perr, 'KSPSolve')
 
@@ -307,10 +305,9 @@ CONTAINS
   END SUBROUTINE chkerrq_petsc
 
 
-  SUBROUTINE setup_petsc_vector(vector, ncells_local, ncells_global)
+  SUBROUTINE setup_petsc_vector(ncells_local, ncells_global)
     
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
-    Vec, INTENT(OUT) :: vector
     PetscScalar :: zero
     PetscInt :: nx_local, nx_glob
       
@@ -322,22 +319,21 @@ CONTAINS
     IF (x_max_boundary) nx_local = nx_local - 1
     nx_glob = ncells_global - 1 ! don't count for last global cell
       
-    CALL VecCreateMPI(comm, nx_local, nx_glob, vector, perr)
+    CALL VecCreateMPI(comm, nx_local, nx_glob, es_potential_vec, perr)
     
     ! Set initial vector values to zero
     zero = 0._num
-    CALL VecSet(vector, zero, perr)
+    CALL VecSet(es_potential_vec, zero, perr)
 
   END SUBROUTINE setup_petsc_vector
 
 
 
-  SUBROUTINE setup_petsc_matrix(matrix,ncells_local, ncells_global)
+  SUBROUTINE setup_petsc_matrix(ncells_local, ncells_global)
     
     ! ncells_local: number of cells in the processor
     ! ncells_global: number of all cells (all processors)
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
-    Mat, INTENT(INOUT) :: matrix
     INTEGER :: n_first, n_last
     PetscInt :: nx_local, nx_glob, zero
     PetscScalar :: values(3)
@@ -362,10 +358,10 @@ CONTAINS
     !             o_nz: number of non-zeros per row in the OFF-DIAGONAL portion
     !                   of local submatrix
     !             o_nnz-array -> same as o_nz but specifying each row
-    CALL MatCreate(comm, matrix, perr)
-    CALL MatSetSizes(matrix, nx_local, nx_local, nx_glob, nx_glob, perr)
-    CALL MatSetFromOptions(matrix, perr) 
-    CALL MatSetUp(matrix, perr)
+    CALL MatCreate(comm, transform_mtrx, perr)
+    CALL MatSetSizes(transform_mtrx, nx_local, nx_local, nx_glob, nx_glob, perr)
+    CALL MatSetFromOptions(transform_mtrx, perr)
+    CALL MatSetUp(transform_mtrx, perr)
 
     ! Petsc matrix indexes (global). First index in Petsc is zero, hence
     ! Shift cell indexing so that it starts at 0
@@ -386,7 +382,7 @@ CONTAINS
       col(2) = row+1
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
-      CALL MatSetValues(matrix, 1, row, 2, col(1:2), values(2:3), &
+      CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(2:3), &
               INSERT_VALUES, perr)
       ! Move to next row to be set
       n_first = n_first + 1
@@ -400,7 +396,7 @@ CONTAINS
       col(2) = row
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
-      CALL MatSetValues(matrix, 1, row, 2, col(1:2), values(1:2), &
+      CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(1:2), &
               INSERT_VALUES, perr)
       ! Move to last row to be set
       n_last = n_last - 1
@@ -411,35 +407,35 @@ CONTAINS
       col(1) = row-1
       col(2) = row
       col(3) = row+1
-      CALL MatSetValues(matrix, 1, row, 3, col, values, INSERT_VALUES, perr)
+      CALL MatSetValues(transform_mtrx, 1, row, 3, col, values, INSERT_VALUES,&
+        perr)
     END DO
 
-    CALL MatAssemblyBegin(matrix, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(matrix, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
 
     ! Generate nullspace required for GAMG preconditioner
     zero = 0
     CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
       PETSC_NULL_VEC, matnull, perr)
-    CALL MatSetNearNullSpace(matrix, matnull, perr)
+    CALL MatSetNearNullSpace(transform_mtrx, matnull, perr)
 
-    CALL MatSetOption(matrix, MAT_SYMMETRIC, PETSC_TRUE, perr)
+    CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
 
   END SUBROUTINE setup_petsc_matrix
 
 
 
-  SUBROUTINE setup_petsc_ksp(matrix)
+  SUBROUTINE setup_petsc_ksp
 
     ! The actual KSP setup happens through the file
     ! 'housekeeping/petsc_runtime_options.opt'
-    Mat, INTENT(INOUT) :: matrix
 
     ! Create linear solver context
     CALL KSPCreate(comm, ksp, perr)
 
     ! Set operators
-    CALL KSPSetOperators(ksp, matrix, matrix, perr)
+    CALL KSPSetOperators(ksp, transform_mtrx, transform_mtrx, perr)
 
     ! Setup solver
     CALL KSPSetFromOptions(ksp,perr)
@@ -782,9 +778,9 @@ CONTAINS
 
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
 
-    CALL setup_petsc_vector(es_potential_vec, ncells_local, ncells_global)
-    CALL setup_petsc_matrix(transform_mtrx, ncells_local, ncells_global)
-    CALL setup_petsc_ksp(transform_mtrx)
+    CALL setup_petsc_vector(ncells_local, ncells_global)
+    CALL setup_petsc_matrix(ncells_local, ncells_global)
+    CALL setup_petsc_ksp
 
   END SUBROUTINE setup_petsc_variables
 
@@ -800,12 +796,19 @@ CONTAINS
   END SUBROUTINE initialize_petsc
 
 
+  SUBROUTINE finalize_petsc
+
+    CALL destroy_petsc
+    CALL PetscFinalize(perr)
+
+  END SUBROUTINE finalize_petsc
+
+
   SUBROUTINE finalize_electrostatic_solver
 
     CALL deallocate_potentials
     CALL deallocate_efield_profiles
-    CALL destroy_petsc
-    CALL PetscFinalize(perr)
+    CALL finalize_petsc
 
   END SUBROUTINE finalize_electrostatic_solver
 

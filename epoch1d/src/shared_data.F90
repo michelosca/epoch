@@ -821,7 +821,7 @@ MODULE shared_data
 
   TYPE collision_type_block
 
-    REAL(num) :: ethreshold
+    REAL(num) :: ethreshold, gthreshold
     REAL(num) :: user_factor
     REAL(num), ALLOCATABLE, DIMENSION(:) :: energy, cross_section
     REAL(num) :: energy_units, cross_section_units

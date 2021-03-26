@@ -285,12 +285,12 @@ CONTAINS
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    INTEGER :: ncolltypes, coll_type, the_coll_type, ix
+    INTEGER :: ncolltypes, ctype, chosen_ctype, ix
     REAL(num) :: p_total, p_low, p_top, igsigma_max
     REAL(num) :: ran1
-    REAL(num) :: g_mag, g2, ke
+    REAL(num) :: g_mag
     REAL(num), DIMENSION(3) :: u_1, u_2, g
-    REAL(num), ALLOCATABLE, DIMENSION(:) :: sigma_arr, prob_arr
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: gsigma_arr, prob_arr
     TYPE(neutrals_block), POINTER :: collision_block
     TYPE(collision_type_block), POINTER :: coll_type_block
 
@@ -298,7 +298,7 @@ CONTAINS
 
     igsigma_max = collision_block%igsigma_max_total
     ncolltypes = collision_block%ncolltypes
-    ALLOCATE(sigma_arr(ncolltypes), prob_arr(ncolltypes))
+    ALLOCATE(gsigma_arr(ncolltypes), prob_arr(ncolltypes))
 
     !Particles momenta
     u_1 = collision%part1%part_p * collision%im1
@@ -317,26 +317,21 @@ CONTAINS
       collision%w2_ratio = collision%w2 / collision_block%max_weight
 #endif
     END IF
-    !Relative velocity
-    g = u_1 - u_2                 ! vector
-    collision%g = g
-    g2 = DOT_PRODUCT(g, g)        ! scalar^2
-    g_mag = SQRT(g2)              ! scalar
-
-    ! Relative kinetic energy
-    ke = 0.5_num * collision%reducedm * g2
+    !Relative velocity (vector and scalar)
+    g = u_1 - u_2
+    g_mag = SQRT(DOT_PRODUCT(g,g))
 
     ! Specific cross-section values for the calculated energies
-    CALL get_coll_cross_section(collision, sigma_arr, ke)
+    CALL get_coll_cross_section(collision, gsigma_arr, g_mag)
     
     ! Collision probabilities
-    prob_arr = sigma_arr * g_mag * igsigma_max  ! Probability array
+    prob_arr = gsigma_arr * igsigma_max  ! Probability array
     prob_arr = prob_arr * collision%prob_factor! User and Boyd(2017) factors
     p_total = SUM(prob_arr)
 
     ! Checkin whether MAX(g*sigma) has been chosen correctly
     IF (p_total>1._num) THEN
-      CALL warning_pmax(collision, SUM(sigma_arr), ke)
+      CALL warning_pmax(collision, SUM(gsigma_arr), g_mag)
       ! What should be done in this case? Maybe have a second collision?
     END IF
 
@@ -347,20 +342,20 @@ CONTAINS
     IF (ran1 <= p_total) THEN !if TRUE then -> collision
 
       ! Determines which type of collision (including null collision)
-      the_coll_type = ncolltypes
+      chosen_ctype = ncolltypes
       p_low = 0._num
       p_top = prob_arr(1)
-      DO coll_type = 1, ncolltypes - 1
-        IF ( ran1 <= p_top .AND. ran1 >= p_low ) THEN
-          the_coll_type = coll_type
+      DO ctype = 1, ncolltypes - 1
+        IF ( ran1 <= p_top .AND. ran1 > p_low ) THEN
+          chosen_ctype = ctype
           EXIT
         END IF
         p_low = p_top
-        p_top = p_top + prob_arr(coll_type+1)
+        p_top = p_top + prob_arr(ctype+1)
       END DO
-      coll_type_block => collision_block%collision_set(the_coll_type)
+      coll_type_block => collision_block%collision_set(chosen_ctype)
       collision%type_block => coll_type_block
-      collision%type = the_coll_type
+      collision%type = chosen_ctype
 
       ! IO collision data
       IF (neutral_collision_counter) THEN
@@ -369,6 +364,7 @@ CONTAINS
       END IF
 
       ! Store velocity values (used later in coll_subroutine)
+      collision%g = g
       collision%g_mag = g_mag
       collision%u_cm = (collision%part1%part_p+collision%m2*u_2)*collision%im12
 
@@ -378,67 +374,67 @@ CONTAINS
       collision%type_block => NULL()
     END IF
 
-    DEALLOCATE(sigma_arr, prob_arr)
+    DEALLOCATE(gsigma_arr, prob_arr)
 
   END SUBROUTINE particle_collision_dynamics
 
 
 
-  SUBROUTINE get_coll_cross_section(collision, sigma_arr, ke_cm)
+  SUBROUTINE get_coll_cross_section(collision, gsigma_arr, g)
     ! This routine outputs the cross-sections for the different collision types
 
     TYPE(current_collision_block), POINTER, INTENT(IN) :: collision
 
-    REAL(num), DIMENSION(:), INTENT(OUT) :: sigma_arr
-    REAL(num), INTENT(IN) :: ke_cm
+    REAL(num), DIMENSION(:), INTENT(OUT) :: gsigma_arr
+    REAL(num), INTENT(IN) :: g
     
-    REAL(num) :: sigma, ke_min, ke_max, sigma_min, sigma_max, ethreshold
+    REAL(num) :: gsigma, g_min, g_max, gsigma_min, gsigma_max, gthreshold
     REAL(num) :: user_factor
-    INTEGER :: table_len, coll_type, ix
+    INTEGER :: table_len, ctype, ix
     TYPE(collision_type_block), POINTER :: coll_type_block
     TYPE(neutrals_block), POINTER :: collision_block
 
-    sigma_arr = 0._num
+    gsigma_arr = 0._num
     collision_block => collision%collision_block
     
-    DO coll_type = 1, collision_block%ncolltypes
+    DO ctype = 1, collision_block%ncolltypes
     
-      coll_type_block => collision_block%collision_set(coll_type)
+      coll_type_block => collision_block%collision_set(ctype)
       user_factor = coll_type_block%user_factor
 
       ! Collision threshold energy
-      ethreshold = coll_type_block%ethreshold
+      gthreshold = coll_type_block%gthreshold
       
-      !Check whether collision types with e_threshold!=0 are possible
-      IF (ke_cm < ethreshold) CYCLE
+      !Check whether collision types with g_threshold!=0 are possible
+      IF (g < gthreshold) CYCLE
       
       ! Cross-section
       !Negative cross-section is initially assigned
-      sigma = -1._num
+      gsigma = -1._num
       !Length of the cross-section table
       table_len = coll_type_block%table_len
       IF (table_len == 1) THEN
         ! Only one line: cross-section is constant
-        sigma = coll_type_block%cross_section(1)
+        gsigma = coll_type_block%cross_section(1)
       ELSE
         ! cross-section is energy dependent
         DO ix = 2, table_len
-          ke_min = coll_type_block%energy(ix-1)
-          ke_max = coll_type_block%energy(ix)
-          IF (ke_cm < ke_max .AND. ke_cm >= ke_min ) THEN
-            sigma_min = coll_type_block%cross_section(ix-1)
-            sigma_max = coll_type_block%cross_section(ix)
+          g_min = coll_type_block%energy(ix-1)
+          g_max = coll_type_block%energy(ix)
+          IF (g < g_max .AND. g >= g_min ) THEN
+            gsigma_min = coll_type_block%cross_section(ix-1)
+            gsigma_max = coll_type_block%cross_section(ix)
             ! Interpolation
-            sigma = interpolation(ke_min, ke_max, sigma_min, sigma_max, ke_cm)
-            sigma = sigma * user_factor
+            gsigma = interpolation(g_min, g_max, gsigma_min, gsigma_max, g)
+            gsigma = gsigma * user_factor
             EXIT
           END IF
         END DO
-        CALL crosssection_out_of_range(sigma, ke_cm, coll_type_block)
+        CALL crosssection_out_of_range(gsigma, g, coll_type_block)
       END IF
 
       !Assig calculated value to the output array
-      sigma_arr(coll_type) = sigma
+      gsigma_arr(ctype) = gsigma
     END DO
 
   END SUBROUTINE get_coll_cross_section

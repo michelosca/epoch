@@ -965,8 +965,8 @@ CONTAINS
     b_mod_max = MAX(b_mod_max, user_max_b_field)
     e_mod_max = MAX(e_mod_max, user_max_e_field)
 
-    e_dt = HUGE(0._num)
-    b_dt = HUGE(0._num)
+    e_dt = 1.e50_num
+    b_dt = 1.e50_num
 
     DO ispecies = 1, n_species
 

@@ -73,7 +73,7 @@ CONTAINS
     got_time = .FALSE.
     user_max_speed = 0._num
     norm_z_factor = 5._num
-    max_perturbation_freq = TINY(0._num)
+    max_perturbation_freq = 1.e-50_num
 
     !Neutral collisions
     user_max_b_field = 0._num

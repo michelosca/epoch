@@ -277,12 +277,28 @@ CONTAINS
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     INTEGER, INTENT(IN) :: ispecies, jspecies
     INTEGER :: io, iu
+    REAL(num) :: mi, mj, mu
 
-    ! Convert data into Joules and m^2
+    ! Convert energy data into Joules
     coll_type%energy = coll_type%energy * coll_type%energy_units
     coll_type%ethreshold = coll_type%ethreshold * coll_type%energy_units
+    ! Convert energy data into speed difference, i.e. g = |u1-u2|
+    mi = species_list(ispecies)%mass
+    IF (coll_block%is_background) THEN
+      mj = coll_block%background%mass
+    ELSE
+      mj = species_list(jspecies)%mass
+    END IF
+    mu = mj * mi / (mi + mj)
+    coll_type%energy = SQRT(coll_type%energy * 2._num / mu)
+    coll_type%gthreshold = SQRT(coll_type%ethreshold * 2._num / mu)
+
+
+    ! Convert cross-section data into m^2
     coll_type%cross_section = coll_type%cross_section * &
       coll_type%cross_section_units
+    ! Convert cross-section data into m^3/s, i.e. g*sigma
+    coll_type%cross_section = coll_type%cross_section * coll_type%energy
 
     ! If collision with a background gas, always Bird
     IF (coll_block%is_background) THEN
@@ -525,21 +541,16 @@ CONTAINS
   SUBROUTINE get_gsigma_max
     
 
-    REAL(num) :: gsigma_max, gsigma, interp_err
-    REAL(num) :: energy, e_min, e_max
-    REAL(num) :: sigma, sigma_min, sigma_max, sigma_total
-    REAL(num) :: m1, m2, reduced_mass, iredmass2
-    REAL(num) :: g, user_factor
-    REAL(num), ALLOCATABLE, DIMENSION(:) :: e_next
+    REAL(num) :: g, g_min, g_max
+    REAL(num) :: gsigma, gsigma_min, gsigma_max, gsigma_total
+    REAL(num) :: user_factor
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: g_next
     INTEGER :: ispecies, jspecies, ncolltypes
     INTEGER :: ctype, line
     INTEGER, ALLOCATABLE, DIMENSION(:) :: ie, tlen
     LOGICAL, ALLOCATABLE, DIMENSION(:) :: completed
     TYPE(neutrals_block), POINTER :: coll_block
     TYPE(collision_type_block), POINTER :: coll_type
-
-    ! Approximation to account for interpolation errors
-    interp_err = 1.e-4_num
 
     DO ispecies = 1, n_species
       DO jspecies = 1, n_species_bg
@@ -551,91 +562,78 @@ CONTAINS
           CYCLE
         END IF
 
-        ! Species masses
-        m1 = species_list(ispecies)%mass
-        IF (coll_block%is_background) THEN
-          m2 = coll_block%background%mass
-        ELSE
-          m2 = species_list(jspecies)%mass
-        END IF
-        reduced_mass = m1*m2/(m1+m2)
-        iredmass2 = 2._num/reduced_mass
-
         ! Each collision type will have its own index: ie
         ncolltypes = coll_block%ncolltypes
-        ALLOCATE(ie(ncolltypes), tlen(ncolltypes), e_next(ncolltypes))
+        ALLOCATE(ie(ncolltypes), tlen(ncolltypes), g_next(ncolltypes))
         ALLOCATE(completed(ncolltypes))
         ie = 1
         completed = .FALSE.
         DO ctype = 1, ncolltypes
           coll_type => coll_block%collision_set(ctype)
           tlen(ctype) = coll_type%table_len
-          e_next(ctype) = coll_type%energy(1)
+          g_next(ctype) = coll_type%energy(1)
         END DO
 
         ! Get MAX(g*sigma_total)
         gsigma_max = 0._num
         DO WHILE ( .NOT.ALL(completed) )
 
-          energy = MINVAL(e_next)
+          g = MINVAL(g_next)
 
-          ! In case an energy max.value is holding the energy sweep
+          ! In case an g max.value is stopping the g-sweep
           DO ctype = 1, ncolltypes
-            IF (ABS(e_next(ctype) - energy) <= TINY(0._num) .AND. &
+            IF (ABS(g_next(ctype) - g) <= TINY(0._num) .AND. &
               ie(ctype) == tlen(ctype)) THEN
                 completed(ctype) = .TRUE.
-                e_next(ctype) = HUGE(0._num)
+                g_next(ctype) = HUGE(0._num)
             END IF
           END DO
 
-          ! Move index in table with min. energy value
+          ! Move index in table with min. g value
           DO ctype = 1, ncolltypes
             IF (.NOT.completed(ctype) .AND. &
-              ABS(e_next(ctype) - energy) <= TINY(0._num)) THEN
+              ABS(g_next(ctype) - g) <= TINY(0._num)) THEN
               coll_type => coll_block%collision_set(ctype)
               ie(ctype) = ie(ctype) + 1
-              e_next(ctype) = coll_type%energy(ie(ctype))
+              g_next(ctype) = coll_type%energy(ie(ctype))
             END IF
           END DO
 
-          g = SQRT(iredmass2*energy)
-
-          sigma_total = 0._num
+          gsigma_total = 0._num
           DO ctype = 1, ncolltypes
             coll_type => coll_block%collision_set(ctype)
             user_factor = coll_type%user_factor
-            sigma = -1._num
+            gsigma = -1._num
             IF (tlen(ctype) == 1) THEN
               ! Only one line: cross-section is constant
-              sigma = coll_type%cross_section(1)
+              gsigma = coll_type%cross_section(1)
             ELSE
               ! cross-section is energy dependent
               DO line = 2, tlen(ctype)
-                e_min = coll_type%energy(line-1)
-                e_max = coll_type%energy(line)
-                IF (energy < e_max .AND. energy >= e_min ) THEN
-                  sigma_min = coll_type%cross_section(line-1)
-                  sigma_max = coll_type%cross_section(line)
+                g_min = coll_type%energy(line-1)
+                g_max = coll_type%energy(line)
+                IF (g < g_max .AND. g >= g_min ) THEN
+                  gsigma_min = coll_type%cross_section(line-1)
+                  gsigma_max = coll_type%cross_section(line)
                   ! Interpolation
-                  sigma = interpolation(e_min,e_max,sigma_min,sigma_max,energy)
-                  sigma = sigma * user_factor
+                  gsigma = interpolation(g_min,g_max,gsigma_min,gsigma_max,g)
+                  gsigma = gsigma * user_factor
                   EXIT
                 END IF
               END DO
-              CALL crosssection_out_of_range(sigma, energy, coll_type)
+              CALL crosssection_out_of_range(gsigma, g, coll_type)
             END IF
 
-            sigma_total = sigma_total + sigma
+            gsigma_total = gsigma_total + gsigma
           END DO ! collision types
-          gsigma = g * sigma_total
-          gsigma_max = MAX(gsigma_max, gsigma)
+          gsigma_max = MAX(gsigma_max, gsigma_total)
 
         END DO ! Do while loop
 
-        DEALLOCATE(ie, tlen, completed, e_next)
+        DEALLOCATE(ie, tlen, completed, g_next)
 
         ! Update coll_block
-        coll_block%gsigma_max_total = gsigma_max * (1._num + interp_err)
+        coll_block%gsigma_max_total = gsigma_max
         coll_block%igsigma_max_total = 1._num/coll_block%gsigma_max_total
 
       END DO ! jspecies
@@ -831,6 +829,7 @@ CONTAINS
     INTEGER, INTENT(INOUT) :: ispecies, jspecies
     
     coll_type%ethreshold = 0._num
+    coll_type%gthreshold = 0._num
     coll_type%energy_units = 1._num
     coll_type%cross_section_units = 1._num
     coll_type%user_factor = coll_pairs(ispecies, jspecies)

@@ -217,22 +217,18 @@ CONTAINS
 
 
 
-  FUNCTION random_unit_vector(fact)
+  FUNCTION random_unit_vector()
 
-    DOUBLE PRECISION , INTENT(IN), OPTIONAL :: fact
     DOUBLE PRECISION , DIMENSION(3) :: random_unit_vector
-    DOUBLE PRECISION :: random_psi, random_phi
-    DOUBLE PRECISION, PARAMETER :: pi = 3.141592653589793238462643383279503D0
+    DOUBLE PRECISION :: norm
 
-    IF ( PRESENT(fact) ) THEN
-      random_phi = fact*pi*random()
-    ELSE
-      random_phi = 2.D0*pi*random()
-    END IF
-    random_psi = pi*random()
-    random_unit_vector(1) = sin(random_psi)*cos(random_phi)
-    random_unit_vector(2) = sin(random_psi)*sin(random_phi)
-    random_unit_vector(3) = cos(random_psi)
+    random_unit_vector(1) = random()*2.D0-1.D0
+    random_unit_vector(2) = random()*2.D0-1.D0
+    random_unit_vector(3) = random()*2.D0-1.D0
+
+    ! Normalize random vector
+    norm = SQRT(DOT_PRODUCT(random_unit_vector, random_unit_vector))
+    random_unit_vector = random_unit_vector / norm
 
   END FUNCTION random_unit_vector
 

@@ -323,10 +323,6 @@ CONTAINS
       ALLOCATE(dump_point_grid(1))
     END IF
 
-#ifdef ELECTROSTATIC
-    CALL es_update_e_field
-#endif
-
     DO iprefix = 1,SIZE(file_prefixes)
       CALL io_test(iprefix, step, print_arrays, force, prefix_first_call)
 
