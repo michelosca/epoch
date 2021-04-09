@@ -826,7 +826,7 @@ CONTAINS
   SUBROUTINE init_collision_type_block(coll_type, ispecies, jspecies)
 
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
-    INTEGER, INTENT(INOUT) :: ispecies, jspecies
+    INTEGER, INTENT(IN) :: ispecies, jspecies
     
     coll_type%ethreshold = 0._num
     coll_type%gthreshold = 0._num
