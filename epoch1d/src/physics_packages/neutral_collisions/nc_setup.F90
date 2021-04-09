@@ -300,16 +300,16 @@ CONTAINS
     ! Convert cross-section data into m^3/s, i.e. g*sigma
     coll_type%cross_section = coll_type%cross_section * coll_type%energy
 
-    ! If collision with a background gas, always Bird
+    ! If collision with a background gas, either Bird or Vahedi
     IF (coll_block%is_background) THEN
-      IF (.NOT.coll_type%wbird) THEN
+      IF (.NOT.coll_type%wbird .AND. .NOT.coll_type%wvahedi) THEN
         IF (rank == 0) THEN
           DO iu = 1, nio_units ! Print to stdout and to file
             io = io_units(iu)
             WRITE(io,*)
             WRITE(io,*) '*** WARNING ***'
             WRITE(io,*) "Collisions with background gas are only possible", &
-              " with Bird's method"
+              " with Bird's or Vahedi's method"
             WRITE(io,*) 'Collision between ', &
               TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
               TRIM(ADJUSTL(coll_block%background%name))
@@ -321,6 +321,7 @@ CONTAINS
         coll_type%wbird = .TRUE.
         coll_type%wboyd = .FALSE.
         coll_type%wsplit = .FALSE.
+        coll_type%wvahedi = .FALSE.
       END IF
     END IF
     ! Link collision subroutine
@@ -341,7 +342,7 @@ CONTAINS
     LOGICAL, INTENT(IN) :: is_background
     INTEGER :: io, iu
     LOGICAL :: linked, background_mismatch
-    CHARACTER(len=5) :: method_str
+    CHARACTER(len=6) :: method_str
 
     linked = .FALSE.
     background_mismatch = .FALSE.
@@ -349,7 +350,9 @@ CONTAINS
     ! BIRD COLLISIONS
     IF (coll_type%wbird) THEN
       IF (is_background) THEN
-        IF (coll_type%id == c_nc_elastic) THEN
+        IF ((coll_type%id == c_nc_elastic) .OR. &
+          (coll_type%id == c_nc_elastic_electron) .OR. &
+          (coll_type%id == c_nc_elastic_ion)) THEN
           coll_type%coll_subroutine => bird_elastic_scattering_bg
           linked = .TRUE.
         ELSE IF (coll_type%id == c_nc_excitation) THEN
@@ -363,7 +366,9 @@ CONTAINS
           linked = .TRUE.
         END IF
       ELSE
-        IF (coll_type%id == c_nc_elastic) THEN
+        IF ((coll_type%id == c_nc_elastic) .OR. &
+          (coll_type%id == c_nc_elastic_electron) .OR. &
+          (coll_type%id == c_nc_elastic_ion)) THEN
           coll_type%coll_subroutine => bird_elastic_scattering
           linked = .TRUE.
         ELSEIF (coll_type%id == c_nc_excitation) THEN
@@ -382,7 +387,9 @@ CONTAINS
     ELSEIF (coll_type%wboyd) THEN
       IF (is_background) THEN
         background_mismatch = .TRUE.
-      ELSEIF (coll_type%id == c_nc_elastic) THEN
+      ELSEIF ((coll_type%id == c_nc_elastic) .OR. &
+        (coll_type%id == c_nc_elastic_electron) .OR. &
+        (coll_type%id == c_nc_elastic_ion)) THEN
         coll_type%coll_subroutine => boyd_elastic_scattering
         linked = .TRUE.
       ELSEIF (coll_type%id == c_nc_excitation) THEN
@@ -417,6 +424,18 @@ CONTAINS
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
 #endif
+
+    ! VAHEDI COLLISIONS
+    ELSEIF (coll_type%wvahedi) THEN
+      IF (is_background) THEN
+        IF (coll_type%id == c_nc_elastic_electron) THEN
+          coll_type%coll_subroutine => vahedi_electron_elastic_scattering_bg
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_elastic_ion) THEN
+          coll_type%coll_subroutine => vahedi_ion_elastic_scattering_bg
+          linked = .TRUE.
+        END IF
+      END IF
     END IF
 
     IF (.NOT.linked) THEN
@@ -424,6 +443,7 @@ CONTAINS
         IF (coll_type%wbird) method_str = 'Bird'
         IF (coll_type%wboyd) method_str = 'Boyd'
         IF (coll_type%wsplit) method_str = 'Split'
+        IF (coll_type%wvahedi) method_str = 'Vahedi'
         DO iu = 1, nio_units ! Print to stdout and to file
           io = io_units(iu)
           WRITE(io,*)
@@ -759,6 +779,9 @@ CONTAINS
       ELSEIF (str_cmp(value, 'split')) THEN
         coll_type%wbird = .FALSE.
         coll_type%wsplit = .TRUE.
+      ELSEIF (str_cmp(value, 'vahedi')) THEN
+        coll_type%wbird = .FALSE.
+        coll_type%wvahedi = .TRUE.
       END IF
 
     ELSEIF (str_cmp(element, 'collision_type')) THEN        
@@ -773,6 +796,12 @@ CONTAINS
         coll_type%name = TRIM(ADJUSTL(value))
       ELSEIF (str_cmp(value, 'charge exchange')) THEN
         coll_type%id = c_nc_charge_exchange
+        coll_type%name = TRIM(ADJUSTL(value))
+      ELSEIF (str_cmp(value, 'elastic_electron')) THEN
+        coll_type%id = c_nc_elastic_electron
+        coll_type%name = TRIM(ADJUSTL(value))
+      ELSEIF (str_cmp(value, 'elastic_ion')) THEN
+        coll_type%id = c_nc_elastic_ion
         coll_type%name = TRIM(ADJUSTL(value))
       END IF
 

@@ -276,6 +276,8 @@ MODULE constants
   INTEGER, PARAMETER :: c_nc_excitation = 1
   INTEGER, PARAMETER :: c_nc_ionisation = 2
   INTEGER, PARAMETER :: c_nc_charge_exchange = 3
+  INTEGER, PARAMETER :: c_nc_elastic_electron = 4
+  INTEGER, PARAMETER :: c_nc_elastic_ion = 5
   !----------------------------------------------------------------------------
   ! Parser data
   !----------------------------------------------------------------------------
