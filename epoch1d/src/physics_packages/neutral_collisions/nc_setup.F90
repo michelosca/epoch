@@ -542,7 +542,7 @@ CONTAINS
     
 
     REAL(num) :: g, g_min, g_max
-    REAL(num) :: gsigma, gsigma_min, gsigma_max, gsigma_total
+    REAL(num) :: gsigma,gsigma_min,gsigma_max,gsigma_total,global_gsigma_max
     REAL(num) :: user_factor
     REAL(num), ALLOCATABLE, DIMENSION(:) :: g_next
     INTEGER :: ispecies, jspecies, ncolltypes
@@ -575,7 +575,7 @@ CONTAINS
         END DO
 
         ! Get MAX(g*sigma_total)
-        gsigma_max = 0._num
+        global_gsigma_max = 0._num
         DO WHILE ( .NOT.ALL(completed) )
 
           g = MINVAL(g_next)
@@ -626,14 +626,14 @@ CONTAINS
 
             gsigma_total = gsigma_total + gsigma
           END DO ! collision types
-          gsigma_max = MAX(gsigma_max, gsigma_total)
+          global_gsigma_max = MAX(global_gsigma_max, gsigma_total)
 
         END DO ! Do while loop
 
         DEALLOCATE(ie, tlen, completed, g_next)
 
         ! Update coll_block
-        coll_block%gsigma_max_total = gsigma_max
+        coll_block%gsigma_max_total = global_gsigma_max
         coll_block%igsigma_max_total = 1._num/coll_block%gsigma_max_total
 
       END DO ! jspecies
