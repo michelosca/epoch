@@ -364,6 +364,7 @@ CONTAINS
 
       ! Store velocity values (used later in coll_subroutine)
       collision%g = g
+      collision%u_2 = u_2
       collision%g_mag = g_mag
       collision%u_cm = (collision%part1%part_p+collision%m2*u_2)*collision%im12
 
@@ -575,6 +576,7 @@ CONTAINS
     collision%g_mag = 0._num
     collision%u_cm = 0._num
     collision%g = 0._num
+    collision%u_2 = 0._num
 
     ! Particle's mass
     collision%m1 = 0._num

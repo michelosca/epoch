@@ -911,7 +911,7 @@ CONTAINS
     costheta = v_inc(1)
     sintheta = SQRT(1._num - costheta*costheta)
     ! Chi angle
-    coschi = 1._num - 2._num * random()
+    coschi = SQRT(1._num - random())
     sinchi = SQRT(1._num - coschi*coschi)
     ! Phi angle
     phi = 2._num * pi * random()
@@ -931,7 +931,7 @@ CONTAINS
     g_scat = SQRT(2._num * e_scat / m1)
 
     ! Post-collision momentum
-    collision%part1%part_p = v_scat * g_scat * m1
+    collision%part1%part_p = (collision%u_2 + v_scat * g_scat) * m1
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
