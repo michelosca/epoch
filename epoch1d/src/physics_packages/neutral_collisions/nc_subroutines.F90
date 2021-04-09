@@ -1006,6 +1006,7 @@ CONTAINS
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
+    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
     !Theta angle
     costheta = v_inc(1)
     sintheta = SQRT(1._num - costheta*costheta)
@@ -1020,7 +1021,6 @@ CONTAINS
     sinphi = SIN(phi)
     ! Scattered normalised vector
     sinratio = sinchi / sintheta
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     ! Post-collision momentum
@@ -1037,7 +1037,6 @@ CONTAINS
     sinphi = SIN(phi)
     ! Scattered normalised vector
     sinratio = sinchi / sintheta
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     ! Create a new electron particle
