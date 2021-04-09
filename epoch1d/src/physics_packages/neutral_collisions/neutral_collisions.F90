@@ -304,7 +304,6 @@ CONTAINS
     u_1 = collision%part1%part_p * collision%im1
     IF (collision_block%is_background) THEN
       u_2 = random_background_velocity(collision)
-      collision%u_2 = u_2
 #ifndef PER_SPECIES_WEIGHT
       collision%w1 = collision%part1%weight
 #endif
@@ -576,7 +575,6 @@ CONTAINS
     collision%g_mag = 0._num
     collision%u_cm = 0._num
     collision%g = 0._num
-    collision%u_2 = 0._num
 
     ! Particle's mass
     collision%m1 = 0._num
