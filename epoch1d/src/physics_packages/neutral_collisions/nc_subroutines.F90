@@ -31,6 +31,8 @@ MODULE nc_subroutines
   PUBLIC :: boyd_elastic_scattering, boyd_excitation
   PUBLIC :: bird_elastic_scattering_bg, bird_ionisation_bg, bird_excitation_bg
   PUBLIC :: bird_charge_exchange_bg
+  PUBLIC :: vahedi_electron_elastic_scattering_bg
+  PUBLIC :: vahedi_ion_elastic_scattering_bg
 #ifndef PER_SPECIES_WEIGHT
   PUBLIC :: split_ionisation, split_charge_exchange
 #endif
@@ -842,5 +844,120 @@ CONTAINS
     collision%part1%part_p = u_cm*m1 - p_scat 
 
   END SUBROUTINE bird_charge_exchange_bg
+
+
+
+  SUBROUTINE vahedi_electron_elastic_scattering_bg(collision)
+
+    ! Collision process: electron elastic scattering
+    ! e + N -> e + N
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
+    REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
+    REAL(num) :: sinratio, m1, m2
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    ! Incoming normalised velocity vector
+    v_inc = vector_normalisation(collision%g)
+
+    !Theta angle
+    costheta = v_inc(1)
+    sintheta = SQRT(1._num - costheta*costheta)
+    ! Chi angle
+    coschi = 1._num - 2._num * random()
+    sinchi = SQRT(1._num - coschi*coschi)
+    ! Phi angle
+    phi = 2._num * pi * random()
+    cosphi = COS(phi)
+    sinphi = SIN(phi)
+
+    ! Scattered normalised vector
+    sinratio = sinchi / sintheta
+    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi - &
+      crossproduct(v_inc,v_inc_i) * sinratio * cosphi
+
+    m1 = collision%m1
+    m2 = collision%m2
+    g_mag = collision%g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
+    delta_e = 2._num * m1 / m2 * (1 - coschi)
+    e_scat = e_inc * (1._num - delta_e)
+    g_scat = SQRT(2._num * e_scat / m1)
+
+    ! Post-collision momentum
+    collision%part1%part_p = v_scat * g_scat * m1
+
+  END SUBROUTINE vahedi_electron_elastic_scattering_bg
+
+
+
+  SUBROUTINE vahedi_ion_elastic_scattering_bg(collision)
+
+    ! Collision process: ion elastic scattering
+    ! e + N -> e + N
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
+    REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
+    REAL(num) :: e_inc, e_scat, g_scat, g_mag
+    REAL(num) :: sinratio, m1
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    ! Incoming normalised velocity vector
+    v_inc = vector_normalisation(collision%g)
+
+    !Theta angle
+    costheta = v_inc(1)
+    sintheta = SQRT(1._num - costheta*costheta)
+    ! Chi angle
+    coschi = 1._num - 2._num * random()
+    sinchi = SQRT(1._num - coschi*coschi)
+    ! Phi angle
+    phi = 2._num * pi * random()
+    cosphi = COS(phi)
+    sinphi = SIN(phi)
+
+    ! Scattered normalised vector
+    sinratio = sinchi / sintheta
+    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi - &
+      crossproduct(v_inc,v_inc_i) * sinratio * cosphi
+
+    m1 = collision%m1
+    g_mag = collision%g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
+    e_scat = e_inc * coschi * coschi
+    g_scat = SQRT(2._num * e_scat / m1)
+
+    ! Post-collision momentum
+    collision%part1%part_p = v_scat * g_scat * m1
+
+  END SUBROUTINE vahedi_ion_elastic_scattering_bg
+
+
+
+  FUNCTION crossproduct(a, b)
+    ! Computes: a x b = crossproduct
+    REAL(num), DIMENSION(3) :: crossproduct
+    REAL(num),  DIMENSION(3), INTENT(IN) :: a, b
+
+    crossproduct(1) = a(2) * b(3) - a(3) * b(2)
+    crossproduct(2) = a(3) * b(1) - a(1) * b(3)
+    crossproduct(3) = a(1) * b(2) - a(2) * b(1)
+
+  END FUNCTION crossproduct
+
+
+  FUNCTION vector_normalisation(vec) RESULT(vec_norm)
+    ! Normalised the input vector
+    REAL(num), DIMENSION(3) :: vec, vec_norm
+    REAL(num) :: norm
+
+    norm = SQRT(DOT_PRODUCT(vec,vec))
+    vec_norm = vec / norm
+
+  END FUNCTION vector_normalisation
+
 
 END MODULE nc_subroutines

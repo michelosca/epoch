@@ -485,6 +485,8 @@ CONTAINS
       WRITE(*,666) 'Bird method'
     ELSE IF (coll_type_block%wsplit) THEN
       WRITE(*,666) 'Split method'
+    ELSE IF (coll_type_block%wvahedi) THEN
+      WRITE(*,666) 'Vahedi method'
     END IF
     WRITE(*,555) 'Output name:', TRIM(ADJUSTL(coll_type_block%io_name))
 
