@@ -434,6 +434,15 @@ CONTAINS
         ELSEIF (coll_type%id == c_nc_elastic_ion) THEN
           coll_type%coll_subroutine => vahedi_ion_elastic_scattering_bg
           linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_excitation) THEN
+          coll_type%coll_subroutine => vahedi_excitation_bg
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_ionisation) THEN
+          coll_type%coll_subroutine => vahedi_ionisation_bg
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+          coll_type%coll_subroutine => bird_charge_exchange_bg
+          linked = .TRUE.
         END IF
       END IF
     END IF
