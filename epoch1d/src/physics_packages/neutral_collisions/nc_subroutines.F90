@@ -882,7 +882,7 @@ CONTAINS
     m2 = collision%m2
     g_mag = collision%g_mag
     e_inc = 0.5_num * m1 * g_mag * g_mag
-    delta_e = 2._num * m1 / m2 * (1 - coschi)
+    delta_e = 2._num * m1 / m2 * (1._num - coschi)
     e_scat = e_inc * (1._num - delta_e)
     g_scat = SQRT(2._num * e_scat / m1)
 
