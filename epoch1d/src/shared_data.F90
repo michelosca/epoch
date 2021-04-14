@@ -922,18 +922,4 @@ MODULE shared_data
   ! Output
   LOGICAL :: neutral_collision_counter
 
-
-  !------------------------------------------------------------------------------
-  ! Power Spectrum Density (PSD) diagnostics - written by M. Osca Engelbrecht
-  !------------------------------------------------------------------------------
-  INTEGER :: psd_diag_rank, psd_diag_cellx, psd_diag_n_dumps
-  INTEGER :: psd_diag_sampling_steps, psd_diag_averaging_steps
-  INTEGER :: psd_diag_start_av, psd_diag_end_av
-  INTEGER, ALLOCATABLE, DIMENSION(:) :: psd_diag_dump_id
-  REAL(num) :: psd_diag_sampling_period, psd_diag_averaging_time
-  REAL(num) :: psd_diag_xpos
-  REAL(num), ALLOCATABLE, DIMENSION(:) :: psd_diag_data_buffer
-  LOGICAL :: av_over_sampling_period, psd_diag_concatenated
-  LOGICAL :: psd_diag_period_is_dt, psd_diag_print_setup
-
 END MODULE shared_data
