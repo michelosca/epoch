@@ -41,7 +41,6 @@ MODULE setup
   PUBLIC :: setup_species, after_deck_last, set_dt
   PUBLIC :: read_cpu_split, pre_load_balance
   PUBLIC :: open_status_file, close_status_file
-  PUBLIC :: setup_psd_diagnostics
 
   TYPE(particle), POINTER, SAVE :: iterator_list
 #ifndef NO_IO
@@ -2228,106 +2227,5 @@ CONTAINS
     pre_loading = .FALSE.
 
   END SUBROUTINE pre_load_balance
-
-
-
-  SUBROUTINE setup_psd_diagnostics(time)
-
-    REAL(num), INTENT(IN) :: time
-    INTEGER :: i, j, dump_id, ios
-    CHARACTER(LEN=string_length) :: species_name, file_name
-
-    IF (rank == psd_diag_rank) THEN
-
-      IF (psd_diag_period_is_dt) THEN
-        ! Set sampling period in case it should be == dt
-        psd_diag_sampling_period = dt
-        av_over_sampling_period = .FALSE.
-        psd_diag_sampling_steps = 1
-      ELSE
-        ! Sampling steps
-        psd_diag_sampling_steps = FLOOR(psd_diag_sampling_period / dt + 0.5_num)
-        psd_diag_sampling_period = REAL(psd_diag_sampling_steps,num) * dt
-      END IF
-
-      ! Averaging time and collection start time
-      IF (.NOT.av_over_sampling_period) THEN
-        psd_diag_averaging_steps = 1
-      ELSE
-        psd_diag_averaging_steps = FLOOR(psd_diag_averaging_time / dt + 0.5_num)
-        ! Set diagnostic start step
-      END IF
-      psd_diag_averaging_time = REAL(psd_diag_averaging_steps, num) * dt
-
-      IF (psd_diag_averaging_steps == psd_diag_sampling_steps) THEN
-        psd_diag_concatenated = .TRUE.
-      END IF
-
-      ! Collection start and end step
-      psd_diag_start_av = step + 1
-      psd_diag_end_av = psd_diag_start_av + psd_diag_averaging_steps
-
-      ! Allocate data buffer array
-      ALLOCATE(psd_diag_data_buffer(psd_diag_n_dumps))
-      psd_diag_data_buffer = 0._num
-
-      ! Generate output files, one for each parameter & species
-      DO i = 1, psd_diag_n_dumps
-        dump_id = psd_diag_dump_id(i)
-
-        ! Number density dumps
-        IF (dump_id == c_dump_number_density) THEN
-          DO j = 1, n_species
-            species_name = TRIM(species_list(j)%name)
-            file_name='/number_density'//'_'//TRIM(ADJUSTL(species_name))// &
-              '.dat'
-            file_name = TRIM(data_dir) // file_name
-            OPEN(dump_id+100+j, FILE=TRIM(ADJUSTL(file_name)),IOSTAT=ios)
-            IF (ios /= 0) THEN
-              PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
-            END IF
-          END DO
-
-        ! Electric potential dumps
-        ELSE IF (dump_id == c_dump_es_potential) THEN
-          file_name = TRIM(data_dir) // '/es_potential.dat'
-          OPEN(dump_id+100, FILE=TRIM(ADJUSTL(file_name)), IOSTAT=ios)
-          IF (ios /= 0) THEN
-            PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
-          END IF
-
-        ! Electric field dumps
-        ELSE IF (dump_id == c_dump_ex) THEN
-          file_name = TRIM(data_dir) // '/ex.dat'
-          OPEN(dump_id+100, FILE=TRIM(ADJUSTL(file_name)), IOSTAT=ios)
-          IF (ios /= 0) THEN
-            PRINT*,'Error opening ', TRIM(ADJUSTL(file_name)),' in rank ',rank
-          END IF
-        END IF
-      END DO
-
-      IF (psd_diag_print_setup) CALL print_psd_diagnostics_setup
-    END IF
-
-  END SUBROUTINE setup_psd_diagnostics
-
-
-
-  SUBROUTINE print_psd_diagnostics_setup
-
-    WRITE(*,*) &
-       '**************POWER SPECTRUM DENSITY DIAGNOSTICS*************'
-    WRITE(*,*) ' - Processor:                ', psd_diag_rank
-    WRITE(*,*) ' - Cell position:            ', psd_diag_cellx
-    WRITE(*,*) ' - X-position:               ', psd_diag_xpos
-    WRITE(*,*) ' - Sampling period (time):   ', psd_diag_sampling_period
-    WRITE(*,*) ' - Sampling period (steps):  ', psd_diag_sampling_steps
-    WRITE(*,*) ' - Sampling average (time):  ', psd_diag_averaging_time
-    WRITE(*,*) ' - Sampling average (steps): ', psd_diag_averaging_steps
-    WRITE(*,*) ' - Averaged sampling:        ', av_over_sampling_period
-    WRITE(*,*) ' - Concatenated sampling:    ', psd_diag_concatenated
-    WRITE(*,*) ' '
-
-  END SUBROUTINE print_psd_diagnostics_setup
 
 END MODULE setup

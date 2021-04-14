@@ -31,7 +31,6 @@ MODULE deck
   USE deck_subset_block
   USE deck_collision_block
   USE deck_part_from_file_block
-  USE deck_psd_diagnostics_block
 #ifdef PHOTONS
   USE photons
 #endif
@@ -117,7 +116,6 @@ CONTAINS
     CALL electrostatic_deck_initialise
 #endif
     CALL background_deck_initialise
-    CALL psd_diagnostics_deck_initialise
 
   END SUBROUTINE deck_initialise
 
@@ -153,7 +151,6 @@ CONTAINS
 #ifdef ELECTROSTATIC
     CALL electrostatic_deck_finalise
 #endif
-    CALL psd_diagnostics_deck_finalise
   END SUBROUTINE deck_finalise
 
 
@@ -208,8 +205,6 @@ CONTAINS
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_start
 #endif
-    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
-      CALL psd_diagnostics_block_start
     END IF
 
   END SUBROUTINE start_block
@@ -267,8 +262,6 @@ CONTAINS
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_end
 #endif
-    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
-      CALL psd_diagnostics_block_end
     END IF
 
   END SUBROUTINE end_block
@@ -370,10 +363,6 @@ CONTAINS
           electrostatic_block_handle_element(block_element, block_value)
       RETURN
 #endif
-    ELSE IF (str_cmp(block_name, 'psd_diagnostics')) THEN
-      handle_block = &
-          psd_diagnostics_block_handle_element(block_element, block_value)
-      RETURN
     END IF
 
     handle_block = c_err_unknown_block
@@ -432,7 +421,6 @@ CONTAINS
 #ifdef ELECTROSTATIC
     errcode_deck = IOR(errcode_deck, electrostatic_block_check())
 #endif
-    errcode_deck = IOR(errcode_deck, psd_diagnostics_block_check())
 
     ! Collision with neutral background
     IF (n_species_bg > n_species) THEN
