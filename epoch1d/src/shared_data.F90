@@ -831,11 +831,8 @@ MODULE shared_data
     CHARACTER(LEN=string_length) :: name, io_name
 
     ! Collision method
-    LOGICAL :: wboyd, wbird, wsplit, wvahedi
+    LOGICAL :: wnanbu, wvahedi
     PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
-
-    ! For Boyd's energy restoration
-    LOGICAL :: energy_correction
 
     ! Collision diagnostics
     INTEGER, ALLOCATABLE, DIMENSION(:) :: coll_counter
@@ -921,10 +918,6 @@ MODULE shared_data
   INTEGER, ALLOCATABLE, DIMENSION(:) :: total_collision_types
   LOGICAL :: resolve_sheath
   TYPE(background_block), DIMENSION(:), POINTER :: background_list
-
-  ! This accounts for the energy loss in Boyd's method
-  REAL(num), ALLOCATABLE, DIMENSION(:) :: energy_loss
-  INTEGER :: energy_correction_species
 
   ! Output
   LOGICAL :: neutral_collision_counter
