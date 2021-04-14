@@ -75,7 +75,6 @@ CONTAINS
       ALLOCATE(dumpmask_array(4))
       ALLOCATE(bc_particle_array(2*c_ndims,4))
       release_species = ''
-      energy_correction_species = -1
     END IF
 
   END SUBROUTINE species_deck_initialise
@@ -646,15 +645,6 @@ CONTAINS
       RETURN
     END IF
 
-    ! *************************************************************
-    ! This section sets properties for neutral collisions
-    ! *************************************************************
-    IF (str_cmp(element, 'energy_correction_target')) THEN
-      IF (as_logical_print(value, element, errcode)) THEN
-        energy_correction_species = species_id
-      END IF
-      RETURN
-    END IF
     ! *************************************************************
     ! This section sets properties for zero_current particles
     ! *************************************************************

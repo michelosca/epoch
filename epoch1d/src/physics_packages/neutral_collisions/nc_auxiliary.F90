@@ -184,7 +184,7 @@ CONTAINS
   SUBROUTINE test_neutral_collision_setup
 
 
-    LOGICAL :: boyd_collision, boyd_same_species, is_background
+    LOGICAL :: is_background
     INTEGER :: ncerr
     INTEGER :: ispecies, jspecies, nc_type, ibg
     REAL(num) :: m1, m2, m_new, m_source
@@ -193,9 +193,6 @@ CONTAINS
     TYPE(neutrals_block), POINTER :: coll_block
 
     ncerr = 0
-
-    boyd_collision = .FALSE.
-    boyd_same_species = .FALSE.
 
     DO ispecies = 1, n_species
       iname = species_list(ispecies)%name
@@ -224,19 +221,19 @@ CONTAINS
           ! In case no collision types are found
           IF (coll_type%id < 0) ncerr = 8
 
-          IF (coll_type%wbird) THEN
+          IF (coll_type%wnanbu) THEN
             IF (coll_type%id == c_nc_ionisation) THEN
 
-              ! Bird-ionisation requires species_source_id
+              ! Nanbu-ionisation requires species_source_id
               IF ((coll_type%source_species_id <= 0 .OR. &
                   coll_type%source_species_id > n_species_bg) .AND. &
                   .NOT.is_background) ncerr = 2
 
-              ! Bird-ionisation requires species_target_id
+              ! Nanbu-ionisation requires species_target_id
               IF (coll_type%new_species_id <= 0 .OR. &
                  coll_type%new_species_id > n_species) ncerr = 3
 
-              ! Bird-ionisation requires same mass for source and new species 
+              ! Nanbu-ionisation requires same mass for source and new species 
               IF ( ncerr == 0 ) THEN
                 IF (is_background) THEN
                   m_source = background_list(ibg)%mass
@@ -253,66 +250,21 @@ CONTAINS
                   coll_type%source_species_id <= n_species_bg &
                   .AND. .NOT.is_background) THEN
 
-                ! Bird-excitation has new_species_id when source_species_id
+                ! Nanbu-excitation has new_species_id when source_species_id
                 IF (coll_type%new_species_id < 0 .OR. &
                     coll_type%new_species_id > n_species) THEN
                   ncerr = 4
                   CYCLE
                 END IF
 
-                ! Bird-excitation requires same mass for source and new species
+                ! Nanbu-excitation requires same mass for source and new species
                 m_source = species_list(coll_type%source_species_id)%mass
                 m_new = species_list(coll_type%new_species_id)%mass
                 IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
               END IF
 
-            ELSE IF (coll_type%id == c_nc_charge_exchange) THEN
-              IF (ABS(m1 - m2) > TINY(0._num)) ncerr = 9
             END IF
 
-          ELSE IF (coll_type%wboyd) THEN
-          
-            !No background collision available for split method
-            IF (is_background) ncerr = 12
-
-            ! Boyd's method requires a target species for energy balance
-            boyd_collision = .TRUE.
-            IF (energy_correction_species <= 0) ncerr = 1
-
-            ! An intra-collision type must be defined for energy balance
-            IF (ispecies==jspecies) boyd_same_species = .TRUE.
-
-          ELSE IF (coll_type%wsplit) THEN
-            !No background collision available for split method
-            IF (is_background) ncerr = 13
-
-            IF (coll_type%id == c_nc_ionisation) THEN
-
-              ! Valid source_species_id
-              IF (coll_type%source_species_id <= 0 .OR. &
-                  coll_type%source_species_id > n_species .AND. &
-                  .NOT.is_background) ncerr = 5
-
-              ! Valir new_species_id
-              IF (coll_type%new_species_id <= 0 .OR. &
-                  coll_type%new_species_id > n_species) ncerr = 6
-
-              ! Ionisation requires same mass for source and new species 
-              m_source = species_list(coll_type%source_species_id)%mass
-              m_new = species_list(coll_type%new_species_id)%mass
-              IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 11
-
-            ELSE IF (coll_type%id == c_nc_charge_exchange) THEN
-              ! Must point which particle has the largest weight
-              IF (coll_type%source_species_id <= 0 .OR. &
-                  coll_type%source_species_id > n_species) ncerr = 5
-
-              ! Collision species must have the same mass
-              m1 = species_list(ispecies)%mass
-              m2 = species_list(jspecies)%mass
-              IF (ABS(m1 - m2) > TINY(0._num)) ncerr = 9
-
-            END IF
           END IF
           IF (ncerr /= 0) EXIT
         END DO
@@ -321,47 +273,28 @@ CONTAINS
       IF (ncerr /= 0) EXIT
     END DO
 
-    IF (boyd_collision .AND. .NOT.boyd_same_species) ncerr = 7
-
     IF (ncerr /= 0) THEN
       IF (rank == 0) THEN
         WRITE(*,*) ''
         WRITE(*,*) '*** ERROR ***'
         WRITE(*,*) 'Collision pair: ', TRIM(ADJUSTL(iname)),' - ', &
           TRIM(ADJUSTL(jname))
-        IF (ncerr == 1) THEN
-          WRITE(*,*) 'Boyd requires sepecific "energy_correction_species"'
-        ELSE IF (ncerr == 2) THEN
-          WRITE(*,*) 'Bird-ionisation requires requires a valid ', &
+        IF (ncerr == 2) THEN
+          WRITE(*,*) 'Nanbu-ionisation requires requires a valid ', &
             '"source_species"'
         ELSE IF (ncerr ==3) THEN
-          WRITE(*,*) 'Bird-ionisation requires "new_species"'
+          WRITE(*,*) 'Nanbu-ionisation requires "new_species"'
         ELSE IF (ncerr ==4) THEN
-          WRITE(*,*) 'Bird-excitation requires a valid ', &
+          WRITE(*,*) 'Nanbu-excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
-        ELSE IF (ncerr ==5) THEN
-          WRITE(*,*) 'Split methods requires a valid ', &
-            '"source_species"'
-        ELSE IF (ncerr ==6) THEN
-          WRITE(*,*) 'Split methods requires a valid ', &
-            '"new_species"'
-        ELSE IF (ncerr ==7) THEN
-          WRITE(*,*) 'Boyd intra-species collision type must be defined ', &
-            'for energy balance'
         ELSE IF (ncerr ==8) THEN
           WRITE(*,*) 'Collision type is not recognised'
-        ELSE IF (ncerr ==9) THEN
-          WRITE(*,*) 'CX collisions require same mass species'
         ELSE IF (ncerr ==10) THEN
           WRITE(*,*) 'Excitation requires that source and new species', &
             ' have the same mass'
         ELSE IF (ncerr ==11) THEN
           WRITE(*,*) 'Ionisation requires that source and new species', &
             ' have the same mass'
-        ELSE IF (ncerr ==12) THEN
-          WRITE(*,*) 'Boyd method does not support background collisions'
-        ELSE IF (ncerr ==13) THEN
-          WRITE(*,*) 'Split method does not support background collisions'
         END IF
       CALL print_collision_type(ispecies, jspecies, nc_type)
       END IF
@@ -478,13 +411,8 @@ CONTAINS
 !       coll_type_block%cross_section_units
 !     END DO
 
-    IF (coll_type_block%wboyd) THEN
-      WRITE(*,666) 'Boyd method'
-      WRITE(*,444) 'Energy correction: ', coll_type_block%energy_correction
-    ELSE IF (coll_type_block%wbird) THEN
-      WRITE(*,666) 'Bird method'
-    ELSE IF (coll_type_block%wsplit) THEN
-      WRITE(*,666) 'Split method'
+    IF (coll_type_block%wnanbu) THEN
+      WRITE(*,666) 'Nanbu method'
     ELSE IF (coll_type_block%wvahedi) THEN
       WRITE(*,666) 'Vahedi method'
     END IF
@@ -495,7 +423,6 @@ CONTAINS
 777 FORMAT(6X, A, 1X, I2)
 666 FORMAT(6X, A)
 555 FORMAT(6X, A, 1X, A)
-444 FORMAT(6X, A, L2)
 333 FORMAT(6X, A, 1X, I4)
 
   END SUBROUTINE print_collision_type

@@ -16,9 +16,9 @@
 ! Non-relativistic neutral-neutral and charged-neutral collision module
 ! written by M. Osca Engelbrecht
 ! particle-particle collisions based on G. A. Bird (Oxford Science 
-! Publications, 1994) and K. Nanbu (IEEE transactions on plasma science, 
-! Vol. 28, No. 3, 2000). Background-particle interactions based on V. Vahedi
-! and M. Surendra (Computer Physics Communications, Vol. 87, 179-198, 1995)
+! Publications, 1994), K. Nanbu (IEEE transactions on plasma science, 
+! Vol. 28, No. 3, 2000) and V. Vahedi and M. Surendra (Computer Physics 
+! Communications, Vol. 87, 179-198, 1995)
 
 MODULE neutral_collisions
 
