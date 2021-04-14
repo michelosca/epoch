@@ -221,7 +221,7 @@ CONTAINS
           ! In case no collision types are found
           IF (coll_type%id < 0) ncerr = 8
 
-          IF (coll_type%wnanbu) THEN
+          IF (coll_type%wnanbu .OR. coll_type%wvahedi) THEN
             IF (coll_type%id == c_nc_ionisation) THEN
 
               ! Nanbu-ionisation requires species_source_id
@@ -280,12 +280,12 @@ CONTAINS
         WRITE(*,*) 'Collision pair: ', TRIM(ADJUSTL(iname)),' - ', &
           TRIM(ADJUSTL(jname))
         IF (ncerr == 2) THEN
-          WRITE(*,*) 'Nanbu-ionisation requires requires a valid ', &
+          WRITE(*,*) 'Ionisation requires requires a valid ', &
             '"source_species"'
         ELSE IF (ncerr ==3) THEN
-          WRITE(*,*) 'Nanbu-ionisation requires "new_species"'
+          WRITE(*,*) 'Ionisation requires "new_species"'
         ELSE IF (ncerr ==4) THEN
-          WRITE(*,*) 'Nanbu-excitation requires a valid ', &
+          WRITE(*,*) 'Excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
         ELSE IF (ncerr ==8) THEN
           WRITE(*,*) 'Collision type is not recognised'

@@ -33,7 +33,7 @@ MODULE nc_subroutines
   PUBLIC :: vahedi_electron_elastic_scattering_bg, vahedi_excitation_bg
   PUBLIC :: vahedi_ion_elastic_scattering_bg, vahedi_ionisation_bg
   PUBLIC :: vahedi_electron_elastic_scattering, vahedi_excitation
-  PUBLIC :: vahedi_ionisation
+  PUBLIC :: vahedi_ionisation, vahedi_ion_elastic_scattering
 CONTAINS
 
 
@@ -170,6 +170,7 @@ CONTAINS
       w2 = w2, &
 #endif
       part1 = part1, part2 = part2, p_list = p_list)
+    u_cm = collision%u_cm
 
     ! Excess energy distribution between the two electrons
     g_mag = collision%g_mag
@@ -193,7 +194,6 @@ CONTAINS
     END IF
 
     ! Impact particle: neutral -> ion + electron
-    u_cm = collision%u_cm
     IF (ran_w <= w1rat) THEN
 
       ! The new electron
@@ -310,16 +310,16 @@ CONTAINS
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
     REAL(num) :: ran_w
-    REAL(num) :: reducedm, m
+    REAL(num) :: mu, m
     REAL(num), DIMENSION(3) :: g, p_scat, u_cm
 
     ran_w = random()
-    reducedm = collision%reducedm
+    mu = collision%reducedm
     g = collision%g
     u_cm = collision%u_cm
 
     ! Post-collision momentum
-    p_scat = reducedm * g
+    p_scat = mu * g
 
     IF (ran_w <= collision%w2_ratio) THEN
       m = collision%m1
@@ -395,6 +395,60 @@ CONTAINS
 
 
 
+  SUBROUTINE vahedi_ion_elastic_scattering(collision)
+
+    ! Collision process: electron elastic scattering
+    ! e + N -> e + N
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, p_scat, u_cm
+    REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
+    REAL(num) :: e_inc, e_scat, g_scat, g_mag
+    REAL(num) :: sinratio, mu
+    REAL(num) :: ranw
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    ! Incoming normalised velocity vector
+    v_inc = vector_normalisation(collision%g)
+
+    !Theta angle
+    costheta = v_inc(1)
+    sintheta = SQRT(1._num - costheta*costheta)
+    ! Chi angle
+    coschi = SQRT(1._num - random())
+    sinchi = SQRT(1._num - coschi*coschi)
+    ! Phi angle
+    phi = 2._num * pi * random()
+    cosphi = COS(phi)
+    sinphi = SIN(phi)
+
+    ! Scattered normalised vector
+    sinratio = sinchi / sintheta
+    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+
+    ! Post-collision speed (g_scat)
+    mu = collision%reducedm
+    g_mag = collision%g_mag
+    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_scat = e_inc * coschi * coschi
+    g_scat = SQRT(2._num * e_scat / mu)
+    p_scat = v_scat * g_scat * mu
+
+    ! Post-collision momentum
+    ranw = random()
+    u_cm = collision%u_cm
+    IF (ranw <= collision%w2_ratio) THEN
+      collision%part1%part_p = u_cm*collision%m1 + p_scat
+    END IF
+    IF (ranw <= collision%w1_ratio) THEN
+      collision%part2%part_p = u_cm*collision%m2 - p_scat
+    END IF
+
+  END SUBROUTINE vahedi_ion_elastic_scattering
+
+
+
   SUBROUTINE vahedi_excitation(collision)
 
     ! Collision process: electron impact excitation
@@ -408,20 +462,20 @@ CONTAINS
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: m1, m2, mu, w1rat, w2rat
     REAL(num) :: ran_w, sinratio
-    REAL(num), DIMENSION(3) :: p_2, u_cm, p_scat
+    REAL(num), DIMENSION(3) :: p_2, u_cm, p_scat, g
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     TYPE(particle), POINTER :: part1, part2, new_part
     TYPE(particle_list), POINTER :: p_list
 
     CALL set_particle_properties(collision, &
       m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
-      part1 = part1, part2 = part2, p_list = p_list)
+      part1 = part1, part2 = part2, p_list = p_list, g = g)
     mu = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
 
     ! Incoming normalised velocity vector
-    v_inc = vector_normalisation(collision%g)
+    v_inc = vector_normalisation(g)
 
     !Theta angle
     costheta = v_inc(1)
@@ -541,7 +595,7 @@ CONTAINS
         crossproduct(v_inc_i,v_inc) * sinratio * cosphi
       ! Post-collision momentum
       u_e1 = v_scat * g_scat * SQRT(ran_e)
-      collision%part1%part_p = (u_cm + u_e1) * m1
+      part1%part_p = (u_cm + u_e1) * m1
     END IF
 
     ! Impact particle: neutral -> ion + electron
@@ -835,7 +889,8 @@ CONTAINS
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, mu
+    REAL(num) :: sinratio, mu, m1
+    REAL(num) , DIMENSION(3) :: u_cm, p_scat
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
@@ -864,9 +919,12 @@ CONTAINS
     e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc * coschi * coschi
     g_scat = SQRT(2._num * e_scat / mu)
+    p_scat = v_scat * g_scat * mu
 
     ! Post-collision momentum
-    collision%part1%part_p = collision%u_cm*collision%m1 + v_scat*g_scat*mu
+    u_cm = collision%u_cm
+    m1 = collision%m1
+    collision%part1%part_p = u_cm*m1 + p_scat
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 

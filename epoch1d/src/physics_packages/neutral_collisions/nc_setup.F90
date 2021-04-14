@@ -365,6 +365,23 @@ CONTAINS
           coll_type%coll_subroutine => nanbu_charge_exchange_bg
           linked = .TRUE.
         END IF
+      ELSE
+        IF (coll_type%id == c_nc_elastic_electron) THEN
+          coll_type%coll_subroutine => vahedi_electron_elastic_scattering
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_elastic_ion) THEN
+          coll_type%coll_subroutine => vahedi_ion_elastic_scattering
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_excitation) THEN
+          coll_type%coll_subroutine => vahedi_excitation
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_ionisation) THEN
+          coll_type%coll_subroutine => vahedi_ionisation
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+          coll_type%coll_subroutine => nanbu_charge_exchange
+          linked = .TRUE.
+        END IF
       END IF
     END IF
 
