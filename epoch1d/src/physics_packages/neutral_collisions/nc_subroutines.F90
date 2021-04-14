@@ -924,14 +924,14 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
-    m1 = collision%m1
+    mu = collision%reducedm
     g_mag = collision%g_mag
-    e_inc = 0.5_num * m1 * g_mag * g_mag
+    e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc * coschi * coschi
-    g_scat = SQRT(2._num * e_scat / m1)
+    g_scat = SQRT(2._num * e_scat / mu)
 
     ! Post-collision momentum
-    collision%part1%part_p = (collision%u_2 + v_scat * g_scat) * m1
+    collision%part1%part_p = collision%u_cm*collision%m1 + v_scat*g_scat*mu
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
