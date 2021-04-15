@@ -58,7 +58,7 @@ CONTAINS
     TYPE(collision_type_block), POINTER :: coll_type
     TYPE(background_block), POINTER :: background
 
-    file_id = 140892 
+    file_id = 140892
     errcode = c_err_none
 
     ! This is used for output purposes
@@ -269,6 +269,7 @@ CONTAINS
     TYPE(neutrals_block), POINTER, INTENT(INOUT) :: coll_block
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     INTEGER, INTENT(IN) :: ispecies, jspecies
+    INTEGER :: io, iu
     REAL(num) :: mi, mj, mu
 
     ! Convert energy data into Joules
@@ -292,6 +293,31 @@ CONTAINS
     ! Convert cross-section data into m^3/s, i.e. g*sigma
     coll_type%cross_section = coll_type%cross_section * coll_type%energy
 
+    ! If collision with a background gas, either Bird or Vahedi
+    IF (coll_block%is_background) THEN
+      IF (.NOT.coll_type%wnanbu .AND. .NOT.coll_type%wvahedi) THEN
+        IF (rank == 0) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*)
+            WRITE(io,*) '*** WARNING ***'
+            WRITE(io,*) "Collisions with background gas are only possible", &
+              " with Nanbu's or Vahedi's method"
+            WRITE(io,*) 'Collision between ', &
+              TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
+              TRIM(ADJUSTL(coll_block%background%name))
+            WRITE(io,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
+              " switched to Nanbu's method"
+            WRITE(io,*) ''
+          END DO
+        END IF
+        coll_type%wnanbu = .TRUE.
+        coll_type%wvahedi = .FALSE.
+        coll_type%wnanbusplit = .FALSE.
+        coll_type%wvahedisplit = .FALSE.
+      END IF
+    END IF
+
     ! Link collision subroutine
     CALL link_collision_subroutine(coll_type, coll_block%is_background)
 
@@ -305,7 +331,7 @@ CONTAINS
     LOGICAL, INTENT(IN) :: is_background
     INTEGER :: io, iu
     LOGICAL :: linked, background_mismatch
-    CHARACTER(len=6) :: method_str
+    CHARACTER(len=20) :: method_str
 
     linked = .FALSE.
     background_mismatch = .FALSE.
@@ -345,6 +371,34 @@ CONTAINS
           linked = .TRUE.
         END IF
       END IF
+
+    ! NANBU-SPLIT COLLISIONS
+    ELSEIF (coll_type%wnanbusplit) THEN
+#ifndef PER_SPECIES_WEIGHT
+      IF (is_background) THEN
+        background_mismatch = .TRUE.
+      ELSEIF (coll_type%id == c_nc_ionisation) THEN
+        coll_type%coll_subroutine => nanbu_split_ionisation
+        linked = .TRUE.
+      ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+        coll_type%coll_subroutine => nanbu_split_charge_exchange
+        linked = .TRUE.
+      END IF
+#else
+      IF (rank == 0) THEN
+        DO iu = 1, nio_units ! Print to stdout and to file
+          io = io_units(iu)
+          WRITE(io,*)
+          WRITE(io,*) '*** ERROR ***'
+          WRITE(io,*) 'Collision split method is only possible with', &
+            ' per-particle weight set-up.'
+          WRITE(io,*) 'Please recompile, and rerun code'
+          WRITE(io,*) ''
+        END DO
+      END IF
+      CALL MPI_BARRIER(comm, errcode)
+      CALL abort_code(c_err_bad_setup)
+#endif
 
     ! VAHEDI COLLISIONS
     ELSEIF (coll_type%wvahedi) THEN
@@ -389,6 +443,8 @@ CONTAINS
       IF (rank == 0) THEN
         IF (coll_type%wnanbu) method_str = 'Nanbu'
         IF (coll_type%wvahedi) method_str = 'Vahedi'
+        IF (coll_type%wvahedisplit) method_str = 'Vahedi split'
+        IF (coll_type%wnanbusplit) method_str = 'Nanbu split'
         DO iu = 1, nio_units ! Print to stdout and to file
           io = io_units(iu)
           WRITE(io,*)
@@ -719,6 +775,12 @@ CONTAINS
       ELSEIF (str_cmp(value, 'vahedi')) THEN
         coll_type%wnanbu = .FALSE.
         coll_type%wvahedi = .TRUE.
+      ELSEIF (str_cmp(value, 'vahedisplit')) THEN
+        coll_type%wnanbu = .FALSE.
+        coll_type%wvahedisplit = .TRUE.
+      ELSEIF (str_cmp(value, 'nanbusplit')) THEN
+        coll_type%wnanbu = .FALSE.
+        coll_type%wnanbusplit = .TRUE.
       END IF
 
     ELSEIF (str_cmp(element, 'collision_type')) THEN        
@@ -809,6 +871,8 @@ CONTAINS
 
     coll_type%wnanbu = .TRUE.
     coll_type%wvahedi = .FALSE.
+    coll_type%wnanbusplit = .FALSE.
+    coll_type%wvahedisplit = .FALSE.
     coll_type%coll_subroutine => NULL()
 
     IF (neutral_collision_counter) THEN

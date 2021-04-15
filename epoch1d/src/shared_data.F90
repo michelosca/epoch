@@ -831,7 +831,7 @@ MODULE shared_data
     CHARACTER(LEN=string_length) :: name, io_name
 
     ! Collision method
-    LOGICAL :: wnanbu, wvahedi
+    LOGICAL :: wnanbu, wvahedi, wnanbusplit, wvahedisplit
     PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
 
     ! Collision diagnostics
