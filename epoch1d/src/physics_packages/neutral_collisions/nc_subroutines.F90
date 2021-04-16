@@ -785,6 +785,9 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, w2
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: w2
+#endif
     REAL(num) :: ran_e, ran_w, phi, w1rat, w2rat
     REAL(num) :: g_mag, e_threshold
     REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
