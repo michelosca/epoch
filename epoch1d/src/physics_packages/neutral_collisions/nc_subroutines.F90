@@ -67,7 +67,8 @@ CONTAINS
 
 
   SUBROUTINE set_particle_properties(collision, species1, species2, &
-    m1, im1, m2, im2, w1, w2, w1_ratio, w2_ratio, g, part1, part2, p_list)
+    m1, im1, m2, im2, w1, w2, w1_ratio, w2_ratio, g, part1, part2, &
+    p_list1, p_list2)
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
     REAL(num), INTENT(OUT), OPTIONAL :: m1, im1, m2, im2
@@ -75,7 +76,7 @@ CONTAINS
     REAL(num), DIMENSION(3), INTENT(OUT), OPTIONAL :: g
     INTEGER, INTENT(OUT), OPTIONAL :: species1, species2
     TYPE(particle), POINTER, INTENT(OUT), OPTIONAL :: part1, part2
-    TYPE(particle_list), POINTER, INTENT(OUT), OPTIONAL :: p_list
+    TYPE(particle_list), POINTER, INTENT(OUT), OPTIONAL :: p_list1, p_list2
 
     IF (collision%species1 == collision%type_block%source_species_id) THEN
       IF (PRESENT(species1)) species1 = collision%species2
@@ -90,7 +91,8 @@ CONTAINS
       IF (PRESENT(w2_ratio)) w2_ratio = collision%w1_ratio
       IF (PRESENT(part1)) part1 => collision%part2
       IF (PRESENT(part2)) part2 => collision%part1
-      IF (PRESENT(p_list)) p_list => collision%p_list1
+      IF (PRESENT(p_list2)) p_list2 => collision%p_list1
+      IF (PRESENT(p_list1)) p_list1 => collision%p_list2
       IF (PRESENT(g)) g = -collision%g
     ELSE
       IF (PRESENT(species1)) species1 = collision%species1
@@ -103,12 +105,28 @@ CONTAINS
       IF (PRESENT(w2)) w2 = collision%w2
       IF (PRESENT(part1)) part1 => collision%part1
       IF (PRESENT(part2)) part2 => collision%part2
-      IF (PRESENT(p_list)) p_list => collision%p_list2
+      IF (PRESENT(p_list1)) p_list1 => collision%p_list1
+      IF (PRESENT(p_list2)) p_list2 => collision%p_list2
       IF (PRESENT(g)) g = collision%g
     END IF
 
   END SUBROUTINE set_particle_properties
 
+
+  SUBROUTINE link_particle_pointers(collision, part1, part2)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    TYPE(particle), POINTER, INTENT(IN) :: part1, part2
+
+    IF (collision%species1 == collision%type_block%source_species_id) THEN
+      collision%part1 => part2
+      collision%part2 => part1
+    ELSE
+      collision%part1 => part1
+      collision%part2 => part2
+    ENDIF
+
+  END SUBROUTINE link_particle_pointers
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                                                                             !
@@ -161,11 +179,11 @@ CONTAINS
     REAL(num) :: ran_w, w1rat, w2rat
     REAL(num), DIMENSION(3) :: random_direction, p_2, u_cm, p_scat
     TYPE(particle), POINTER :: part1, part2, new_part
-    TYPE(particle_list), POINTER :: p_list
+    TYPE(particle_list), POINTER :: p_list2
 
     CALL set_particle_properties(collision, &
       m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
-      part1 = part1, part2 = part2, p_list = p_list)
+      part1 = part1, part2 = part2, p_list2 = p_list2)
     excited_id = collision%type_block%new_species_id
     reducedm = collision%reducedm
     ireducedm = collision%ireducedm
@@ -191,14 +209,14 @@ CONTAINS
 
       IF (excited_id>0) THEN !Move particle to excited particle list
         new_part => part2
-        ! Link part1 pointer to next colliding particle
-        IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
+        ! Link part2 pointer to next colliding particle
+        IF (.NOT.ASSOCIATED(p_list2%head, TARGET=part2)) THEN
           part2 => part2%prev
         ELSE
           part2 => part2%next
         END IF
         new_part%part_p = p_2
-        CALL remove_particle_from_partlist(p_list, new_part)
+        CALL remove_particle_from_partlist(p_list2, new_part)
         CALL add_particle_to_partlist( &
           species_list(excited_id)%attached_list, new_part)
         NULLIFY(new_part)
@@ -209,45 +227,33 @@ CONTAINS
 
     END IF
 
-    NULLIFY(part1, part2)
+    CALL link_particle_pointers(collision, part1, part2)
+    NULLIFY(part1, part2, p_list2)
 
   END SUBROUTINE nanbu_excitation
 
 
 #ifndef PER_SPECIES_WEIGHT
-  SUBROUTINE check_weight_difference(w2, w1, part2, p_list)
+  SUBROUTINE merge_particles(part1, part2, p_list1)
 
-    REAL(num), INTENT(INOUT) :: w2
-    REAL(num), INTENT(IN) :: w1
-    TYPE(particle), POINTER, INTENT(INOUT) :: part2
-    TYPE(particle_list), POINTER , INTENT(INOUT) :: p_list
+    ! Merge particles 1 and 2 and remove particle 1
+    TYPE(particle), POINTER, INTENT(INOUT) :: part1, part2
+    TYPE(particle_list), POINTER, INTENT(INOUT) :: p_list1
+    REAL(num), DIMENSION(3) :: p
+    REAL(num) :: w1, w2, wtot
 
-    REAL(num) :: weight_difference, new_w2
-    REAL(num), DIMENSION(3) :: new_p
-    TYPE(particle), POINTER :: current
+    ! Merge current to particle2
+    w1 = part1%weight
+    w2 = part2%weight
+    wtot = w1 + w2
+    ! Average momentum
+    p = (part1%part_p*w1 + part2%part_p*w2 ) / wtot
+    part2%part_p = p
+    part2%weight = wtot
+    CALL remove_particle_from_partlist(p_list1, part1)
+    CALL destroy_particle(part1)
 
-    weight_difference = w2 - w1 ! Neutrals weight should always be larger
-    ! Check that w2 - w1 > w1
-    IF (weight_difference < 0._num) THEN
-      WRITE(*,*) 'weight_difference is below zero: ', weight_difference
-    END IF
-    IF (weight_difference <= w1) THEN
-      current => part2 ! Low weight particle
-      part2 => part2%next ! Next particle
-      ! Merge current to next particle
-      new_w2 = part2%weight
-      ! Average momentum
-      new_p = part2%part_p*new_w2 + current%part_p*weight_difference
-      w2 = new_w2 + weight_difference
-      new_p = new_p/w2
-      part2%part_p = new_p
-      part2%weight = w2
-      CALL remove_particle_from_partlist(p_list, current)
-      CALL destroy_particle(current)
-      NULLIFY(current)
-    END IF
-
-  END SUBROUTINE check_weight_difference
+  END SUBROUTINE merge_particles
 
 
 
@@ -261,75 +267,100 @@ CONTAINS
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, random_direction
-    REAL(num) :: m1, m2, im1, w1, w2, reducedm
-    REAL(num) :: ran_e
+    REAL(num) :: m1, m2, im1, w1, w2, w_diff, w_min, reducedm
+    REAL(num) :: ran_e, part2_pos
     REAL(num) :: g_mag, e_threshold, e_excess, u_excess, u_excess_total
     INTEGER :: species1, ion_id
-    TYPE(particle), POINTER :: part1, part2, new_part
-    TYPE(particle_list), POINTER :: p_list
+    LOGICAL :: merge_electrons
+    TYPE(particle), POINTER :: part1, part2, new_part, part_next
+    TYPE(particle_list), POINTER :: p_list1, p_list2
 
     CALL set_particle_properties(collision, species1 = species1, &
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
-      part2 = part2, p_list = p_list)
+      part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
     u_cm = collision%u_cm
     reducedm = collision%reducedm
     e_threshold = collision%type_block%ethreshold
-
+    part2_pos = part2%part_pos
 
     ! Excess energy distribution between the two electrons
     e_excess = 0.5_num*reducedm*g_mag*g_mag - e_threshold
-
     ! Speed associated to the energy excess (electrons)
     u_excess_total = SQRT(2._num*im1*e_excess)
     ran_e = 0.5_num ! 0.5 for equal energy distribution between electrons,
                     ! Otherwise: random()
-    u_excess = u_excess_total*SQRT(ran_e)
+
+    ! Check particle's weight
+    merge_electrons = .FALSE.
+    IF (w1 >= w2) THEN
+      ! Electron's weight is larger than neutral
+      w_min = w2
+      w_diff = w1 - w2
+      !Update impact electron weight
+      part1%weight = w_diff
+      !Remove neutral particle from list
+      new_part => part2%next ! This is just a buffer
+      CALL remove_particle_from_partlist(p_list2, part2)
+      CALL destroy_particle(part2)
+      part2 => new_part
+      NULLIFY(new_part)
+      IF (w_diff < w1) merge_electrons = .TRUE.
+    ELSE
+      ! Neutral's weight is larger
+      w_min = w1
+      w_diff = w2 - w1
+      part2%weight = w_diff
+      IF (w_diff < w1) THEN
+        ! If w_diff is small merge neutral with next particle
+        new_part => part2 ! Part to be merged and removed
+        part2 => part2%next
+        CALL merge_particles(new_part, part2, p_list2)
+        NULLIFY(new_part)
+      END IF
+    ENDIF
 
     ! Impact electron
     random_direction = random_unit_vector() ! Random vector
-    u_excess_total = SQRT(2._num*im1*e_excess)
-    ran_e = 0.5_num ! 0.5 for equal energy distribution between electrons,
-                    ! Otherwise: random()
     u_excess = u_excess_total*SQRT(ran_e)
-
-    ! Impact electron
-    random_direction = random_unit_vector() ! Random vector
     u_e1 = u_excess*random_direction ! cm frame of reference
     part1%part_p = (u_cm + u_e1)*m1
 
-
-    ! Neutral (part2 pointer) is split into two
-    ! - Ion and electron of weight w1
-    ! - Untouched neutral of weight w2 - w1
+    ! Neutral (part2 pointer) is split into
+    ! - New ion
+    ! - New electron
+    ! - Untouched neutral
 
     ! New electron
     CALL create_particle(new_part)
-    u_excess = u_excess_total*SQRT(1._num - ran_e)
     random_direction = random_unit_vector() ! New random vector
+    u_excess = u_excess_total*SQRT(1._num - ran_e)
     u_e2 = u_excess*random_direction  ! cm frame of reference
     new_part%part_p = (u_cm + u_e2)*m1
-    new_part%part_pos = part2%part_pos
-    new_part%weight = w1 ! Electron's weight
+    new_part%part_pos = part2_pos
+    new_part%weight = w_min
     CALL add_particle_to_partlist( &
       species_list(species1)%attached_list, new_part)
+    IF (merge_electrons) THEN
+      part_next => part1%next
+      CALL merge_particles(part1, new_part, p_list1)
+      part1 => part_next
+      NULLIFY(part_next)
+    END IF
     NULLIFY(new_part)
 
     ! New ion
     ion_id = collision%type_block%new_species_id ! ions
     CALL create_particle(new_part)
     new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
-    new_part%part_pos = part2%part_pos
-    new_part%weight = w1 ! Electron's weight
+    new_part%part_pos = part2_pos
+    new_part%weight = w_min
     CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
       new_part)
     NULLIFY(new_part)
 
-    ! Neutral: substract ion's weight from neutral particle
-    part2%weight = w2 - w1
-    CALL check_weight_difference(w2, w1, part2, p_list)
-
-    NULLIFY(part1, part2, p_list)
+    CALL link_particle_pointers(collision, part1, part2)
+    NULLIFY(part1, part2, p_list1, p_list2)
 
   END SUBROUTINE nanbu_split_ionisation
 
@@ -338,45 +369,81 @@ CONTAINS
   SUBROUTINE nanbu_split_charge_exchange(collision)
 
     ! Collision process: charge exchange
-    ! Assumes that: neutral(N) weight > ion(I) weight
     ! I + N -> N + I
-    ! species1 -> ion
-    ! species2 -> neutral
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num) :: m1, m2, w1, w2, g_mag, mu
-    REAL(num), DIMENSION(3) :: g, u_cm, p_scat
-    INTEGER :: species2
-    TYPE(particle), POINTER :: part1, part2, new_part
+    REAL(num) :: m1, m2, mu, w1, w2, w_diff
+    REAL(num), DIMENSION(3) :: u_cm, p_scat
+    TYPE(particle), POINTER :: part1, part2, new_part, part_next
     TYPE(particle_list), POINTER :: p_list
 
-    CALL set_particle_properties(collision, species2 = species2, &
-      m1 = m1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, part2 = part2, &
-      g = g, p_list = p_list)
-    g_mag = collision%g_mag
+    w1 = collision%w1
+    w2 = collision%w2
+    m1 = collision%m1
+    m2 = collision%m2
+    part1 => collision%part1
+    part2 => collision%part2
     u_cm = collision%u_cm
     mu = collision%reducedm
-    p_scat = mu * g
+    p_scat = mu * collision%g
 
-    ! Create new neutral (former ion)
-    CALL create_particle(new_part)
-    new_part%part_p = u_cm * m2 + p_scat
-    new_part%part_pos = part1%part_pos
-    new_part%weight = w1 ! Ion's weight
-    CALL add_particle_to_partlist( &
-      species_list(species2)%attached_list, new_part)
-    NULLIFY(new_part)
+    ! Check particle's weight
+    IF (w1 >= w2) THEN
+      ! Particle 1 is split into two
+      ! Particle 1: unperturbed (only weight loss)
+      w_diff = w1 - w2
+      part1%weight = w_diff
+      ! Species 1: create new particle
+      CALL create_particle(new_part)
+      new_part%part_p = u_cm * m1 - p_scat
+      new_part%part_pos = part2%part_pos
+      new_part%weight = w2
+      CALL add_particle_to_partlist( &
+        species_list(collision%species1)%attached_list, new_part)
+      ! Particle 2
+      part2%part_p = u_cm * m2 + p_scat
+      part2%part_pos = part1%part_pos
+      ! Check weight difference
+      IF (w_diff < w2) THEN
+        ! If w_diff small merge particles of species1
+        p_list => collision%p_list1
+        part_next => part1%next
+        CALL merge_particles(part1, new_part, p_list)
+        part1 => part_next
+        NULLIFY(p_list, part_next)
+      END IF
+      NULLIFY(new_part)
+    ELSE
+      ! Particle 2 is split into two
+      ! Particle 1
+      part1%part_p = u_cm * m1 - p_scat
+      part1%part_pos = part2%part_pos
+      ! Particle 2: unperturbed (only weight loss)
+      w_diff = w2 - w1
+      part2%weight = w_diff
+      ! Species 2: create new particle
+      CALL create_particle(new_part)
+      new_part%part_p = u_cm * m2 + p_scat
+      new_part%part_pos = part1%part_pos
+      new_part%weight = w1
+      CALL add_particle_to_partlist( &
+        species_list(collision%species2)%attached_list, new_part)
+      ! Check weight difference
+      IF (w_diff < w1) THEN
+        ! If w_diff small merge particles of species2
+        p_list => collision%p_list2
+        part_next => part2%next
+        CALL merge_particles(part2, new_part, p_list)
+        part2 => part_next
+        NULLIFY(p_list, part_next)
+      END IF
+      NULLIFY(new_part)
+    ENDIF
 
-    ! Neutral becomes ion
-    part1%part_p = u_cm * m1 - p_scat
-    part1%part_pos = part2%part_pos
-
-    ! High weight neutral: substract ions weight
-    part2%weight = w2 - w1
-    CALL check_weight_difference(w2, w1, part2, p_list)
-
-    NULLIFY(part1, part2, p_list)
+    collision%part1 => part1
+    collision%part2 => part2
+    NULLIFY(part1, part2)
 
   END SUBROUTINE nanbu_split_charge_exchange
 #endif
@@ -392,7 +459,7 @@ CONTAINS
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, random_direction
-    REAL(num) :: m1, m2, im1
+    REAL(num) :: m1, m2, im1, mu
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) ::  w2
 #endif
@@ -400,32 +467,32 @@ CONTAINS
     REAL(num) :: g_mag, e_threshold, e_excess, u_excess, u_excess_total
     INTEGER :: ion_id, species1
     TYPE(particle), POINTER :: new_part, part1, part2
-    TYPE(particle_list) , POINTER :: p_list
+    TYPE(particle_list) , POINTER :: p_list2
 
     CALL set_particle_properties(collision, species1 = species1, &
       m1 = m1, im1 = im1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
 #ifndef PER_SPECIES_WEIGHT
       w2 = w2, &
 #endif
-      part1 = part1, part2 = part2, p_list = p_list)
+      part1 = part1, part2 = part2, p_list2 = p_list2)
     u_cm = collision%u_cm
+    g_mag = collision%g_mag
+    mu = collision%reducedm
 
     ! Excess energy distribution between the two electrons
-    g_mag = collision%g_mag
     e_threshold = collision%type_block%ethreshold
-    e_excess = 0.5_num*collision%reducedm*g_mag*g_mag - e_threshold
+    e_excess = 0.5_num*mu*g_mag*g_mag - e_threshold
 
     ! Speed associated to the energy excess
     u_excess_total = SQRT(2._num*im1*e_excess)
-
     ran_e = 0.5_num !random()
 
     ! Random weight ratio
     ran_w = random()
 
     ! Current particle: the existing electron
+    random_direction = random_unit_vector()
     u_excess = u_excess_total*SQRT(ran_e)
-    random_direction = random_unit_vector() ! Random vector
     u_e1 = u_excess*random_direction ! cm frame of reference
     IF (ran_w <= w2rat) THEN
       part1%part_p = (u_cm + u_e1)*m1
@@ -433,11 +500,10 @@ CONTAINS
 
     ! Impact particle: neutral -> ion + electron
     IF (ran_w <= w1rat) THEN
-
       ! The new electron
       CALL create_particle(new_part)
+      random_direction = random_unit_vector()
       u_excess = u_excess_total*SQRT(1._num - ran_e)
-      random_direction = random_unit_vector() ! Random unitary vector
       u_e2 = u_excess*random_direction  ! cm frame of reference
       new_part%part_p = (u_cm + u_e2)*m1
       new_part%part_pos = part1%part_pos
@@ -451,23 +517,23 @@ CONTAINS
       ! New ion: move neutral particle to ion species list
       new_part => part2
       new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
-      IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
+      IF (.NOT.ASSOCIATED(p_list2%head, TARGET=part2)) THEN
         ! If particle is not the head of the list
         part2 => part2%prev
       ELSE
         ! If particle is the head of the list then one particle is skipped
-        p_list%coll_counter = p_list%coll_counter + 1
+        p_list2%coll_counter = p_list2%coll_counter + 1
         part2 => part2%next
       END IF
-      CALL remove_particle_from_partlist(p_list, new_part)
+      CALL remove_particle_from_partlist(p_list2, new_part)
       ion_id = collision%type_block%new_species_id ! ions
       CALL add_particle_to_partlist( species_list(ion_id)%attached_list, &
         new_part)
       NULLIFY(new_part)
-      
     END IF
 
-    NULLIFY(part1, part2)
+    CALL link_particle_pointers(collision, part1, part2)
+    NULLIFY(part1, part2, p_list2)
 
   END SUBROUTINE nanbu_ionisation
 
@@ -640,7 +706,7 @@ CONTAINS
 
     CALL set_particle_properties(collision, &
       m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
-      part1 = part1, part2 = part2, p_list = p_list, g = g)
+      part1 = part1, part2 = part2, p_list2 = p_list, g = g)
     mu = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
@@ -702,7 +768,7 @@ CONTAINS
 
     END IF
 
-    NULLIFY(part1, part2)
+    NULLIFY(part1, part2, p_list)
 
   END SUBROUTINE vahedi_excitation
 
@@ -732,7 +798,7 @@ CONTAINS
 #ifndef PER_SPECIES_WEIGHT
       w2 = w2, &
 #endif
-      part1 = part1, part2 = part2, p_list = p_list)
+      part1 = part1, part2 = part2, p_list2 = p_list)
 
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
@@ -815,7 +881,7 @@ CONTAINS
 
     END IF
 
-    NULLIFY(part1, part2)
+    NULLIFY(part1, part2, p_list)
 
   END SUBROUTINE vahedi_ionisation
 
