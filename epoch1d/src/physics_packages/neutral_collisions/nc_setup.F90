@@ -499,13 +499,15 @@ CONTAINS
     END DO
     
     IF (ispecies /= jspecies) THEN
-      current => species_list(jspecies)%attached_list%head
-      npart = species_list(jspecies)%attached_list%count
-      DO ipart = 1, npart
-        wj = current%weight
-        max_weight = MAX(wj, max_weight)
-        current => current%next
-      END DO
+      IF (jspecies <= n_species) THEN
+        current => species_list(jspecies)%attached_list%head
+        npart = species_list(jspecies)%attached_list%count
+        DO ipart = 1, npart
+          wj = current%weight
+          max_weight = MAX(wj, max_weight)
+          current => current%next
+        END DO
+      END IF
     END IF
     CALL MPI_ALLREDUCE(max_weight, all_max_weight, 1, MPIREAL, MPI_MAX, &
         comm, errcode)
@@ -527,7 +529,7 @@ CONTAINS
     TYPE(neutrals_block), POINTER :: coll_block
 
     DO ispecies = 1, n_species
-      DO jspecies = 1, n_species
+      DO jspecies = 1, n_species_bg
         IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
         coll_block => species_list(ispecies)%neutrals(jspecies)
         CALL get_max_weight(coll_block, ispecies, jspecies)
