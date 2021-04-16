@@ -899,6 +899,12 @@ CONTAINS
 
     REAL(num) :: reducedm, g_mag, m1
     REAL(num), DIMENSION(3) :: random_direction, p_scat, u_cm
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
+
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     reducedm = collision%reducedm
     g_mag = collision%g_mag
@@ -932,6 +938,12 @@ CONTAINS
     REAL(num) :: g_mag, e_threshold, e_excess, u_excess, u_excess_total
     INTEGER :: species1, ion_id
     TYPE(particle), POINTER :: part1, new_part
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
+
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     m1 = collision%m1
     im1 = collision%im1
@@ -1004,6 +1016,12 @@ CONTAINS
     REAL(num), DIMENSION(3) :: random_direction, u_cm, p_scat
     INTEGER :: excited_id
     TYPE(particle), POINTER :: part1, new_part
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
+
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     m1 = collision%m1
     reducedm = collision%reducedm
@@ -1054,6 +1072,12 @@ CONTAINS
 
     REAL(num) :: reducedm, m1
     REAL(num), DIMENSION(3) :: g, p_scat, u_cm
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
+
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     reducedm = collision%reducedm
     g = collision%g
@@ -1077,12 +1101,18 @@ CONTAINS
 
     ! Collision process: electron elastic scattering
     ! e + N -> e + N
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1, m2
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
 
-    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
@@ -1123,13 +1153,19 @@ CONTAINS
 
     ! Collision process: ion elastic scattering
     ! e + N -> e + N
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, mu, m1
     REAL(num) , DIMENSION(3) :: u_cm, p_scat
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
 
-    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
@@ -1171,12 +1207,18 @@ CONTAINS
 
     ! Collision process: electron impact excitation
     ! e + N -> e + N
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
 
-    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
@@ -1216,14 +1258,20 @@ CONTAINS
 
     ! Collision process: electron impact ionisation
     ! e + N -> e + N
+    TYPE(particle), POINTER :: new_part
+
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1, part_pos
     INTEGER :: species_id
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: ran_w
 
-    TYPE(particle), POINTER :: new_part
+    ran_w = random()
+    IF (ran_w > collision%w1_ratio) RETURN
+#endif
 
     part_pos = collision%part1%part_pos
 

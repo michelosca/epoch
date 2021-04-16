@@ -28,7 +28,6 @@ MODULE neutral_collisions
   USE nc_auxiliary
   USE random_generator
   USE collisions
-!   USE helper
 
   IMPLICIT NONE
 
@@ -304,17 +303,8 @@ CONTAINS
     u_1 = collision%part1%part_p * collision%im1
     IF (collision_block%is_background) THEN
       u_2 = random_background_velocity(collision)
-#ifndef PER_SPECIES_WEIGHT
-      collision%w1 = collision%part1%weight
-#endif
     ELSE
       u_2 = collision%part2%part_p * collision%im2
-#ifndef PER_SPECIES_WEIGHT
-      collision%w1 = collision%part1%weight
-      collision%w2 = collision%part2%weight
-      collision%w1_ratio = collision%w1 / collision_block%max_weight
-      collision%w2_ratio = collision%w2 / collision_block%max_weight
-#endif
     END IF
     !Relative velocity (vector and scalar)
     g = u_1 - u_2
@@ -367,6 +357,17 @@ CONTAINS
       collision%u_2 = u_2
       collision%g_mag = g_mag
       collision%u_cm = (collision%part1%part_p+collision%m2*u_2)*collision%im12
+#ifndef PER_SPECIES_WEIGHT
+      IF (collision_block%is_background) THEN
+        collision%w1 = collision%part1%weight
+        collision%w1_ratio = collision%w1 / collision_block%max_weight
+      ELSE
+        collision%w1 = collision%part1%weight
+        collision%w2 = collision%part2%weight
+        collision%w1_ratio = collision%w1 / collision_block%max_weight
+        collision%w2_ratio = collision%w2 / collision_block%max_weight
+      END IF
+#endif
 
       ! Calculate post-collision momenta
       CALL coll_type_block%coll_subroutine(collision)
