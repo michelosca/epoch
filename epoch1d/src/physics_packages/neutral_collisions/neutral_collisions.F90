@@ -180,8 +180,8 @@ CONTAINS
     n_part1 = n_part1 - counter1
     n_part2 = n_part2 - counter2
     IF (int_coll_pairs > MIN(n_part1, n_part2)) THEN
-      ! Checking whether pairing is performing correctly
-      CALL warning_coll_pairs(collision, int_coll_pairs)
+      IF (n_part1 <= 0) RETURN
+      IF (n_part2 <= 0) RETURN
       int_coll_pairs = MIN(n_part1, n_part2)
       n_coll_pairs = int_coll_pairs
     END IF
@@ -243,8 +243,7 @@ CONTAINS
 
     n_part1 = n_part1 - counter1
     IF (int_coll_pairs > n_part1) THEN
-      ! Checkin whether pairing is performing correctly
-      CALL warning_coll_pairs(collision, int_coll_pairs)
+      IF (n_part1 <= 0) RETURN
       int_coll_pairs = n_part1
       n_coll_pairs = int_coll_pairs
     END IF
@@ -514,8 +513,7 @@ CONTAINS
 
     n_part1 = n_part1 - counter1
     IF (int_coll_pairs > n_part1) THEN
-      ! Checking whether pairing is performing correctly
-      CALL warning_coll_pairs(collision, int_coll_pairs)
+      IF (n_part1 <= 0) RETURN
       int_coll_pairs = n_part1
       n_coll_pairs = int_coll_pairs
     END IF
