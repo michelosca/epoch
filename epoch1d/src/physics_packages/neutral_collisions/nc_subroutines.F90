@@ -913,7 +913,7 @@ CONTAINS
 
     CALL set_particle_properties(collision, species1 = species1, &
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
-      part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
+      g = g, part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
     u_cm = collision%u_cm
     mu = collision%reducedm
