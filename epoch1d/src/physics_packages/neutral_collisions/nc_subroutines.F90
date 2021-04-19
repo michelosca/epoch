@@ -918,7 +918,7 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, part2_pos
-    REAL(num) :: ran_w, w1, w2, w_diff, w_min, w1max_rat, w2max_rat
+    REAL(num) :: w1, w2, w_diff, w_min, w1max_rat, w2max_rat
     REAL(num) :: ran_e, phi
     REAL(num) :: g_mag, e_threshold
     REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
@@ -954,9 +954,8 @@ CONTAINS
     ! Check particle's weight
     electron_collides = .FALSE.
     neutral_collides = .FALSE.
-    ran_w = random()
-    IF (ran_w < w1max_rat) electron_collides = .TRUE.
-    IF (ran_w < w2max_rat) neutral_collides = .TRUE.
+    IF (random() < w1max_rat) electron_collides = .TRUE.
+    IF (random() < w2max_rat) neutral_collides = .TRUE.
     merge_electrons = .FALSE.
     IF (w1 >= w2) THEN
       ! Electron's weight is larger than neutral
