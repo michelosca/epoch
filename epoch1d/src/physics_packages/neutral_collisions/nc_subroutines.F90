@@ -35,7 +35,7 @@ MODULE nc_subroutines
   PUBLIC :: vahedi_electron_elastic_scattering, vahedi_excitation
   PUBLIC :: vahedi_ionisation, vahedi_ion_elastic_scattering
 #ifndef PER_SPECIES_WEIGHT
-!  PUBLIC :: vahedi_split_ionisation, vahedi_split_charge_exchange
+  PUBLIC :: vahedi_split_ionisation!, vahedi_split_charge_exchange
   PUBLIC :: nanbu_split_ionisation, nanbu_split_charge_exchange
 #endif
 CONTAINS
@@ -506,7 +506,7 @@ CONTAINS
       u_excess = u_excess_total*SQRT(1._num - ran_e)
       u_e2 = u_excess*random_direction  ! cm frame of reference
       new_part%part_p = (u_cm + u_e2)*m1
-      new_part%part_pos = part1%part_pos
+      new_part%part_pos = part2%part_pos
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = w2 ! Electron's weight
 #endif
@@ -857,7 +857,7 @@ CONTAINS
       CALL create_particle(new_part)
       u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
       new_part%part_p = (u_cm + u_e2)*m1
-      new_part%part_pos = part1%part_pos
+      new_part%part_pos = part2%part_pos
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = w2 ! Electron's weight
 #endif
@@ -867,7 +867,7 @@ CONTAINS
 
       ! New ion: move neutral particle to ion species list
       new_part => part2
-      new_part%part_p = collision%u_2
+      new_part%part_p = collision%u_2 * m2
       IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
         ! If particle is not the head of the list
         part2 => part2%prev
@@ -887,6 +887,147 @@ CONTAINS
     NULLIFY(part1, part2, p_list)
 
   END SUBROUTINE vahedi_ionisation
+
+
+
+  SUBROUTINE vahedi_split_ionisation(collision)
+
+    ! Collision process: electron impact ionisation
+    ! e + N -> 2e + I
+    ! species1 = electron (e)
+    ! species2 = neutral (N)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
+    REAL(num) :: m1, m2, im1, mu, part2_pos
+    REAL(num) :: w1, w2, w_diff, w_min
+    REAL(num) :: ran_e, phi
+    REAL(num) :: g_mag, e_threshold
+    REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
+    REAL(num) :: sinratio, e_inc, e_scat, g_scat
+    INTEGER :: ion_id, species1
+    LOGICAL :: merge_electrons
+    TYPE(particle), POINTER :: new_part, part_next, part1, part2
+    TYPE(particle_list) , POINTER :: p_list1, p_list2
+
+    CALL set_particle_properties(collision, species1 = species1, &
+      m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
+      part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
+    g_mag = collision%g_mag
+    u_cm = collision%u_cm
+    mu = collision%reducedm
+    e_threshold = collision%type_block%ethreshold
+    part2_pos = part2%part_pos
+
+    e_threshold = collision%type_block%ethreshold
+    g_mag = collision%g_mag
+    mu = collision%reducedm
+    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_scat = e_inc - e_threshold
+    g_scat = SQRT(2._num * e_scat * im1)
+    ran_e = 0.5_num !random() ! Energy split ratio
+
+    ! Incoming normalised velocity vector
+    v_inc = vector_normalisation(g)
+    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+    !Theta angle
+    costheta = v_inc(1)
+    sintheta = SQRT(1._num - costheta*costheta)
+
+    ! Check particle's weight
+    merge_electrons = .FALSE.
+    IF (w1 >= w2) THEN
+      ! Electron's weight is larger than neutral
+      w_min = w2
+      w_diff = w1 - w2
+      !Update impact electron weight
+      part1%weight = w_diff
+      !Remove neutral particle from list
+      new_part => part2%next ! This is just a buffer
+      CALL remove_particle_from_partlist(p_list2, part2)
+      CALL destroy_particle(part2)
+      part2 => new_part
+      NULLIFY(new_part)
+      IF (w_diff < w1) merge_electrons = .TRUE.
+    ELSE
+      ! Neutral's weight is larger
+      w_min = w1
+      w_diff = w2 - w1
+      part2%weight = w_diff
+      IF (w_diff < w1) THEN
+        ! If w_diff is small merge neutral with next particle
+        new_part => part2 ! Part to be merged and removed
+        part2 => part2%next
+        CALL merge_particles(new_part, part2, p_list2)
+        NULLIFY(new_part)
+      END IF
+    ENDIF
+
+    ! Impact electron
+    ! Chi angle
+    coschi = 1._num - 2._num * random()
+    sinchi = SQRT(1._num - coschi*coschi)
+    ! Phi angle
+    phi = 2._num * pi * random()
+    cosphi = COS(phi)
+    sinphi = SIN(phi)
+    ! Scattered normalised vector
+    sinratio = sinchi / sintheta
+    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+    ! Post-collision momentum
+    u_e1 = v_scat * g_scat * SQRT(ran_e)
+    part1%part_p = (u_cm + u_e1) * m1
+
+    ! Neutral (part2 pointer) is split into
+    ! - New ion
+    ! - New electron
+    ! - Untouched neutral
+
+    ! New electron
+    ! Chi angle
+    coschi = 1._num - 2._num * random()
+    sinchi = SQRT(1._num - coschi*coschi)
+    ! Phi angle
+    phi = 2._num * pi * random()
+    cosphi = COS(phi)
+    sinphi = SIN(phi)
+    ! Scattered normalised vector
+    sinratio = sinchi / sintheta
+    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+    CALL create_particle(new_part)
+    u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
+    new_part%part_p = (u_cm + u_e2) * m1
+    new_part%part_pos = part2_pos
+#ifndef PER_SPECIES_WEIGHT
+    new_part%weight = w2 ! Electron's weight
+#endif
+    CALL add_particle_to_partlist( &
+      species_list(species1)%attached_list, new_part)
+    IF (merge_electrons) THEN
+      part_next => part1%next
+      CALL merge_particles(part1, new_part, p_list1)
+      part1 => part_next
+      NULLIFY(part_next)
+    END IF
+    NULLIFY(new_part)
+
+    ! New ion
+    ion_id = collision%type_block%new_species_id ! ions
+    CALL create_particle(new_part)
+    new_part%part_p = collision%u_2 * m2
+    new_part%part_pos = part2_pos
+    new_part%weight = w_min
+    CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
+      new_part)
+    NULLIFY(new_part)
+
+    CALL link_particle_pointers(collision, part1, part2)
+    NULLIFY(part1, part2, p_list1, p_list2)
+
+  END SUBROUTINE vahedi_split_ionisation
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                                                                             !

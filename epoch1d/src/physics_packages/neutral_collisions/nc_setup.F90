@@ -437,6 +437,34 @@ CONTAINS
           linked = .TRUE.
         END IF
       END IF
+
+    ! VAHEDI SPLIT COLLISIONS
+    ELSEIF (coll_type%wvahedisplit) THEN
+#ifndef PER_SPECIES_WEIGHT
+      IF (is_background) THEN
+        background_mismatch = .TRUE.
+      ELSEIF (coll_type%id == c_nc_ionisation) THEN
+        coll_type%coll_subroutine => vahedi_split_ionisation
+        linked = .TRUE.
+!      ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+!        coll_type%coll_subroutine => nanbu_split_charge_exchange
+!        linked = .TRUE.
+      END IF
+#else
+      IF (rank == 0) THEN
+        DO iu = 1, nio_units ! Print to stdout and to file
+          io = io_units(iu)
+          WRITE(io,*)
+          WRITE(io,*) '*** ERROR ***'
+          WRITE(io,*) 'Collision split method is only possible with', &
+            ' per-particle weight set-up.'
+          WRITE(io,*) 'Please recompile, and rerun code'
+          WRITE(io,*) ''
+        END DO
+      END IF
+      CALL MPI_BARRIER(comm, errcode)
+      CALL abort_code(c_err_bad_setup)
+#endif
     END IF
 
     IF (.NOT.linked) THEN
