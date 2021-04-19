@@ -68,11 +68,14 @@ CONTAINS
 
   SUBROUTINE set_particle_properties(collision, species1, species2, &
     m1, im1, m2, im2, w1, w2, w1_ratio, w2_ratio, g, part1, part2, &
-    p_list1, p_list2)
+    p_list1, p_list2, w1max_rat, w2max_rat)
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
     REAL(num), INTENT(OUT), OPTIONAL :: m1, im1, m2, im2
     REAL(num), INTENT(OUT), OPTIONAL :: w1, w2, w1_ratio, w2_ratio
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num), INTENT(OUT), OPTIONAL :: w1max_rat, w2max_rat
+#endif
     REAL(num), DIMENSION(3), INTENT(OUT), OPTIONAL :: g
     INTEGER, INTENT(OUT), OPTIONAL :: species1, species2
     TYPE(particle), POINTER, INTENT(OUT), OPTIONAL :: part1, part2
@@ -89,6 +92,12 @@ CONTAINS
       IF (PRESENT(w2)) w2 = collision%w1
       IF (PRESENT(w1_ratio)) w1_ratio = collision%w2_ratio
       IF (PRESENT(w2_ratio)) w2_ratio = collision%w1_ratio
+#ifndef PER_SPECIES_WEIGHT
+      IF (PRESENT(w1max_rat)) &
+        w1max_rat = collision%w2/collision%collision_block%max_w2
+      IF (PRESENT(w2max_rat)) &
+        w2max_rat = collision%w1/collision%collision_block%max_w1
+#endif
       IF (PRESENT(part1)) part1 => collision%part2
       IF (PRESENT(part2)) part2 => collision%part1
       IF (PRESENT(p_list2)) p_list2 => collision%p_list1
@@ -103,6 +112,14 @@ CONTAINS
       IF (PRESENT(im2)) im2 = collision%im2
       IF (PRESENT(w1)) w1 = collision%w1
       IF (PRESENT(w2)) w2 = collision%w2
+      IF (PRESENT(w1_ratio)) w1_ratio = collision%w1_ratio
+      IF (PRESENT(w2_ratio)) w2_ratio = collision%w2_ratio
+#ifndef PER_SPECIES_WEIGHT
+      IF (PRESENT(w2max_rat)) &
+        w2max_rat = collision%w2/collision%collision_block%max_w2
+      IF (PRESENT(w1max_rat)) &
+        w1max_rat = collision%w1/collision%collision_block%max_w1
+#endif
       IF (PRESENT(part1)) part1 => collision%part1
       IF (PRESENT(part2)) part2 => collision%part2
       IF (PRESENT(p_list1)) p_list1 => collision%p_list1
@@ -901,7 +918,7 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, part2_pos
-    REAL(num) :: ran_w, w1, w2, w_diff, w_min, w1rat, w2rat
+    REAL(num) :: ran_w, w1, w2, w_diff, w_min, w1max_rat, w2max_rat
     REAL(num) :: ran_e, phi
     REAL(num) :: g_mag, e_threshold
     REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
@@ -913,7 +930,7 @@ CONTAINS
 
     CALL set_particle_properties(collision, species1 = species1, &
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
-      w1_ratio = w1rat, w2_ratio = w2rat, &
+      w1max_rat = w1max_rat, w2max_rat = w2max_rat, &
       g = g, part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
     u_cm = collision%u_cm
@@ -938,8 +955,8 @@ CONTAINS
     electron_collides = .FALSE.
     neutral_collides = .FALSE.
     ran_w = random()
-    IF (ran_w < w1rat) electron_collides = .TRUE.
-    IF (ran_w < w2rat) neutral_collides = .TRUE.
+    IF (ran_w < w1max_rat) electron_collides = .TRUE.
+    IF (ran_w < w2max_rat) neutral_collides = .TRUE.
     merge_electrons = .FALSE.
     IF (w1 >= w2) THEN
       ! Electron's weight is larger than neutral
