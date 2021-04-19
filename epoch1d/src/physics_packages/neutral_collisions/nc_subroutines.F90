@@ -901,18 +901,19 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, part2_pos
-    REAL(num) :: w1, w2, w_diff, w_min
+    REAL(num) :: ran_w, w1, w2, w_diff, w_min, w1rat, w2rat
     REAL(num) :: ran_e, phi
     REAL(num) :: g_mag, e_threshold
     REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
     REAL(num) :: sinratio, e_inc, e_scat, g_scat
     INTEGER :: ion_id, species1
-    LOGICAL :: merge_electrons
+    LOGICAL :: merge_electrons, electron_collides, neutral_collides
     TYPE(particle), POINTER :: new_part, part_next, part1, part2
     TYPE(particle_list) , POINTER :: p_list1, p_list2
 
     CALL set_particle_properties(collision, species1 = species1, &
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
+      w1_ratio = w1rat, w2_ratio = w2rat, &
       g = g, part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
     u_cm = collision%u_cm
@@ -934,91 +935,103 @@ CONTAINS
     sintheta = SQRT(1._num - costheta*costheta)
 
     ! Check particle's weight
+    electron_collides = .FALSE.
+    neutral_collides = .FALSE.
+    ran_w = random()
+    IF (ran_w < w2rat) electron_collides = .TRUE.
+    IF (ran_w < w1rat) neutral_collides = .TRUE.
     merge_electrons = .FALSE.
     IF (w1 >= w2) THEN
       ! Electron's weight is larger than neutral
       w_min = w2
       w_diff = w1 - w2
       !Update impact electron weight
-      part1%weight = w_diff
+      IF (electron_collides) part1%weight = w_diff
       !Remove neutral particle from list
-      new_part => part2%next ! This is just a buffer
-      CALL remove_particle_from_partlist(p_list2, part2)
-      CALL destroy_particle(part2)
-      part2 => new_part
-      NULLIFY(new_part)
+      IF (neutral_collides) THEN
+        new_part => part2%next ! This is just a buffer
+        CALL remove_particle_from_partlist(p_list2, part2)
+        CALL destroy_particle(part2)
+        part2 => new_part
+        NULLIFY(new_part)
+      END IF
       IF (w_diff < w1) merge_electrons = .TRUE.
     ELSE
       ! Neutral's weight is larger
       w_min = w1
       w_diff = w2 - w1
-      part2%weight = w_diff
-      IF (w_diff < w1) THEN
-        ! If w_diff is small merge neutral with next particle
-        new_part => part2 ! Part to be merged and removed
-        part2 => part2%next
-        CALL merge_particles(new_part, part2, p_list2)
-        NULLIFY(new_part)
+      IF (neutral_collides) THEN
+        part2%weight = w_diff
+        IF (w_diff < w1) THEN
+          ! If w_diff is small merge neutral with next particle
+          new_part => part2 ! Part to be merged and removed
+          part2 => part2%next
+          CALL merge_particles(new_part, part2, p_list2)
+          NULLIFY(new_part)
+        END IF
       END IF
-    ENDIF
+    END IF
 
     ! Impact electron
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-    ! Post-collision momentum
-    u_e1 = v_scat * g_scat * SQRT(ran_e)
-    part1%part_p = u_e1 * m1
+    IF (electron_collides) THEN
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+      ! Post-collision momentum
+      u_e1 = v_scat * g_scat * SQRT(ran_e)
+      part1%part_p = u_e1 * m1
+    END IF
 
     ! Neutral (part2 pointer) is split into
     ! - New ion
     ! - New electron
     ! - Untouched neutral
+    IF (neutral_collides) THEN
+      ! New electron
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+      CALL create_particle(new_part)
+      u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
+      new_part%part_p = u_e2 * m1
+      new_part%part_pos = part2_pos
+      new_part%weight = w_min
+      CALL add_particle_to_partlist( &
+        species_list(species1)%attached_list, new_part)
+      IF (merge_electrons) THEN
+        part_next => part1%next
+        CALL merge_particles(part1, new_part, p_list1)
+        part1 => part_next
+        NULLIFY(part_next)
+      END IF
+      NULLIFY(new_part)
 
-    ! New electron
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-    CALL create_particle(new_part)
-    u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
-    new_part%part_p = u_e2 * m1
-    new_part%part_pos = part2_pos
-    new_part%weight = w_min
-    CALL add_particle_to_partlist( &
-      species_list(species1)%attached_list, new_part)
-    IF (merge_electrons) THEN
-      part_next => part1%next
-      CALL merge_particles(part1, new_part, p_list1)
-      part1 => part_next
-      NULLIFY(part_next)
+      ! New ion
+      ion_id = collision%type_block%new_species_id ! ions
+      CALL create_particle(new_part)
+      new_part%part_p = collision%u_2 * m2
+      new_part%part_pos = part2_pos
+      new_part%weight = w_min
+      CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
+        new_part)
+      NULLIFY(new_part)
     END IF
-    NULLIFY(new_part)
-
-    ! New ion
-    ion_id = collision%type_block%new_species_id ! ions
-    CALL create_particle(new_part)
-    new_part%part_p = collision%u_2 * m2
-    new_part%part_pos = part2_pos
-    new_part%weight = w_min
-    CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
-      new_part)
-    NULLIFY(new_part)
 
     CALL link_particle_pointers(collision, part1, part2)
     NULLIFY(part1, part2, p_list1, p_list2)
