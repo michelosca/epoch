@@ -889,7 +889,7 @@ CONTAINS
   END SUBROUTINE vahedi_ionisation
 
 
-
+#ifndef PER_SPECIES_WEIGHT
   SUBROUTINE vahedi_split_ionisation(collision)
 
     ! Collision process: electron impact ionisation
@@ -920,6 +920,7 @@ CONTAINS
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
 
+    ! Energy balance and post collision speed
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
     mu = collision%reducedm
@@ -1001,9 +1002,7 @@ CONTAINS
     u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
     new_part%part_p = (u_cm + u_e2) * m1
     new_part%part_pos = part2_pos
-#ifndef PER_SPECIES_WEIGHT
-    new_part%weight = w2 ! Electron's weight
-#endif
+    new_part%weight = w_min
     CALL add_particle_to_partlist( &
       species_list(species1)%attached_list, new_part)
     IF (merge_electrons) THEN
@@ -1028,7 +1027,7 @@ CONTAINS
     NULLIFY(part1, part2, p_list1, p_list2)
 
   END SUBROUTINE vahedi_split_ionisation
-
+#endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                                                                             !
 !                             NANBU BACKGROUND                                !
