@@ -809,6 +809,9 @@ MODULE shared_data
 
     REAL(num) :: gsigma_max_total, igsigma_max_total
     REAL(num) :: max_weight
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: max_w1, max_w2
+#endif
 
     INTEGER :: ncolltypes
     LOGICAL :: is_background, user_gsigma_max
