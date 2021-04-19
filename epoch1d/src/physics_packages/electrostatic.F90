@@ -151,32 +151,17 @@ CONTAINS
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
 
-#ifndef PER_PARTICLE_CHARGE_MASS
+      ! Copy the particle properties out for speed
       part_q  = species_list(ispecies)%charge
       IF (ABS(part_q) < TINY(0._num)) CYCLE
 #ifdef PER_SPECIES_WEIGHT      
       part_weight = species_list(ispecies)%weight
       wdata = part_q * part_weight
 #endif
-#endif
-
-#ifdef PER_SPECIES_WEIGHT      
-      part_weight = species_list(ispecies)%weight
-#endif
 
       current => species_list(ispecies)%attached_list%head
       DO WHILE (ASSOCIATED(current))
-        ! Copy the particle properties out for speed
-#ifdef PER_PARTICLE_CHARGE_MASS
-        part_q  = current%charge
-        IF (ABS(part_q) < TINY(0._num)) CYCLE
 #ifndef PER_SPECIES_WEIGHT
-        part_weight = current%weight
-        wdata = part_q * part_weight
-#endif
-#endif
-
-#ifndef PER_SPECIES_WEIGHT      
         part_weight = current%weight
         wdata = part_q * part_weight
 #endif
