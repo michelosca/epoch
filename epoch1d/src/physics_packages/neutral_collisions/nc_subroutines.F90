@@ -938,8 +938,8 @@ CONTAINS
     electron_collides = .FALSE.
     neutral_collides = .FALSE.
     ran_w = random()
-    IF (ran_w < w2rat) electron_collides = .TRUE.
-    IF (ran_w < w1rat) neutral_collides = .TRUE.
+    IF (ran_w < w1rat) electron_collides = .TRUE.
+    IF (ran_w < w2rat) neutral_collides = .TRUE.
     merge_electrons = .FALSE.
     IF (w1 >= w2) THEN
       ! Electron's weight is larger than neutral
