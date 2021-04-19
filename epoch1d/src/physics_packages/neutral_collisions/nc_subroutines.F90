@@ -921,9 +921,6 @@ CONTAINS
     part2_pos = part2%part_pos
 
     ! Energy balance and post collision speed
-    e_threshold = collision%type_block%ethreshold
-    g_mag = collision%g_mag
-    mu = collision%reducedm
     e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc - e_threshold
     g_scat = SQRT(2._num * e_scat * im1)
@@ -979,7 +976,7 @@ CONTAINS
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     ! Post-collision momentum
     u_e1 = v_scat * g_scat * SQRT(ran_e)
-    part1%part_p = (u_cm + u_e1) * m1
+    part1%part_p = u_e1 * m1
 
     ! Neutral (part2 pointer) is split into
     ! - New ion
@@ -1000,7 +997,7 @@ CONTAINS
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     CALL create_particle(new_part)
     u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
-    new_part%part_p = (u_cm + u_e2) * m1
+    new_part%part_p = u_e2 * m1
     new_part%part_pos = part2_pos
     new_part%weight = w_min
     CALL add_particle_to_partlist( &
@@ -1407,7 +1404,7 @@ CONTAINS
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, part_pos
+    REAL(num) :: sinratio, m1, part_pos, ran_e
     INTEGER :: species_id
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
@@ -1422,8 +1419,9 @@ CONTAINS
     g_mag = collision%g_mag
     e_inc = 0.5_num * m1 * g_mag * g_mag
     delta_e = collision%type_block%ethreshold
-    e_scat = (e_inc - delta_e) * 0.5_num
-    g_scat = SQRT(2._num * e_scat / m1)
+    e_scat = e_inc - delta_e
+    g_scat = SQRT(2._num * e_scat * collision%im1)
+    ran_e = 0.5_num ! random()
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
@@ -1445,7 +1443,7 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     ! Post-collision momentum
-    collision%part1%part_p = v_scat * g_scat * m1
+    collision%part1%part_p = v_scat * g_scat * SQRT(ran_e) * m1
 
 
     ! Electron #2:
@@ -1463,7 +1461,7 @@ CONTAINS
     ! Create a new electron particle
     species_id = collision%species1
     CALL create_particle(new_part)
-    new_part%part_p = v_scat * g_scat * m1
+    new_part%part_p = v_scat * g_scat * SQRT(1._num - ran_e) * m1
     new_part%part_pos = part_pos
 #ifndef PER_SPECIES_WEIGHT
     new_part%weight = collision%w1 ! Electron's weight
