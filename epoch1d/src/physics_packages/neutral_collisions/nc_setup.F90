@@ -512,6 +512,7 @@ CONTAINS
 #ifndef PER_SPECIES_WEIGHT
     INTEGER(8) :: npart, ipart
     REAL(num) :: all_max_weight
+    REAL(num) :: max_w1, max_w2
     TYPE(particle), POINTER :: current
 #endif
     REAL(num) :: max_weight, wi, wj
@@ -520,26 +521,31 @@ CONTAINS
 #ifndef PER_SPECIES_WEIGHT
     current => species_list(ispecies)%attached_list%head
     npart = species_list(ispecies)%attached_list%count
+    max_w1 = 0._num
     DO ipart = 1, npart
       wi = current%weight
-      max_weight = MAX(wi, max_weight)
+      max_w1 = MAX(wi, max_w1)
       current => current%next
     END DO
+    CALL MPI_ALLREDUCE(max_w1,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
+    coll_block%max_w1 = all_max_weight
     
+    max_w2 = 0._num
     IF (ispecies /= jspecies) THEN
       IF (jspecies <= n_species) THEN
         current => species_list(jspecies)%attached_list%head
         npart = species_list(jspecies)%attached_list%count
         DO ipart = 1, npart
           wj = current%weight
-          max_weight = MAX(wj, max_weight)
+          max_w2 = MAX(wj, max_w2)
           current => current%next
         END DO
       END IF
     END IF
-    CALL MPI_ALLREDUCE(max_weight, all_max_weight, 1, MPIREAL, MPI_MAX, &
-        comm, errcode)
-    max_weight = all_max_weight
+    CALL MPI_ALLREDUCE(max_w2,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
+    coll_block%max_w2 = all_max_weight
+
+    max_weight = MAX(coll_block%max_w1, coll_block%max_w2)
 #else
     wi = species_list(ispecies)%weight
     wj = species_list(jspecies)%weight
@@ -945,6 +951,8 @@ CONTAINS
     coll_block%user_gsigma_max = .FALSE.
     coll_block%ncolltypes = 0
     coll_block%max_weight = 0._num
+    coll_block%max_w1 = 0._num
+    coll_block%max_w2 = 0._num
     coll_block%is_background = .FALSE.
 
 
