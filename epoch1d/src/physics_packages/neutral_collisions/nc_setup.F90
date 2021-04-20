@@ -953,8 +953,8 @@ CONTAINS
     coll_block%max_weight = 0._num
 #ifndef PER_SPECIES_WEIGHT
     coll_block%max_w1 = 0._num
-#endif
     coll_block%max_w2 = 0._num
+#endif
     coll_block%is_background = .FALSE.
 
 
