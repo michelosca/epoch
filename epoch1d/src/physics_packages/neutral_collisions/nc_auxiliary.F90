@@ -330,7 +330,7 @@ CONTAINS
 
   SUBROUTINE print_collision_type(ispecies, jspecies, ctype)
 
-    INTEGER, INTENT(INOUT) :: ispecies, jspecies, ctype
+    INTEGER, INTENT(IN) :: ispecies, jspecies, ctype
     INTEGER :: species_id
     TYPE(neutrals_block), POINTER :: coll_block
     TYPE(collision_type_block), POINTER :: coll_type_block

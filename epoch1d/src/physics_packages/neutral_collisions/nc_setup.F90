@@ -890,7 +890,7 @@ CONTAINS
   SUBROUTINE init_collision_type_block(coll_type, ispecies, jspecies)
 
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
-    INTEGER, INTENT(INOUT) :: ispecies, jspecies
+    INTEGER, INTENT(IN) :: ispecies, jspecies
     
     coll_type%ethreshold = 0._num
     coll_type%gthreshold = 0._num
@@ -951,7 +951,9 @@ CONTAINS
     coll_block%user_gsigma_max = .FALSE.
     coll_block%ncolltypes = 0
     coll_block%max_weight = 0._num
+#ifndef PER_SPECIES_WEIGHT
     coll_block%max_w1 = 0._num
+#endif
     coll_block%max_w2 = 0._num
     coll_block%is_background = .FALSE.
 

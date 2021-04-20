@@ -68,7 +68,11 @@ CONTAINS
 
   SUBROUTINE set_particle_properties(collision, species1, species2, &
     m1, im1, m2, im2, w1, w2, w1_ratio, w2_ratio, g, part1, part2, &
+#ifndef PER_SPECIES_WEIGHT
     p_list1, p_list2, w1max_rat, w2max_rat)
+#else
+    p_list1, p_list2 )
+#endif
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
     REAL(num), INTENT(OUT), OPTIONAL :: m1, im1, m2, im2
