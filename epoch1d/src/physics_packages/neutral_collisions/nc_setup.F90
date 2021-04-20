@@ -548,7 +548,11 @@ CONTAINS
     max_weight = MAX(coll_block%max_w1, coll_block%max_w2)
 #else
     wi = species_list(ispecies)%weight
-    wj = species_list(jspecies)%weight
+    IF (jspecies > n_species) THEN
+      wj = 0._num
+    ELSE
+      wj = species_list(jspecies)%weight
+    END IF
     max_weight = MAX(wi, wj)
 #endif
     coll_block%max_weight = max_weight
