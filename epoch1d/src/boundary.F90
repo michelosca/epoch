@@ -876,7 +876,6 @@ CONTAINS
       END DO
 
       IF (reinjection) THEN
-          species_list(ispecies)%attached_list%count
 #ifndef PER_SPECIES_WEIGHT
         CALL inject_electron_ion_pair(n_injections, species_list(ispecies), &
           injection_weight)
