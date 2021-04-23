@@ -142,6 +142,8 @@ CONTAINS
             collision%p_list2 => NULL()
           END IF
           collision%p_list1 => NULL()
+          collision%part1 => NULL()
+          collision%part2 => NULL()
         END DO ! ix
 
         collision%collision_block => NULL()
