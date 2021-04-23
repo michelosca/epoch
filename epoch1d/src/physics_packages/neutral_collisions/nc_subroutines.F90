@@ -731,6 +731,7 @@ CONTAINS
       m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
       part1 = part1, part2 = part2, p_list2 = p_list, g = g)
     mu = collision%reducedm
+    u_cm = collision%u_cm
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
 
@@ -830,6 +831,7 @@ CONTAINS
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
     mu = collision%reducedm
+    u_cm = collision%u_cm
     e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc - e_threshold
     g_scat = SQRT(2._num * e_scat * im1)
