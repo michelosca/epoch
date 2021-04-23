@@ -668,7 +668,7 @@ CONTAINS
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
     ! Incoming normalised velocity vector
-    v_inc = vector_normalisation(collision%g)
+    v_inc = random_unit_vector() 
 
     !Theta angle
     costheta = v_inc(1)
