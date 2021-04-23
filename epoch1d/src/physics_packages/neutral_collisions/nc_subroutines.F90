@@ -827,6 +827,8 @@ CONTAINS
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
     mu = collision%reducedm
+    u_cme = collision%u_cm
+
     e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc - e_threshold
     g_scat = SQRT(2._num * e_scat * im1)
