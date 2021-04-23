@@ -9,11 +9,11 @@
 
 # LINEAR SOLVER
 -ksp_type cg
--ksp_rtol   1.e-40    #is the decrease of the residual norm relative to the 
+#-ksp_rtol   1.e-40    #is the decrease of the residual norm relative to the 
                      #norm of the right hand side. Default: 1.e-5
--ksp_atol   1.e-80   #is the absolute size of the residual norm. Default: 1.e-50
--ksp_divtol 1.e5     #is the relative increase in the residual. Default: 1.e5
--ksp_max_it 10000     #is the max. number of iterations. Default: 1.e4
+#-ksp_atol   1.e-80   #is the absolute size of the residual norm. Default: 1.e-50
+#-ksp_divtol 1.e5     #is the relative increase in the residual. Default: 1.e5
+#-ksp_max_it 10000     #is the max. number of iterations. Default: 1.e4
 
 # PRECONDITIONER
 -pc_type gamg
