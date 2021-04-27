@@ -206,7 +206,7 @@ CONTAINS
       collision%ix_temp = background%temp_profile(ix) * temp
       collision%pmax = ix_density*gsigma_max*dt
 
-      CALL background_collisions_neutrals(collision)
+      CALL background_species_collisions_neutrals(collision)
 
       collision%p_list1 => NULL()
       collision%part1 => NULL()
@@ -339,6 +339,59 @@ CONTAINS
     collision%p_list1%coll_counter = counter1 + int_coll_pairs*2
 
   END SUBROUTINE intra_species_collisions_neutrals
+
+
+
+  SUBROUTINE background_species_collisions_neutrals(collision)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    INTEGER(8) :: n_part1, counter1, int_coll_pairs, ipair
+    REAL(num) :: n_coll_pairs
+
+    TYPE(particle), POINTER :: current
+
+    ! Number of particles in the cell
+    n_part1 = collision%p_list1%count
+    IF (n_part1 == 0) RETURN
+
+    ! Collision pairs
+    n_coll_pairs = n_part1 * collision%pmax ! Real
+    int_coll_pairs = CEILING(n_coll_pairs)  ! Integer
+
+    ! Number of collisions undergone by this list in this dt cycle
+    counter1 = collision%p_list1%coll_counter
+
+    n_part1 = n_part1 - counter1
+    IF (int_coll_pairs > n_part1) THEN
+      IF (n_part1 <= 0) RETURN
+      int_coll_pairs = n_part1
+      n_coll_pairs = int_coll_pairs
+    END IF
+
+    ! The conversion from real to integer of n_coll_pairs induces an error
+    !that is prevented with boyd_factor (Boyd 2017, Chapter 6)
+    collision%prob_factor = n_coll_pairs/REAL(int_coll_pairs, num)
+
+    ! Particle pairing
+    current => collision%p_list1%head
+    ! Point to the first particle in the list that is going to collide
+    !counter1 discards the ones that may have collided already with other
+    !species
+    DO ipair = 1, counter1
+      current => current%next
+    END DO
+
+    ! Execute collisions
+    collision%part1 => current
+    DO ipair = 1, int_coll_pairs
+      CALL particle_collision_dynamics(collision)
+      collision%part1 => collision%part1%next
+    END DO
+
+    collision%p_list1%coll_counter = counter1 + int_coll_pairs
+
+  END SUBROUTINE background_species_collisions_neutrals
 
 
 
@@ -501,60 +554,6 @@ CONTAINS
     END DO
 
   END SUBROUTINE get_coll_cross_section
-
-
-
-  SUBROUTINE background_collisions_neutrals(collision)
-
-    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
-
-    INTEGER(8) :: n_part1, counter1, int_coll_pairs, ipair
-    REAL(num) :: n_coll_pairs
-
-    TYPE(particle), POINTER :: current
-    
-    ! Number of particles in the cell
-    n_part1 = collision%p_list1%count
-    IF (n_part1 == 0) RETURN
-   
-    ! Collision pairs
-    n_coll_pairs = n_part1 * collision%pmax ! Real
-    int_coll_pairs = CEILING(n_coll_pairs)  ! Integer
-
-    ! Number of collisions undergone by this list in this dt cycle
-    counter1 = collision%p_list1%coll_counter
-
-    n_part1 = n_part1 - counter1
-    IF (int_coll_pairs > n_part1) THEN
-      IF (n_part1 <= 0) RETURN
-      int_coll_pairs = n_part1
-      n_coll_pairs = int_coll_pairs
-    END IF
-    
-    ! The conversion from real to integer of n_coll_pairs induces an error
-    !that is prevented with boyd_factor (Boyd 2017, Chapter 6)
-    collision%prob_factor = n_coll_pairs/REAL(int_coll_pairs, num)
-    
-    ! Particle pairing
-    current => collision%p_list1%head
-    ! Point to the first particle in the list that is going to collide
-    !counter1 discards the ones that may have collided already with other
-    !species
-    DO ipair = 1, counter1
-      current => current%next
-    END DO
-
-    ! Execute collisions
-    collision%part1 => current
-    DO ipair = 1, int_coll_pairs
-      CALL particle_collision_dynamics(collision)
-      collision%part1 => collision%part1%next
-    END DO
-    
-    collision%p_list1%coll_counter = counter1 + int_coll_pairs
-    collision%part1 => NULL()
-
-  END SUBROUTINE background_collisions_neutrals
 
 
 
