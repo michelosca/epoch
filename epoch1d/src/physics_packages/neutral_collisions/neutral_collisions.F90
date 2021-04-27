@@ -33,26 +33,22 @@ MODULE neutral_collisions
 
   PRIVATE
 
-  PUBLIC :: particle_neutral_collisions
+  PUBLIC :: run_neutral_collisions
 
 CONTAINS
 
-  SUBROUTINE particle_neutral_collisions
+  SUBROUTINE run_neutral_collisions
 
-    INTEGER :: species1, species2, ibg, ix
-    REAL(num) :: idx, gsigma_max, w_max
+    INTEGER :: species1, species2, ix
     TYPE(current_collision_block), POINTER :: collision => NULL()
-    TYPE(particle_list), POINTER :: p_list1, p_list2
-    TYPE(neutrals_block), POINTER :: collision_block
-
-    idx = 1._num/dx
+    TYPE(particle_list), POINTER :: p_list1
 
     ! Update background gas spatial & temporal profile
-    DO ibg = 1, n_backgrounds
+    DO ix = 1, n_backgrounds
       ! Update density profile
-      CALL bg_update_dens_profile(background_list(ibg))
+      CALL bg_update_dens_profile(background_list(ix))
       ! Update temperature profile
-      CALL bg_update_temp_profile(background_list(ibg))
+      CALL bg_update_temp_profile(background_list(ix))
     END DO
 
     DO species1 = 1, n_species
@@ -71,6 +67,7 @@ CONTAINS
         p_list1 => species_list(species1)%secondary_list(ix)
         CALL shuffle_particle_list_random(p_list1)
       END DO ! ix
+      p_list1 => NULL()
       
       
       DO species2 = species1, n_species_bg
@@ -81,7 +78,7 @@ CONTAINS
         IF (coll_pairs(species1, species2) <= 0._num) CYCLE
 
         ! Get collision block
-        collision_block => species_list(species1)%neutrals(species2)
+        collision%collision_block => species_list(species1)%neutrals(species2)
 
         ! Set current collision block
         collision%species1 = species1
@@ -91,68 +88,132 @@ CONTAINS
         ELSE
           collision%same_species = .FALSE.
         END IF
-        collision%collision_block => collision_block
 
         ! Background collisions
-        IF (collision_block%is_background) THEN
+        IF (collision%collision_block%is_background) THEN
           collision%bg_species = species2 - n_species
           CALL setup_background_collisions(collision)
-          CYCLE
+        ELSE
+          CALL setup_particle_collisions(collision)
         END IF
 
-        !Maximum(g*cross-section)
-        gsigma_max = collision_block%gsigma_max_total
-        IF (gsigma_max <= 0._num) CYCLE
-
-        ! species2 mass & weight
-        collision%m2 = species_list(species2)%mass
-        collision%im2 = 1._num/collision%m2
-        collision%m12 = collision%m1 + collision%m2
-        collision%im12 = 1._num/collision%m12
-        collision%reducedm = collision%m1*collision%m2*collision%im12
-        collision%ireducedm = 1._num/collision%reducedm
-        w_max = collision_block%max_weight
-#ifdef PER_SPECIES_WEIGHT
-        collision%w2 = species_list(species2)%weight
-        collision%w1_ratio = collision%w1 / w_max
-        collision%w2_ratio = collision%w2 / w_max
-#endif
-
-        !Maximum collision probability
-        ! after the following lines pmax is not fully calculated, the number
-        !of target particles 'jcount' needs to be multiplied
-        collision%pmax = dt*gsigma_max*idx*w_max
-        ! Collisions per grid
-        DO ix = 1, nx
-          collision%ix = ix
-          collision%p_list1 => species_list(species1)%secondary_list(ix)
-
-          IF (collision%same_species) THEN
-            CALL intra_species_collisions_neutrals(collision)
-
-          ELSE
-            p_list2 => species_list(species2)%secondary_list(ix)
-            ! Shuffle target particle list, but only if not been done before
-            IF (p_list2%coll_counter==0) &
-              CALL shuffle_particle_list_random(p_list2)
-
-            collision%p_list2 => p_list2
-            CALL inter_species_collisions_neutrals(collision)
-
-            collision%p_list2 => NULL()
-          END IF
-          collision%p_list1 => NULL()
-          collision%part1 => NULL()
-          collision%part2 => NULL()
-        END DO ! ix
-
         collision%collision_block => NULL()
+
       END DO ! species2
       CALL end_current_collision_block(collision)
     END DO ! species1
 
 
-  END SUBROUTINE particle_neutral_collisions
+  END SUBROUTINE run_neutral_collisions
+
+
+
+  SUBROUTINE setup_particle_collisions(collision)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    INTEGER :: species1, species2, ix
+    REAL(num) :: gsigma_max
+    REAL(num) :: w_max
+
+    !Maximum(g*cross-section)
+    gsigma_max = collision%collision_block%gsigma_max_total
+    IF (gsigma_max <= 0._num) RETURN
+
+    species1 = collision%species1
+    species2 = collision%species2
+    ! species2 mass & weight
+    collision%m2 = species_list(species2)%mass
+    collision%im2 = 1._num/collision%m2
+    collision%m12 = collision%m1 + collision%m2
+    collision%im12 = 1._num/collision%m12
+    collision%reducedm = collision%m1*collision%m2*collision%im12
+    collision%ireducedm = 1._num/collision%reducedm
+    w_max = collision%collision_block%max_weight
+#ifdef PER_SPECIES_WEIGHT
+    collision%w2 = species_list(species2)%weight
+    collision%w1_ratio = collision%w1 / w_max
+    collision%w2_ratio = collision%w2 / w_max
+#endif
+
+    !Maximum collision probability
+    ! Collisions per grid
+    collision%pmax = dt*gsigma_max*w_max/dx
+    DO ix = 1, nx
+      collision%ix = ix
+      collision%p_list1 => species_list(species1)%secondary_list(ix)
+
+      IF (collision%same_species) THEN
+        CALL intra_species_collisions_neutrals(collision)
+
+      ELSE
+        collision%p_list2 => species_list(species2)%secondary_list(ix)
+        ! Shuffle target particle list, but only if not been done before
+        IF (collision%p_list2%coll_counter==0) THEN
+          CALL shuffle_particle_list_random(collision%p_list2)
+        END IF
+
+        CALL inter_species_collisions_neutrals(collision)
+        collision%p_list2 => NULL()
+
+      END IF
+
+      collision%p_list1 => NULL()
+      collision%part1 => NULL()
+      collision%part2 => NULL()
+
+    END DO ! ix
+
+  END SUBROUTINE setup_particle_collisions
+
+
+
+  SUBROUTINE setup_background_collisions(collision)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    REAL(num) :: gsigma_max, density, temp
+    REAL(num) :: ix_density
+    INTEGER :: ix, species1
+    TYPE(background_block), POINTER :: background
+
+    species1 = collision%species1
+    background => collision%collision_block%background
+    IF (time < background%t_start .OR. time > background%t_end) RETURN
+
+    !Maximum(g*cross-section)
+    gsigma_max = collision%collision_block%gsigma_max_total
+    IF (gsigma_max <= 0._num) RETURN
+
+    ! Background gas mass
+    collision%m2 = background%mass
+    collision%im2 = 1._num/collision%m2
+    collision%m12 = collision%m1 + collision%m2
+    collision%im12 = 1._num/collision%m12
+    collision%reducedm = collision%m1*collision%m2*collision%im12
+    collision%ireducedm = 1._num/collision%reducedm
+
+    ! Background gass density & temperature 'amplitude'
+    density = background%dens
+    temp = background%temp
+
+    DO ix = 1, nx
+      collision%ix = ix
+      collision%p_list1 => species_list(species1)%secondary_list(ix)
+
+      ! Background density
+      ix_density = background%dens_profile(ix) * density
+      ! Background temperature
+      collision%ix_temp = background%temp_profile(ix) * temp
+      collision%pmax = ix_density*gsigma_max*dt
+
+      CALL background_collisions_neutrals(collision)
+
+      collision%p_list1 => NULL()
+      collision%part1 => NULL()
+
+    END DO ! ix
+
+  END SUBROUTINE setup_background_collisions
 
 
 
@@ -172,7 +233,7 @@ CONTAINS
     IF (n_part2 == 0) RETURN
 
     ! Collision pairs
-    n_coll_pairs = n_part1*n_part2 * collision%pmax ! Real
+    n_coll_pairs = n_part1 * n_part2 * collision%pmax ! Real
     int_coll_pairs = CEILING(n_coll_pairs)  ! Integer
 
     ! Number of collisions undergone by this list in this dt cycle
@@ -440,56 +501,6 @@ CONTAINS
     END DO
 
   END SUBROUTINE get_coll_cross_section
-
-
-
-  SUBROUTINE setup_background_collisions(collision)
-
-    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
-
-    REAL(num) :: gsigma_max, density, temp
-    REAL(num) :: ix_density
-    INTEGER :: ix, species1
-    TYPE(background_block), POINTER :: background
-
-    species1 = collision%species1
-    background => collision%collision_block%background
-    IF (time < background%t_start .OR. time > background%t_end) RETURN 
-
-    !Maximum(g*cross-section)
-    gsigma_max = collision%collision_block%gsigma_max_total
-    IF (gsigma_max <= 0._num) RETURN
-        
-    ! Background gas mass
-    collision%m2 = background%mass
-    collision%im2 = 1._num/collision%m2
-    collision%m12 = collision%m1 + collision%m2
-    collision%im12 = 1._num/collision%m12
-    collision%reducedm = collision%m1*collision%m2*collision%im12
-    collision%ireducedm = 1._num/collision%reducedm
-
-    ! Background gass density & temperature 'amplitude'
-    density = background%dens
-    temp = background%temp
-          
-    DO ix = 1, nx
-      collision%ix = ix
-      collision%p_list1 => species_list(species1)%secondary_list(ix)
-
-      ! Background density
-      ix_density = background%dens_profile(ix) * density
-      ! Background temperature
-      collision%ix_temp = background%temp_profile(ix) * temp
-      collision%pmax = ix_density*gsigma_max*dt
-
-      CALL background_collisions_neutrals(collision)
-
-      collision%p_list1 => NULL()
-    END DO ! ix
-
-    collision%collision_block => NULL()
-
-  END SUBROUTINE setup_background_collisions
 
 
 
