@@ -763,7 +763,8 @@ MODULE shared_data
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_potential
   REAL(num) :: es_dt_fact, max_speed, norm_z_factor, max_perturbation_freq
   REAL(num) :: user_max_speed
-  LOGICAL :: x_min_boundary_open, x_max_boundary_open
+  REAL(num) :: user_dt
+  LOGICAL :: force_user_dt, x_min_boundary_open, x_max_boundary_open
 
   TYPE potential_block
     ! Boundary to which potential is attached

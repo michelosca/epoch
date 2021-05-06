@@ -74,6 +74,8 @@ CONTAINS
     user_max_speed = 0._num
     norm_z_factor = 5._num
     max_perturbation_freq = 1.e-50_num
+    user_dt = 0._num
+    force_user_dt= .FALSE.
 
     !Neutral collisions
     user_max_b_field = 0._num
@@ -440,6 +442,9 @@ CONTAINS
       user_max_speed = as_real_print(value, element, errcode)
     ELSE IF (str_cmp(element, 'norm_z_factor')) THEN
       norm_z_factor = as_real_print(value, element, errcode) 
+    ELSE IF (str_cmp(element, 'user_dt')) THEN
+      user_dt = as_real_print(value, element, errcode)
+      force_user_dt= .TRUE.
 #endif
 
     ! Neutral collisions

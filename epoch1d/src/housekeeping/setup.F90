@@ -745,21 +745,26 @@ CONTAINS
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
 
+    ! Force user time step
+    IF (force_user_dt) dt = user_dt
 
     IF (rank == 0) THEN
       WRITE(*,*) &
        '************ELECTROSTATIC: TIME STEP RESTRICTIONS************'
-      WRITE(*, 987) 'Plasma frequency: ', dt_plasma_frequency
-      WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq
-      WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid
-      WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq
-      WRITE(*, 987) 'Laser time-step: ', dt_laser
-      WRITE(*, 987) 'CFL time-step: ', dt_courant
-      WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck
+      WRITE(*, 987) 'Plasma frequency: ', dt_plasma_frequency, ' s'
+      WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq, ' s'
+      WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid, ' s'
+      WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq, ' s'
+      WRITE(*, 987) 'Laser time-step: ', dt_laser, ' s'
+      WRITE(*, 987) 'CFL time-step: ', dt_courant, ' s'
+      WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck, ' s'
+      IF (force_user_dt) THEN
+        WRITE(*, 987) 'User predefined dt: ', user_dt, ' s'
+      END IF
       WRITE(*,*) ''
       WRITE(*,*) &
-       '**********************SIMULATION TIME STEP*********************'
-      WRITE(*,*) 'Min. dt: ', dt
+       '*******************SIMULATION TIME STEP**********************'
+      WRITE(*,*) 'Min. dt: ', dt, ' s'
       WRITE(*,*) ''
     ENDIF
 
@@ -785,7 +790,7 @@ CONTAINS
       END IF
     END DO
 
-987 FORMAT (A25, ES10.4)
+987 FORMAT (A25, ES10.4, A2)
 
   END SUBROUTINE set_dt
 
@@ -1017,8 +1022,8 @@ CONTAINS
         WRITE(*,*) ''
         WRITE(*,*) &
           '*********NEUTRAL COLLISIONS: TIME STEP RESTRICTIONS**********'
-        WRITE(*,*) 'Max. acceleration: ', dt_accel
-        WRITE(*,*) 'Max. collision frequency: ', dt_neutral_collisions
+        WRITE(*,987) 'Max. acceleration: ', dt_accel, ' s'
+        WRITE(*,987) 'Max. collision freq.: ', dt_neutral_collisions, ' s'
         WRITE(*,*) ''
       END IF
 
@@ -1026,6 +1031,7 @@ CONTAINS
 
     END IF
 
+987 FORMAT (A25, ES10.4, A2)
   END SUBROUTINE set_dt_neutral_collisions
 
 
