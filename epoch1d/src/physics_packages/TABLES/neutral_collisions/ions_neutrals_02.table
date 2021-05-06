@@ -1,13 +1,12 @@
 energy_threshold = 0
 cross_section_units = 1.e-20
 energy_units = eV
-collision_method = bird
+collision_method = vahedi
 collision_type = charge exchange
 source_species = none
 new_species = none
-output_name = charge_exchange 
+output_name = none
 user_factor = 1.0
-#gsigma_max = 8.5475e-15
 0.0 22.139
 0.00010000 22.139
 0.00012045 22.139

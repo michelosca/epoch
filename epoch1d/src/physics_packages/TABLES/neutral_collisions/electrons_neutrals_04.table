@@ -1,11 +1,11 @@
 energy_threshold = 24.587
 cross_section_units = 1
 energy_units = eV
-collision_method = split #bird
+collision_method = vahedi
 collision_type = ionisation
 source_species = neutrals
 new_species = ions
-output_name = ionisation 
+output_name = none
 user_factor = 1.0
    2.45900e+1	   0.00000e+0
    2.46000e+1	  1.23487e-26

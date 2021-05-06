@@ -1,11 +1,11 @@
 energy_threshold = 0
 cross_section_units = 1
 energy_units = eV
-collision_method = bird
-collision_type = elastic
+collision_method = vahedi
+collision_type = elastic_electron
 source_species = none
 new_species = none
-output_name = elastic 
+output_name = none
 user_factor = 1.0
    0.00000e+0	  4.90350e-20
    1.00000e-4	  4.90350e-20
