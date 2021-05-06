@@ -966,8 +966,8 @@ CONTAINS
     ! Check particle's weight
     electron_collides = .FALSE.
     neutral_collides = .FALSE.
-    IF (random() <= w2max_rat) electron_collides = .TRUE.
-    IF (random() <= w1max_rat) neutral_collides = .TRUE.
+    IF (random() <= w1max_rat) electron_collides = .TRUE.
+    IF (random() <= w2max_rat) neutral_collides = .TRUE.
     merge_electrons = .FALSE.
     IF (w1 >= w2) THEN
       ! Electron's weight is larger than neutral

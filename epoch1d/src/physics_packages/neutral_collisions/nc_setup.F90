@@ -517,11 +517,11 @@ CONTAINS
 #endif
     REAL(num) :: max_weight, wi, wj
     
-    max_weight = 0._num
+    max_weight = 1._num
 #ifndef PER_SPECIES_WEIGHT
     current => species_list(ispecies)%attached_list%head
     npart = species_list(ispecies)%attached_list%count
-    max_w1 = 0._num
+    max_w1 = 1._num
     DO ipart = 1, npart
       wi = current%weight
       max_w1 = MAX(wi, max_w1)
@@ -530,7 +530,7 @@ CONTAINS
     CALL MPI_ALLREDUCE(max_w1,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
     coll_block%max_w1 = all_max_weight
     
-    max_w2 = 0._num
+    max_w2 = 1._num
     IF (ispecies /= jspecies) THEN
       IF (jspecies <= n_species) THEN
         current => species_list(jspecies)%attached_list%head
