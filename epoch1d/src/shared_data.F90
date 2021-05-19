@@ -260,8 +260,8 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
-    ! Species recombination
-    INTEGER :: recombination_id, reinjection_id
+    ! Species reinjection
+    INTEGER :: reinjection_id
 
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
