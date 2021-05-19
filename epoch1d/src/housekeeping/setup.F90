@@ -338,7 +338,6 @@ CONTAINS
       NULLIFY(species_list(ispecies)%secondary_list)
       NULLIFY(species_list(ispecies)%background_density)
       species_list(ispecies)%bc_particle = c_bc_null
-      species_list(ispecies)%recombination_id = -1
       species_list(ispecies)%reinjection_id = -1
     END DO
 

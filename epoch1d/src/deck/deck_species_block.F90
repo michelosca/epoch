@@ -743,21 +743,6 @@ CONTAINS
     END IF
 
     ! *************************************************************
-    ! This section sets properties for recombination boundary
-    ! *************************************************************
-    IF (str_cmp(element, 'recombination_id')) THEN
-      species_list(species_id)%recombination_id = &
-          as_integer_print(value, element, errcode)
-      RETURN
-    END IF
-
-    IF (str_cmp(element, 'recombination_species')) THEN
-      species_list(species_id)%recombination_id = &
-          as_integer(value, errcode)
-      RETURN
-    END IF
-
-    ! *************************************************************
     ! This section sets properties for particle reinjection
     ! *************************************************************
     IF (str_cmp(element, 'reinjection')) THEN
@@ -1129,7 +1114,7 @@ CONTAINS
   FUNCTION species_block_check() RESULT(errcode)
 
     INTEGER :: errcode
-    INTEGER :: i, io, iu, ix
+    INTEGER :: i, io, iu
 
     errcode = check_block
 
@@ -1170,20 +1155,6 @@ CONTAINS
         END IF
         species_list(i)%count = INT(species_list(i)%npart_per_cell, i8)
       END IF
-      DO ix = 1, 2*c_ndims
-        IF (species_list(i)%bc_particle(ix) == c_bc_recombine) THEN
-          IF (species_list(i)%recombination_id == -1) THEN
-            DO iu = 1, nio_units ! Print to stdout and to file
-              io = io_units(iu)
-              WRITE(io,*) '*** ERROR ***'
-              WRITE(io,*) 'Recombination boundary has been set for "', &
-                  TRIM(species_list(i)%name), ' but not the new species"'
-              WRITE(io,*) 'Use "recombination_id" for this purpose.'
-            END DO
-            errcode = c_err_missing_elements
-          END IF
-        END IF
-      END DO
 
       IF (species_list(i)%reinjection_id >= 0 .AND. &
         species_list(i)%bc_particle(1) /= c_bc_open .AND. &

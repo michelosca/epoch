@@ -128,8 +128,7 @@ CONTAINS
         .OR. boundary == c_bc_reflect &
         .OR. boundary == c_bc_thermal &
         .OR. boundary == c_bc_heat_bath &
-        .OR. boundary == c_bc_open &
-        .OR. boundary == c_bc_recombine) RETURN
+        .OR. boundary == c_bc_open) RETURN
 
     IF (rank == 0) THEN
       WRITE(*,*)
@@ -712,11 +711,6 @@ CONTAINS
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
-              ELSE IF (bc == c_bc_recombine) THEN
-                cur%part_pos = 2.0_num * x_min - part_pos
-                part_pos = cur%part_pos
-                cur%part_p(1) = -cur%part_p(1)
-                CALL particle_recombination_bcs(cur, species_list(ispecies))
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
@@ -797,11 +791,6 @@ CONTAINS
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
-              ELSE IF (bc == c_bc_recombine) THEN
-                cur%part_pos = 2.0_num * x_max - part_pos
-                part_pos = cur%part_pos
-                cur%part_p(1) = -cur%part_p(1)
-                CALL particle_recombination_bcs(cur, species_list(ispecies))
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
@@ -1209,31 +1198,6 @@ CONTAINS
     END IF
 
   END SUBROUTINE cpml_advance_b_currents
-
-
-
-  SUBROUTINE particle_recombination_bcs(ion, ion_species)
-
-    ! Generates a neutral particle with the same characteristics as the input
-    !particle 'ion'
-    TYPE(particle), POINTER, INTENT(IN) :: ion
-    TYPE(particle_species), INTENT(IN) :: ion_species
-    INTEGER :: neutral_id
-    TYPE(particle), POINTER :: neutral
-
-    neutral_id = ion_species%recombination_id
-
-    CALL create_particle(neutral)
-    neutral%part_p = ion%part_p
-    neutral%part_pos = ion%part_pos
-#ifndef PER_SPECIES_WEIGHT
-    neutral%weight = ion%weight
-#endif
-    CALL add_particle_to_partlist(species_list(neutral_id)%attached_list, &
-      neutral)
-    NULLIFY(neutral)
-
-  END SUBROUTINE particle_recombination_bcs
 
 
 

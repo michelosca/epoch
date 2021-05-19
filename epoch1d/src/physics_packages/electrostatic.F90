@@ -263,7 +263,6 @@ CONTAINS
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
     CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
-    CALL chkerrq_petsc(perr, 'KSPSolve')
 
     ! Pass electric potential data (es_potential_vec) to data_array
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
@@ -274,20 +273,6 @@ CONTAINS
 
   END SUBROUTINE poisson_solver
 
-
-  SUBROUTINE chkerrq_petsc(errcode, funct_name)
-
-    PetscErrorCode, INTENT(IN) :: errcode
-    CHARACTER(LEN=*), INTENT(IN) :: funct_name
-    
-    IF (perr .ne. 0) THEN
-      PRINT*, 'ERROR in ', TRIM(ADJUSTL(funct_name))
-      PRINT*, 'Error code ', perr 
-      PRINT*, 'Rank ', rank 
-      RETURN
-    END IF
-
-  END SUBROUTINE chkerrq_petsc
 
 
   SUBROUTINE setup_petsc_vector(ncells_local, ncells_global)
@@ -305,6 +290,7 @@ CONTAINS
     nx_glob = ncells_global - 1 ! don't count for last global cell
       
     CALL VecCreateMPI(comm, nx_local, nx_glob, es_potential_vec, perr)
+    CALL VecSetFromOptions(es_potential_vec, perr)
     
     ! Set initial vector values to zero
     zero = 0._num
@@ -354,9 +340,9 @@ CONTAINS
     n_last = nx_global_max-1
 
     ! Matrix diagonal values
-    values(1) = 1.0
-    values(2) = -2.0
-    values(3) = 1.0
+    values(1) = 1._num
+    values(2) = -2._num
+    values(3) = 1._num
 
     ! Set matrix values
     col = 0
