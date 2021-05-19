@@ -64,6 +64,7 @@ CONTAINS
     n_zeros_control = -1
     dlb_maximum_interval = 500
     dlb_force_interval = 2000
+    dlb_threshold = -1.0_num
     nx_global = -1
     particle_push_start_time = 0.0_num
     particle_migration_interval = 1
@@ -73,6 +74,8 @@ CONTAINS
     user_max_speed = 0._num
     norm_z_factor = 5._num
     max_perturbation_freq = 1.e-50_num
+    user_dt = 0._num
+    force_user_dt= .FALSE.
 
     !Neutral collisions
     user_max_b_field = 0._num
@@ -439,6 +442,9 @@ CONTAINS
       user_max_speed = as_real_print(value, element, errcode)
     ELSE IF (str_cmp(element, 'norm_z_factor')) THEN
       norm_z_factor = as_real_print(value, element, errcode) 
+    ELSE IF (str_cmp(element, 'user_dt')) THEN
+      user_dt = as_real_print(value, element, errcode)
+      force_user_dt= .TRUE.
 #endif
 
     ! Neutral collisions

@@ -260,8 +260,8 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
-    ! Species recombination
-    INTEGER :: recombination_id, reinjection_id
+    ! Species reinjection
+    INTEGER :: reinjection_id
 
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
@@ -763,7 +763,8 @@ MODULE shared_data
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_potential
   REAL(num) :: es_dt_fact, max_speed, norm_z_factor, max_perturbation_freq
   REAL(num) :: user_max_speed
-  LOGICAL :: x_min_boundary_open, x_max_boundary_open
+  REAL(num) :: user_dt
+  LOGICAL :: force_user_dt, x_min_boundary_open, x_max_boundary_open
 
   TYPE potential_block
     ! Boundary to which potential is attached
@@ -809,6 +810,9 @@ MODULE shared_data
 
     REAL(num) :: gsigma_max_total, igsigma_max_total
     REAL(num) :: max_weight
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: max_w1, max_w2
+#endif
 
     INTEGER :: ncolltypes
     LOGICAL :: is_background, user_gsigma_max
@@ -831,11 +835,8 @@ MODULE shared_data
     CHARACTER(LEN=string_length) :: name, io_name
 
     ! Collision method
-    LOGICAL :: wboyd, wbird, wsplit, wvahedi
+    LOGICAL :: wnanbu, wvahedi, wnanbusplit, wvahedisplit
     PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
-
-    ! For Boyd's energy restoration
-    LOGICAL :: energy_correction
 
     ! Collision diagnostics
     INTEGER, ALLOCATABLE, DIMENSION(:) :: coll_counter
@@ -922,25 +923,7 @@ MODULE shared_data
   LOGICAL :: resolve_sheath
   TYPE(background_block), DIMENSION(:), POINTER :: background_list
 
-  ! This accounts for the energy loss in Boyd's method
-  REAL(num), ALLOCATABLE, DIMENSION(:) :: energy_loss
-  INTEGER :: energy_correction_species
-
   ! Output
   LOGICAL :: neutral_collision_counter
-
-
-  !------------------------------------------------------------------------------
-  ! Power Spectrum Density (PSD) diagnostics - written by M. Osca Engelbrecht
-  !------------------------------------------------------------------------------
-  INTEGER :: psd_diag_rank, psd_diag_cellx, psd_diag_n_dumps
-  INTEGER :: psd_diag_sampling_steps, psd_diag_averaging_steps
-  INTEGER :: psd_diag_start_av, psd_diag_end_av
-  INTEGER, ALLOCATABLE, DIMENSION(:) :: psd_diag_dump_id
-  REAL(num) :: psd_diag_sampling_period, psd_diag_averaging_time
-  REAL(num) :: psd_diag_xpos
-  REAL(num), ALLOCATABLE, DIMENSION(:) :: psd_diag_data_buffer
-  LOGICAL :: av_over_sampling_period, psd_diag_concatenated
-  LOGICAL :: psd_diag_period_is_dt, psd_diag_print_setup
 
 END MODULE shared_data

@@ -69,7 +69,6 @@ MODULE constants
   INTEGER, PARAMETER :: c_bc_cpml_outflow = 13
   INTEGER, PARAMETER :: c_bc_mixed = 14
   INTEGER, PARAMETER :: c_bc_heat_bath = 15
-  INTEGER, PARAMETER :: c_bc_recombine = 16
 
   ! Boundary location codes
   INTEGER, PARAMETER :: c_bd_x_min = 1

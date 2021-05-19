@@ -204,7 +204,7 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 #DEFINES += $(D)PARTICLE_SHAPE_TOPHAT
 
 # Use fifth order particle weighting (default is third order).
-DEFINES += $(D)PARTICLE_SHAPE_BSPLINE3
+#DEFINES += $(D)PARTICLE_SHAPE_BSPLINE3
 
 # Include a unique global particle ID. The first flag defines the ID using
 # an 8-byte integer, the second uses 4-bytes.
@@ -326,7 +326,7 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
   electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.f90 \
   neutral_collisions.F90 background.f90 deck_background_block.F90 \
-  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 deck_psd_diagnostics_block.F90
+  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
 OBJFILES := $(OBJFILES:.F90=.o)
@@ -476,8 +476,7 @@ deck.o: deck.F90 bremsstrahlung.o custom_deck.o deck_boundaries_block.o \
   deck_laser_block.o deck_part_from_file_block.o deck_particle_probe_block.o \
   deck_qed_block.o deck_species_block.o deck_stencil_block.o \
   deck_subset_block.o deck_window_block.o photons.o strings.o utilities.o \
-  version_data.o deck_electrostatic_block.o deck_background_block.o \
-  deck_psd_diagnostics_block.o $(SDFMOD)
+  version_data.o deck_electrostatic_block.o deck_background_block.o $(SDFMOD)
 
 deck_background_block.o: deck_background_block.F90 background.o constants.o \
   strings_advanced.o
@@ -504,8 +503,6 @@ deck_part_from_file_block.o: deck_part_from_file_block.F90 \
   deck_species_block.o strings_advanced.o utilities.o
 deck_particle_probe_block.o: deck_particle_probe_block.F90 probes.o \
   strings_advanced.o utilities.o
-deck_psd_diagnostics_block.o: deck_psd_diagnostics_block.F90 strings_advanced.o \
-  shared_data.o
 deck_qed_block.o: deck_qed_block.F90 strings_advanced.o utilities.o
 deck_species_block.o: deck_species_block.F90 partlist.o setup.o simple_io.o \
   strings_advanced.o utilities.o

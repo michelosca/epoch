@@ -128,8 +128,7 @@ CONTAINS
         .OR. boundary == c_bc_reflect &
         .OR. boundary == c_bc_thermal &
         .OR. boundary == c_bc_heat_bath &
-        .OR. boundary == c_bc_open &
-        .OR. boundary == c_bc_recombine) RETURN
+        .OR. boundary == c_bc_open) RETURN
 
     IF (rank == 0) THEN
       WRITE(*,*)
@@ -712,11 +711,6 @@ CONTAINS
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
-              ELSE IF (bc == c_bc_recombine) THEN
-                cur%part_pos = 2.0_num * x_min - part_pos
-                part_pos = cur%part_pos
-                cur%part_p(1) = -cur%part_p(1)
-                CALL particle_recombination_bcs(cur, species_list(ispecies))
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
@@ -797,11 +791,6 @@ CONTAINS
               ELSE IF (bc == c_bc_periodic) THEN
                 xbd = sgn
                 cur%part_pos = part_pos - sgn * x_shift
-              ELSE IF (bc == c_bc_recombine) THEN
-                cur%part_pos = 2.0_num * x_max - part_pos
-                part_pos = cur%part_pos
-                cur%part_p(1) = -cur%part_p(1)
-                CALL particle_recombination_bcs(cur, species_list(ispecies))
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
@@ -1212,31 +1201,6 @@ CONTAINS
 
 
 
-  SUBROUTINE particle_recombination_bcs(ion, ion_species)
-
-    ! Generates a neutral particle with the same characteristics as the input
-    !particle 'ion'
-    TYPE(particle), POINTER, INTENT(IN) :: ion
-    TYPE(particle_species), INTENT(IN) :: ion_species
-    INTEGER :: neutral_id
-    TYPE(particle), POINTER :: neutral
-
-    neutral_id = ion_species%recombination_id
-
-    CALL create_particle(neutral)
-    neutral%part_p = ion%part_p
-    neutral%part_pos = ion%part_pos
-#ifndef PER_SPECIES_WEIGHT
-    neutral%weight = ion%weight
-#endif
-    CALL add_particle_to_partlist(species_list(neutral_id)%attached_list, &
-      neutral)
-    NULLIFY(neutral)
-
-  END SUBROUTINE particle_recombination_bcs
-
-
-
   SUBROUTINE inject_electron_ion_pair(outflow_particles, part_species, &
     total_weight)
 
@@ -1324,7 +1288,7 @@ CONTAINS
 
     INTEGER :: ipair, cell_x, i, j
     INTEGER, DIMENSION(2) :: species_ids
-    REAL(num) :: local_length_x, x_pos
+    REAL(num) :: local_length_x, x_pos, mass
     REAL(num), DIMENSION(3) ::temp
     TYPE(parameter_pack) :: parameters
     TYPE(particle), POINTER :: new_part
@@ -1344,6 +1308,7 @@ CONTAINS
 
         DO j = 1,2
           current_species => species_list(species_ids(j))
+          mass = current_species%mass
 
           ! Get temperature
           DO i = 1, 3
@@ -1354,7 +1319,7 @@ CONTAINS
           ! New particle
           CALL create_particle(new_part)
           new_part%part_pos = x_pos + x_min_local
-          new_part%part_p = get_random_momentum(current_species, temp)
+          new_part%part_p = random_momentum(mass, temp)
 #ifndef PER_SPECIES_WEIGHT
           new_part%weight = weigth
 #endif
@@ -1370,31 +1335,18 @@ CONTAINS
 
 
 
-  FUNCTION get_random_momentum(species, temp)
+  FUNCTION random_momentum(mass, temp)
 
-    TYPE(particle_species) :: species
-    REAL(num), DIMENSION(3) :: temp, momentum
-    REAL(num), DIMENSION(3) :: get_random_momentum, variance
-    REAL(num) :: ran1, ran2, mass
+    REAL(num), DIMENSION(3) :: random_momentum
+    REAL(num) :: mass
+    REAL(num), DIMENSION(3) :: var, temp
 
-    mass = species%mass
+    var = SQRT(kb*temp*mass)
 
-    ! Box Muller method for random from Gaussian distribution
-    ! this is to ensure that 0 < ran1 < 1
-    ! ran1=0 gives NaN in logarithm
-    ! ran1=1 could give positive logarithm due to rounding errors
-    ran1 = (1.0_num - 1.0e-10_num) * random() + 0.5e-10_num
-    ran2 = 2.0_num * pi * random()
-    variance = SQRT(kb*temp*mass)! = SQRT(3._num*kb*temp/mass) * mass
-    momentum(1) = variance(1) * SQRT(-2.0_num * LOG(ran1)) * SIN(ran2)
-    momentum(2) = variance(2) * SQRT(-2.0_num * LOG(ran1)) * COS(ran2)
+    random_momentum(1) = random_box_muller(var(1))
+    random_momentum(2) = random_box_muller(var(2))
+    random_momentum(3) = random_box_muller(var(3))
 
-    ran1 = (1.0_num - 1.0e-10_num) * random() + 0.5e-10_num
-    ran2 = 2.0_num * pi * random()
-    momentum(3) = variance(3) * SQRT(-2.0_num * LOG(ran1)) * SIN(ran2)
-
-    get_random_momentum = momentum
-
-  END FUNCTION get_random_momentum
+  END FUNCTION random_momentum
 
 END MODULE boundary

@@ -191,9 +191,6 @@ PROGRAM pic
   IF (use_bremsstrahlung) CALL setup_bremsstrahlung_module()
 #endif
 
-  ! Setup Power Spectrum Density diagnostics
-  CALL setup_psd_diagnostics(time)
-
   IF (rank == 0) THEN
     PRINT*
     PRINT*, 'Equilibrium set up OK, running code'
@@ -255,7 +252,7 @@ PROGRAM pic
             CALL collisional_ionisation
           ELSE
             IF (ANY(coulomb_coll)) CALL particle_collisions
-            IF (ANY(neutral_coll)) CALL particle_neutral_collisions
+            IF (ANY(neutral_coll)) CALL run_neutral_collisions
           END IF
         END IF
 

@@ -1,7 +1,7 @@
 energy_threshold = 20.61
 cross_section_units = 1
 energy_units = eV
-collision_method = bird
+collision_method = vahedi
 collision_type = excitation
 source_species = none
 new_species = none

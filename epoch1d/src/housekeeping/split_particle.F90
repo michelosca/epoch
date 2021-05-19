@@ -85,7 +85,9 @@ CONTAINS
       DEALLOCATE(species_list(ispecies)%secondary_list)
     END DO
 
-    CALL particle_bcs
+    IF (ANY(coulomb_coll) .OR. use_collisional_ionisation .OR. use_split) THEN
+      CALL particle_bcs
+    END IF
 
   END SUBROUTINE reattach_particles_to_mainlist
 

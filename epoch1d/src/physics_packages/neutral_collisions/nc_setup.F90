@@ -58,8 +58,7 @@ CONTAINS
     TYPE(collision_type_block), POINTER :: coll_type
     TYPE(background_block), POINTER :: background
 
-    allocated_energy_loss = .FALSE.
-    file_id = 123
+    file_id = 140892
     errcode = c_err_none
 
     ! This is used for output purposes
@@ -185,12 +184,6 @@ CONTAINS
               BACKSPACE(file_id) ! The file-reader moves a line back
               header_lines = header_lines - 1
 
-              ! Check whether Boyd's method is used
-              IF (.NOT.allocated_energy_loss .AND. coll_type%wboyd) THEN
-                ALLOCATE(energy_loss(nx))
-                energy_loss = 0._num
-                allocated_energy_loss = .TRUE.
-              END IF
               ! Count length of the energy-cross_section table
               lines = 0
               DO
@@ -302,35 +295,31 @@ CONTAINS
 
     ! If collision with a background gas, either Bird or Vahedi
     IF (coll_block%is_background) THEN
-      IF (.NOT.coll_type%wbird .AND. .NOT.coll_type%wvahedi) THEN
+      IF (.NOT.coll_type%wnanbu .AND. .NOT.coll_type%wvahedi) THEN
         IF (rank == 0) THEN
           DO iu = 1, nio_units ! Print to stdout and to file
             io = io_units(iu)
             WRITE(io,*)
             WRITE(io,*) '*** WARNING ***'
             WRITE(io,*) "Collisions with background gas are only possible", &
-              " with Bird's or Vahedi's method"
+              " with Nanbu's or Vahedi's method"
             WRITE(io,*) 'Collision between ', &
               TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
               TRIM(ADJUSTL(coll_block%background%name))
             WRITE(io,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
-              " switched to Bird's method"
+              " switched to Nanbu's method"
             WRITE(io,*) ''
           END DO
         END IF
-        coll_type%wbird = .TRUE.
-        coll_type%wboyd = .FALSE.
-        coll_type%wsplit = .FALSE.
+        coll_type%wnanbu = .TRUE.
         coll_type%wvahedi = .FALSE.
+        coll_type%wnanbusplit = .FALSE.
+        coll_type%wvahedisplit = .FALSE.
       END IF
     END IF
+
     ! Link collision subroutine
     CALL link_collision_subroutine(coll_type, coll_block%is_background)
-
-    ! Boyd's energy correction
-    IF (ispecies == jspecies .AND. energy_correction_species==ispecies) THEN
-      coll_type%energy_correction = .TRUE.
-    END IF
 
   END SUBROUTINE customise_collision_type_block
 
@@ -342,71 +331,57 @@ CONTAINS
     LOGICAL, INTENT(IN) :: is_background
     INTEGER :: io, iu
     LOGICAL :: linked, background_mismatch
-    CHARACTER(len=6) :: method_str
+    CHARACTER(len=20) :: method_str
 
     linked = .FALSE.
     background_mismatch = .FALSE.
 
-    ! BIRD COLLISIONS
-    IF (coll_type%wbird) THEN
+    ! NANBU COLLISIONS
+    IF (coll_type%wnanbu) THEN
       IF (is_background) THEN
         IF ((coll_type%id == c_nc_elastic) .OR. &
           (coll_type%id == c_nc_elastic_electron) .OR. &
           (coll_type%id == c_nc_elastic_ion)) THEN
-          coll_type%coll_subroutine => bird_elastic_scattering_bg
+          coll_type%coll_subroutine => nanbu_elastic_scattering_bg
           linked = .TRUE.
         ELSE IF (coll_type%id == c_nc_excitation) THEN
-          coll_type%coll_subroutine => bird_excitation_bg
+          coll_type%coll_subroutine => nanbu_excitation_bg
           linked = .TRUE.
         ELSE IF (coll_type%id == c_nc_ionisation) THEN
-          coll_type%coll_subroutine => bird_ionisation_bg
+          coll_type%coll_subroutine => nanbu_ionisation_bg
           linked = .TRUE.
         ELSE IF (coll_type%id == c_nc_charge_exchange) THEN
-          coll_type%coll_subroutine => bird_charge_exchange_bg
+          coll_type%coll_subroutine => nanbu_charge_exchange_bg
           linked = .TRUE.
         END IF
       ELSE
         IF ((coll_type%id == c_nc_elastic) .OR. &
           (coll_type%id == c_nc_elastic_electron) .OR. &
           (coll_type%id == c_nc_elastic_ion)) THEN
-          coll_type%coll_subroutine => bird_elastic_scattering
+          coll_type%coll_subroutine => nanbu_elastic_scattering
           linked = .TRUE.
         ELSEIF (coll_type%id == c_nc_excitation) THEN
-          coll_type%coll_subroutine => bird_excitation
+          coll_type%coll_subroutine => nanbu_excitation
           linked = .TRUE.
         ELSEIF (coll_type%id == c_nc_ionisation) THEN
-          coll_type%coll_subroutine => bird_ionisation
+          coll_type%coll_subroutine => nanbu_ionisation
           linked = .TRUE.
         ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
-          coll_type%coll_subroutine => bird_charge_exchange
+          coll_type%coll_subroutine => nanbu_charge_exchange
           linked = .TRUE.
         END IF
       END IF
 
-    ! BOYD COLLISIONS
-    ELSEIF (coll_type%wboyd) THEN
-      IF (is_background) THEN
-        background_mismatch = .TRUE.
-      ELSEIF ((coll_type%id == c_nc_elastic) .OR. &
-        (coll_type%id == c_nc_elastic_electron) .OR. &
-        (coll_type%id == c_nc_elastic_ion)) THEN
-        coll_type%coll_subroutine => boyd_elastic_scattering
-        linked = .TRUE.
-      ELSEIF (coll_type%id == c_nc_excitation) THEN
-        coll_type%coll_subroutine => boyd_excitation
-        linked = .TRUE.
-      END IF
-
-    ! SPLIT COLLISIONS
-    ELSEIF (coll_type%wsplit) THEN
+    ! NANBU-SPLIT COLLISIONS
+    ELSEIF (coll_type%wnanbusplit) THEN
 #ifndef PER_SPECIES_WEIGHT
       IF (is_background) THEN
         background_mismatch = .TRUE.
       ELSEIF (coll_type%id == c_nc_ionisation) THEN
-        coll_type%coll_subroutine => split_ionisation
+        coll_type%coll_subroutine => nanbu_split_ionisation
         linked = .TRUE.
       ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
-        coll_type%coll_subroutine => split_charge_exchange
+        coll_type%coll_subroutine => nanbu_split_charge_exchange
         linked = .TRUE.
       END IF
 #else
@@ -434,16 +409,70 @@ CONTAINS
         ELSEIF (coll_type%id == c_nc_elastic_ion) THEN
           coll_type%coll_subroutine => vahedi_ion_elastic_scattering_bg
           linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_excitation) THEN
+          coll_type%coll_subroutine => vahedi_excitation_bg
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_ionisation) THEN
+          coll_type%coll_subroutine => vahedi_ionisation_bg
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+          coll_type%coll_subroutine => nanbu_charge_exchange_bg
+          linked = .TRUE.
+        END IF
+      ELSE
+        IF (coll_type%id == c_nc_elastic_electron) THEN
+          coll_type%coll_subroutine => vahedi_electron_elastic_scattering
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_elastic_ion) THEN
+          coll_type%coll_subroutine => vahedi_ion_elastic_scattering
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_excitation) THEN
+          coll_type%coll_subroutine => vahedi_excitation
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_ionisation) THEN
+          coll_type%coll_subroutine => vahedi_ionisation
+          linked = .TRUE.
+        ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+          coll_type%coll_subroutine => nanbu_charge_exchange
+          linked = .TRUE.
         END IF
       END IF
+
+    ! VAHEDI SPLIT COLLISIONS
+    ELSEIF (coll_type%wvahedisplit) THEN
+#ifndef PER_SPECIES_WEIGHT
+      IF (is_background) THEN
+        background_mismatch = .TRUE.
+      ELSEIF (coll_type%id == c_nc_ionisation) THEN
+        coll_type%coll_subroutine => vahedi_split_ionisation
+        linked = .TRUE.
+!      ELSEIF (coll_type%id == c_nc_charge_exchange) THEN
+!        coll_type%coll_subroutine => nanbu_split_charge_exchange
+!        linked = .TRUE.
+      END IF
+#else
+      IF (rank == 0) THEN
+        DO iu = 1, nio_units ! Print to stdout and to file
+          io = io_units(iu)
+          WRITE(io,*)
+          WRITE(io,*) '*** ERROR ***'
+          WRITE(io,*) 'Collision split method is only possible with', &
+            ' per-particle weight set-up.'
+          WRITE(io,*) 'Please recompile, and rerun code'
+          WRITE(io,*) ''
+        END DO
+      END IF
+      CALL MPI_BARRIER(comm, errcode)
+      CALL abort_code(c_err_bad_setup)
+#endif
     END IF
 
     IF (.NOT.linked) THEN
       IF (rank == 0) THEN
-        IF (coll_type%wbird) method_str = 'Bird'
-        IF (coll_type%wboyd) method_str = 'Boyd'
-        IF (coll_type%wsplit) method_str = 'Split'
+        IF (coll_type%wnanbu) method_str = 'Nanbu'
         IF (coll_type%wvahedi) method_str = 'Vahedi'
+        IF (coll_type%wvahedisplit) method_str = 'Vahedi split'
+        IF (coll_type%wnanbusplit) method_str = 'Nanbu split'
         DO iu = 1, nio_units ! Print to stdout and to file
           io = io_units(iu)
           WRITE(io,*)
@@ -459,8 +488,6 @@ CONTAINS
 
     IF (background_mismatch) THEN
       IF (rank == 0) THEN
-        IF (coll_type%wboyd) method_str = 'Boyd'
-        IF (coll_type%wsplit) method_str = 'Split'
         DO iu = 1, nio_units ! Print to stdout and to file
           io = io_units(iu)
           WRITE(io,*)
@@ -485,35 +512,47 @@ CONTAINS
 #ifndef PER_SPECIES_WEIGHT
     INTEGER(8) :: npart, ipart
     REAL(num) :: all_max_weight
+    REAL(num) :: max_w1, max_w2
     TYPE(particle), POINTER :: current
 #endif
     REAL(num) :: max_weight, wi, wj
     
-    max_weight = 0._num
+    max_weight = 1._num
 #ifndef PER_SPECIES_WEIGHT
     current => species_list(ispecies)%attached_list%head
     npart = species_list(ispecies)%attached_list%count
+    max_w1 = 1._num
     DO ipart = 1, npart
       wi = current%weight
-      max_weight = MAX(wi, max_weight)
+      max_w1 = MAX(wi, max_w1)
       current => current%next
     END DO
+    CALL MPI_ALLREDUCE(max_w1,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
+    coll_block%max_w1 = all_max_weight
     
+    max_w2 = 1._num
     IF (ispecies /= jspecies) THEN
-      current => species_list(jspecies)%attached_list%head
-      npart = species_list(jspecies)%attached_list%count
-      DO ipart = 1, npart
-        wj = current%weight
-        max_weight = MAX(wj, max_weight)
-        current => current%next
-      END DO
+      IF (jspecies <= n_species) THEN
+        current => species_list(jspecies)%attached_list%head
+        npart = species_list(jspecies)%attached_list%count
+        DO ipart = 1, npart
+          wj = current%weight
+          max_w2 = MAX(wj, max_w2)
+          current => current%next
+        END DO
+      END IF
     END IF
-    CALL MPI_ALLREDUCE(max_weight, all_max_weight, 1, MPIREAL, MPI_MAX, &
-        comm, errcode)
-    max_weight = all_max_weight
+    CALL MPI_ALLREDUCE(max_w2,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
+    coll_block%max_w2 = all_max_weight
+
+    max_weight = MAX(coll_block%max_w1, coll_block%max_w2)
 #else
     wi = species_list(ispecies)%weight
-    wj = species_list(jspecies)%weight
+    IF (jspecies > n_species) THEN
+      wj = 0._num
+    ELSE
+      wj = species_list(jspecies)%weight
+    END IF
     max_weight = MAX(wi, wj)
 #endif
     coll_block%max_weight = max_weight
@@ -528,7 +567,7 @@ CONTAINS
     TYPE(neutrals_block), POINTER :: coll_block
 
     DO ispecies = 1, n_species
-      DO jspecies = 1, n_species
+      DO jspecies = 1, n_species_bg
         IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
         coll_block => species_list(ispecies)%neutrals(jspecies)
         CALL get_max_weight(coll_block, ispecies, jspecies)
@@ -771,17 +810,17 @@ CONTAINS
       END IF
 
     ELSEIF (str_cmp(element, 'collision_method')) THEN
-      IF (str_cmp(value, 'boyd')) THEN
-        coll_type%wbird = .FALSE.
-        coll_type%wboyd = .TRUE.
-      ELSEIF (str_cmp(value, 'bird')) THEN ! This one is default
-        coll_type%wbird = .TRUE.
-      ELSEIF (str_cmp(value, 'split')) THEN
-        coll_type%wbird = .FALSE.
-        coll_type%wsplit = .TRUE.
+      IF (str_cmp(value, 'nanbu')) THEN ! This one is default
+        coll_type%wnanbu = .TRUE.
       ELSEIF (str_cmp(value, 'vahedi')) THEN
-        coll_type%wbird = .FALSE.
+        coll_type%wnanbu = .FALSE.
         coll_type%wvahedi = .TRUE.
+      ELSEIF (str_cmp(value, 'vahedisplit')) THEN
+        coll_type%wnanbu = .FALSE.
+        coll_type%wvahedisplit = .TRUE.
+      ELSEIF (str_cmp(value, 'nanbusplit')) THEN
+        coll_type%wnanbu = .FALSE.
+        coll_type%wnanbusplit = .TRUE.
       END IF
 
     ELSEIF (str_cmp(element, 'collision_type')) THEN        
@@ -855,7 +894,7 @@ CONTAINS
   SUBROUTINE init_collision_type_block(coll_type, ispecies, jspecies)
 
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
-    INTEGER, INTENT(INOUT) :: ispecies, jspecies
+    INTEGER, INTENT(IN) :: ispecies, jspecies
     
     coll_type%ethreshold = 0._num
     coll_type%gthreshold = 0._num
@@ -870,13 +909,12 @@ CONTAINS
     
     coll_type%io_name = 'none'
 
-    coll_type%wboyd = .FALSE. 
-    coll_type%wbird = .TRUE.
-    coll_type%wsplit = .FALSE.
+    coll_type%wnanbu = .TRUE.
+    coll_type%wvahedi = .FALSE.
+    coll_type%wnanbusplit = .FALSE.
+    coll_type%wvahedisplit = .FALSE.
     coll_type%coll_subroutine => NULL()
 
-    coll_type%energy_correction = .FALSE.
-    
     IF (neutral_collision_counter) THEN
       ALLOCATE(coll_type%coll_counter(nx))
       coll_type%coll_counter = 0
@@ -917,6 +955,10 @@ CONTAINS
     coll_block%user_gsigma_max = .FALSE.
     coll_block%ncolltypes = 0
     coll_block%max_weight = 0._num
+#ifndef PER_SPECIES_WEIGHT
+    coll_block%max_w1 = 0._num
+    coll_block%max_w2 = 0._num
+#endif
     coll_block%is_background = .FALSE.
 
 
@@ -928,10 +970,6 @@ CONTAINS
 
     INTEGER :: stat
 
-    IF (allocated_energy_loss) THEN
-      DEALLOCATE(energy_loss)
-    END IF
-    
     CALL deallocate_collision_block
     CALL deallocate_backgrounds
     DEALLOCATE(neutral_coll, coulomb_coll, STAT=stat)

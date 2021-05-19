@@ -111,80 +111,10 @@ CONTAINS
 
 
 
-  SUBROUTINE warning_coll_pairs(collision, n_pairs)
-
-    TYPE(current_collision_block), POINTER ,INTENT(IN) :: collision
-    INTEGER(8), INTENT(IN) :: n_pairs
-
-    INTEGER :: species1, species2, iu, io
-    INTEGER(8) :: n_part1, n_part2, coll_counter1, coll_counter2
-    REAL(num) :: time, position
-    CHARACTER(14) :: time_str, pos_str, n_ipart_str, n_jpart_str
-    CHARACTER(14) :: n_pairs_str, coll_icounter_str, coll_jcounter_str
-    CHARACTER(LEN=string_length) :: ispecies_str, jspecies_str
-
-    species1 = collision%species1
-    species2 = collision%species2
-    position = collision%p_list1%head%part_pos
-    n_part1 = collision%p_list1%count
-    IF (collision%collision_block%is_background) THEN
-      n_part2 = -1
-    ELSE
-      n_part2 = collision%p_list2%count
-    END IF
-
-    coll_counter1 = collision%p_list1%coll_counter
-    IF (collision%collision_block%is_background) THEN
-      coll_counter2 = -1
-    ELSE
-      coll_counter2 = collision%p_list2%coll_counter
-    END IF
-
-    WRITE(time_str, 987) time
-    WRITE(pos_str, 987) position
-    WRITE(n_ipart_str, 765) n_part1
-    WRITE(n_jpart_str, 765) n_part2
-    WRITE(n_pairs_str, 765) n_pairs
-    WRITE(coll_icounter_str, 765) coll_counter1
-    IF (coll_counter2 == -1) THEN
-      WRITE(coll_jcounter_str,*) 'N/A'
-    ELSE
-      WRITE(coll_jcounter_str, 765) coll_counter2
-    END IF
-    ispecies_str = species_list(species1)%name
-    IF (species2 > n_species) THEN
-      jspecies_str = background_list(species2 - n_species)%name
-    ELSE
-      jspecies_str = species_list(species2)%name
-    END IF
-
-    DO iu = 1, nio_units ! Print to stdout and to file
-      io = io_units(iu)
-      WRITE(io,*)
-      WRITE(io,*) '*** WARNING ***'
-      WRITE(io,*) 'Too many collision pairs between species ', &
-        TRIM(ADJUSTL(ispecies_str)), ' and ', TRIM(ADJUSTL(jspecies_str)),'.'
-      WRITE(io,*) 'Position [m]:    ', TRIM(ADJUSTL(pos_str))
-      WRITE(io,*) 'Time [s]:        ', TRIM(ADJUSTL(time_str))
-      WRITE(io,*) 'Number Sup-pcls: ', TRIM(ADJUSTL(n_ipart_str)), &
-        ' and ', TRIM(ADJUSTL(n_jpart_str))
-      WRITE(io,*) 'Coll. counter:   ', TRIM(ADJUSTL(coll_icounter_str)), &
-        ' and ', TRIM(ADJUSTL(coll_jcounter_str))
-      WRITE(io,*) 'Collision pairs: ', TRIM(ADJUSTL(n_pairs_str))
-      WRITE(io,*)
-    END DO
-
-987 FORMAT (ES14.6)
-765 FORMAT (I14)
-
-  END SUBROUTINE warning_coll_pairs
-
-
-
   SUBROUTINE test_neutral_collision_setup
 
 
-    LOGICAL :: boyd_collision, boyd_same_species, is_background
+    LOGICAL :: is_background
     INTEGER :: ncerr
     INTEGER :: ispecies, jspecies, nc_type, ibg
     REAL(num) :: m1, m2, m_new, m_source
@@ -193,9 +123,6 @@ CONTAINS
     TYPE(neutrals_block), POINTER :: coll_block
 
     ncerr = 0
-
-    boyd_collision = .FALSE.
-    boyd_same_species = .FALSE.
 
     DO ispecies = 1, n_species
       iname = species_list(ispecies)%name
@@ -224,19 +151,19 @@ CONTAINS
           ! In case no collision types are found
           IF (coll_type%id < 0) ncerr = 8
 
-          IF (coll_type%wbird) THEN
+          IF (coll_type%wnanbu .OR. coll_type%wvahedi) THEN
             IF (coll_type%id == c_nc_ionisation) THEN
 
-              ! Bird-ionisation requires species_source_id
+              ! Nanbu-ionisation requires species_source_id
               IF ((coll_type%source_species_id <= 0 .OR. &
                   coll_type%source_species_id > n_species_bg) .AND. &
                   .NOT.is_background) ncerr = 2
 
-              ! Bird-ionisation requires species_target_id
+              ! Nanbu-ionisation requires species_target_id
               IF (coll_type%new_species_id <= 0 .OR. &
                  coll_type%new_species_id > n_species) ncerr = 3
 
-              ! Bird-ionisation requires same mass for source and new species 
+              ! Nanbu-ionisation requires same mass for source and new species 
               IF ( ncerr == 0 ) THEN
                 IF (is_background) THEN
                   m_source = background_list(ibg)%mass
@@ -253,36 +180,21 @@ CONTAINS
                   coll_type%source_species_id <= n_species_bg &
                   .AND. .NOT.is_background) THEN
 
-                ! Bird-excitation has new_species_id when source_species_id
+                ! Nanbu-excitation has new_species_id when source_species_id
                 IF (coll_type%new_species_id < 0 .OR. &
                     coll_type%new_species_id > n_species) THEN
                   ncerr = 4
                   CYCLE
                 END IF
 
-                ! Bird-excitation requires same mass for source and new species
+                ! Nanbu-excitation requires same mass for source and new species
                 m_source = species_list(coll_type%source_species_id)%mass
                 m_new = species_list(coll_type%new_species_id)%mass
                 IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
               END IF
 
-            ELSE IF (coll_type%id == c_nc_charge_exchange) THEN
-              IF (ABS(m1 - m2) > TINY(0._num)) ncerr = 9
             END IF
-
-          ELSE IF (coll_type%wboyd) THEN
-          
-            !No background collision available for split method
-            IF (is_background) ncerr = 12
-
-            ! Boyd's method requires a target species for energy balance
-            boyd_collision = .TRUE.
-            IF (energy_correction_species <= 0) ncerr = 1
-
-            ! An intra-collision type must be defined for energy balance
-            IF (ispecies==jspecies) boyd_same_species = .TRUE.
-
-          ELSE IF (coll_type%wsplit) THEN
+          ELSE IF (coll_type%wnanbusplit .OR. coll_type%wvahedisplit) THEN
             !No background collision available for split method
             IF (is_background) ncerr = 13
 
@@ -297,7 +209,7 @@ CONTAINS
               IF (coll_type%new_species_id <= 0 .OR. &
                   coll_type%new_species_id > n_species) ncerr = 6
 
-              ! Ionisation requires same mass for source and new species 
+              ! Ionisation requires same mass for source and new species
               m_source = species_list(coll_type%source_species_id)%mass
               m_new = species_list(coll_type%new_species_id)%mass
               IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 11
@@ -307,12 +219,8 @@ CONTAINS
               IF (coll_type%source_species_id <= 0 .OR. &
                   coll_type%source_species_id > n_species) ncerr = 5
 
-              ! Collision species must have the same mass
-              m1 = species_list(ispecies)%mass
-              m2 = species_list(jspecies)%mass
-              IF (ABS(m1 - m2) > TINY(0._num)) ncerr = 9
-
             END IF
+
           END IF
           IF (ncerr /= 0) EXIT
         END DO
@@ -321,47 +229,34 @@ CONTAINS
       IF (ncerr /= 0) EXIT
     END DO
 
-    IF (boyd_collision .AND. .NOT.boyd_same_species) ncerr = 7
-
     IF (ncerr /= 0) THEN
       IF (rank == 0) THEN
         WRITE(*,*) ''
         WRITE(*,*) '*** ERROR ***'
         WRITE(*,*) 'Collision pair: ', TRIM(ADJUSTL(iname)),' - ', &
           TRIM(ADJUSTL(jname))
-        IF (ncerr == 1) THEN
-          WRITE(*,*) 'Boyd requires sepecific "energy_correction_species"'
-        ELSE IF (ncerr == 2) THEN
-          WRITE(*,*) 'Bird-ionisation requires requires a valid ', &
+        IF (ncerr == 2) THEN
+          WRITE(*,*) 'Ionisation requires requires a valid ', &
             '"source_species"'
         ELSE IF (ncerr ==3) THEN
-          WRITE(*,*) 'Bird-ionisation requires "new_species"'
+          WRITE(*,*) 'Ionisation requires "new_species"'
         ELSE IF (ncerr ==4) THEN
-          WRITE(*,*) 'Bird-excitation requires a valid ', &
+          WRITE(*,*) 'Excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
         ELSE IF (ncerr ==5) THEN
-          WRITE(*,*) 'Split methods requires a valid ', &
-            '"source_species"'
+          WRITE(*,*) 'Split methods requires a valid "source_species"'
         ELSE IF (ncerr ==6) THEN
-          WRITE(*,*) 'Split methods requires a valid ', &
-            '"new_species"'
-        ELSE IF (ncerr ==7) THEN
-          WRITE(*,*) 'Boyd intra-species collision type must be defined ', &
-            'for energy balance'
+          WRITE(*,*) 'Split methods requires a valid "new_species"'
         ELSE IF (ncerr ==8) THEN
           WRITE(*,*) 'Collision type is not recognised'
-        ELSE IF (ncerr ==9) THEN
-          WRITE(*,*) 'CX collisions require same mass species'
         ELSE IF (ncerr ==10) THEN
           WRITE(*,*) 'Excitation requires that source and new species', &
             ' have the same mass'
         ELSE IF (ncerr ==11) THEN
           WRITE(*,*) 'Ionisation requires that source and new species', &
             ' have the same mass'
-        ELSE IF (ncerr ==12) THEN
-          WRITE(*,*) 'Boyd method does not support background collisions'
         ELSE IF (ncerr ==13) THEN
-          WRITE(*,*) 'Split method does not support background collisions'
+          WRITE(*,*) 'Split methods does not support background collisions'
         END IF
       CALL print_collision_type(ispecies, jspecies, nc_type)
       END IF
@@ -435,7 +330,7 @@ CONTAINS
 
   SUBROUTINE print_collision_type(ispecies, jspecies, ctype)
 
-    INTEGER, INTENT(INOUT) :: ispecies, jspecies, ctype
+    INTEGER, INTENT(IN) :: ispecies, jspecies, ctype
     INTEGER :: species_id
     TYPE(neutrals_block), POINTER :: coll_block
     TYPE(collision_type_block), POINTER :: coll_type_block
@@ -478,15 +373,14 @@ CONTAINS
 !       coll_type_block%cross_section_units
 !     END DO
 
-    IF (coll_type_block%wboyd) THEN
-      WRITE(*,666) 'Boyd method'
-      WRITE(*,444) 'Energy correction: ', coll_type_block%energy_correction
-    ELSE IF (coll_type_block%wbird) THEN
-      WRITE(*,666) 'Bird method'
-    ELSE IF (coll_type_block%wsplit) THEN
-      WRITE(*,666) 'Split method'
+    IF (coll_type_block%wnanbu) THEN
+      WRITE(*,666) 'Nanbu method'
     ELSE IF (coll_type_block%wvahedi) THEN
       WRITE(*,666) 'Vahedi method'
+    ELSE IF (coll_type_block%wnanbusplit) THEN
+      WRITE(*,666) 'Nanbu(split) method'
+    ELSE IF (coll_type_block%wvahedisplit) THEN
+      WRITE(*,666) 'Vahedi(split) method'
     END IF
     WRITE(*,555) 'Output name:', TRIM(ADJUSTL(coll_type_block%io_name))
 
@@ -495,7 +389,6 @@ CONTAINS
 777 FORMAT(6X, A, 1X, I2)
 666 FORMAT(6X, A)
 555 FORMAT(6X, A, 1X, A)
-444 FORMAT(6X, A, L2)
 333 FORMAT(6X, A, 1X, I4)
 
   END SUBROUTINE print_collision_type

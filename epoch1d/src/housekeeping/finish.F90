@@ -41,7 +41,6 @@ CONTAINS
   SUBROUTINE finalise
 
     CALL close_files
-    CALL close_psd_diagnostics_files
     IF (done_mpi_initialise) CALL deallocate_memory
     CALL MPI_FINALIZE(errcode)
     STOP
@@ -131,29 +130,5 @@ CONTAINS
     CALL MPI_COMM_FREE(comm, errcode)
 
   END SUBROUTINE deallocate_memory
-
-
-
-  SUBROUTINE close_psd_diagnostics_files
-
-    INTEGER :: i, dump_id, species_counter, file_unit
-
-    IF (psd_diag_rank == rank) THEN
-      species_counter = 1
-      DO i = 1, psd_diag_n_dumps
-        dump_id = psd_diag_dump_id(i)
-        IF (dump_id == c_dump_number_density) THEN
-          file_unit = dump_id + 100 + species_counter
-          species_counter = species_counter + 1
-        ELSE
-          file_unit = dump_id + 100
-        END IF
-
-        CLOSE(unit=file_unit)
-
-      END DO
-    END IF
-
- END SUBROUTINE close_psd_diagnostics_files
 
 END MODULE finish
