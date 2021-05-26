@@ -32,7 +32,7 @@ MODULE electrostatic
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: initialize_petsc, finalize_electrostatic_solver
 
-  Vec, SAVE :: es_potential_vec
+  Vec, SAVE :: es_potential_vec, charge_dens_vec
   Mat, SAVE :: transform_mtrx
   PetscErrorCode, SAVE :: perr
   KSP, SAVE :: ksp
@@ -43,31 +43,33 @@ CONTAINS
 
   SUBROUTINE es_update_e_field
     
-    REAL(num) :: chargdens_half, chargdens_nxhalf
-
-    es_potential = 0.0_num 
+    REAL(num) :: rhodx_min, rhodx_max
+    REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
 
     ! Charge weighting from particles to the grid, i.e. charge density
-    ! The following subroutine loads total chage density on es_potential
-    CALL es_calc_charge_density
+    ALLOCATE(es_charge_density(1-ng:nx+ng))
+    CALL es_calc_charge_density(es_charge_density)
 
-    ! In case of non-periodic boundaries
+    ! Charge density to electrostatic potential
+    !  - This subroutine calculates the electric potential on es_potential
+    CALL es_calc_potential(es_charge_density)
+
+    ! Calculate electric field in x-direction
+    !  - In case of non-periodic boundaries
     IF (x_min_boundary_open) THEN
       ! chargdens_1/2 = (rho_0+rho_1)/2*dx: charge density near wall
-      chargdens_half = (es_potential(0)+es_potential(1)) * dx * 0.5_num
+      rhodx_min = (es_charge_density(0)+es_charge_density(1)) * dx * 0.5_num
     END IF
     IF (x_max_boundary_open) THEN
       ! chargdens_nx-1/2 = rho_nx*dx/2: charge density near wall
-      chargdens_nxhalf = (es_potential(nx)+es_potential(nx-1)) * dx * 0.5_num
+      rhodx_max = (es_charge_density(nx)+es_charge_density(nx-1)) * dx * 0.5_num
     END IF
-
-    ! Charge density to electrostatic potential
-    ! This subroutine calculates the electric potential on es_potential
-    CALL es_calc_potential
-
-    ! Calculate electric field in x-direction
-    CALL es_calc_ex(chargdens_half, chargdens_nxhalf)
-    ! Update electric field in y- and z-direction
+    DEALLOCATE(es_charge_density)
+    
+    ! - Calculate electric field in x-direction
+    CALL es_calc_ex(rhodx_min, rhodx_max)
+    
+    ! - Update electric field in y- and z-direction
     CALL set_ez
     CALL set_ey
 
@@ -76,67 +78,9 @@ CONTAINS
 
 
 
-  SUBROUTINE es_calc_ex(chargdens_0, chargdens_nx)
+  SUBROUTINE es_calc_charge_density(charge_density)
 
-    INTEGER :: ix
-    REAL(num) :: idx
-    REAL(num), INTENT(IN) :: chargdens_0, chargdens_nx
-
-    idx = 1._num/dx
-    ! Update electric field in x-direction
-    ex = 0._num
-    
-    ! Calculate the electric field: Div(E) = -Phi
-    DO ix = 0, nx
-      ex(ix) = es_potential(ix-1) - es_potential(ix+1)
-    END DO
-    ex = ex * 0.5_num * idx
-
-    ! E-field boundaries
-    ! For between-processors boundaries and external (periodic) bc
-    CALL field_bc(ex, ng)
-
-    ! For non-periodic boundaries
-    IF (x_min_boundary_open) THEN
-      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
-      ! Wall charge and difference with respect to last time step
-      ! Previous wall charge surface density value
-      dwcharge_min = wcharge_min  
-      ! Charge surface density at wall
-      wcharge_min = ex(1) * epsilon0 - chargdens_0
-      ! This is used for diagnostics
-      dwcharge_min = wcharge_min - dwcharge_min 
-
-      !Update E-field at wall
-      ex(0) = wcharge_min/epsilon0
-      ! Option two would be ex(0) = ex_half*2._num - ex(1)
-    END IF
-
-    IF (x_max_boundary_open) THEN
-      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
-      ! Wall charge and difference with respect to last time step
-      ! Previous wall charge surface density value
-      dwcharge_max = wcharge_max
-      ! Charge surface density at wall
-      wcharge_max = ex(nx-1) * epsilon0 + chargdens_nx
-      ! This is used for diagnostics
-      dwcharge_max = wcharge_max - dwcharge_max
-
-      !Update E-field at wall
-      ex(nx) = wcharge_max/epsilon0
-      ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
-    END IF
-
-    DO ix = 1, 2*c_ndims
-      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
-    END DO
-
-  END SUBROUTINE es_calc_ex
-
-
-
-  SUBROUTINE es_calc_charge_density
-
+    REAL(num), DIMENSION(1-ng:nx+ng), INTENT(INOUT) :: charge_density
     ! Properties of the current particle. Copy out of particle arrays for speed
     REAL(num) :: part_q
     ! The data to be weighted onto the grid
@@ -147,6 +91,7 @@ CONTAINS
 #include "particle_head.inc"
 
     idx = 1.0_num / dx
+    charge_density = 0._num
 
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
@@ -183,7 +128,7 @@ CONTAINS
 #endif
 
         DO ix = sf_min, sf_max
-          es_potential(cell_x+ix) = es_potential(cell_x+ix) + gx(ix) * wdata
+          charge_density(cell_x+ix) = charge_density(cell_x+ix) + gx(ix) * wdata
         END DO
 
         current => current%next
@@ -191,32 +136,33 @@ CONTAINS
     END DO
 
     ! Adds charge density values from adjacent processors
-    CALL processor_summation_bcs(es_potential, ng)
+    CALL processor_summation_bcs(charge_density, ng)
     ! Places charge density values from adjacent processor in ghost cells
-    CALL field_bc(es_potential, ng)
+    CALL field_bc(charge_density, ng)
 
-    es_potential = es_potential * idx
+    charge_density = charge_density * idx
     IF (x_max_boundary_open) THEN
       DO i = 1,ng-1
-        es_potential(nx-i) = es_potential(nx-i) + es_potential(nx+i)
+        charge_density(nx-i) = charge_density(nx-i) + charge_density(nx+i)
       END DO
-      es_potential(nx+1:) = 0._num
-      es_potential(nx) = es_potential(nx) * 2._num
+      charge_density(nx+1:) = 0._num
+      charge_density(nx) = charge_density(nx) * 2._num
     END IF
     IF (x_min_boundary_open) THEN
       DO i = 1,ng-1
-        es_potential(i) = es_potential(i) + es_potential(-i)
+        charge_density(i) = charge_density(i) + charge_density(-i)
       END DO
-      es_potential(:-1) = 0._num
-      es_potential(0) = es_potential(0) * 2._num
+      charge_density(:-1) = 0._num
+      charge_density(0) = charge_density(0) * 2._num
     END IF
 
   END SUBROUTINE es_calc_charge_density
 
 
 
-  SUBROUTINE es_calc_potential
+  SUBROUTINE es_calc_potential(charge_density)
   
+    REAL(num), DIMENSION(1-ng:nx+ng), INTENT(IN) :: charge_density
     INTEGER :: nx_end
     
     ! The Poisson solver resolves the potential inside the grid with
@@ -224,7 +170,7 @@ CONTAINS
     nx_end = nx
     IF (x_max_boundary) nx_end = nx_end - 1
     
-    CALL poisson_solver(es_potential(1:nx_end), nx_end)
+    CALL poisson_solver(charge_density(1:nx_end), nx_end)
     
     ! Potential boundaries (between MPI processors, valid for periodic bc)
     CALL field_bc(es_potential, ng)
@@ -237,37 +183,39 @@ CONTAINS
 
 
 
-  SUBROUTINE poisson_solver(data_array, nx_end)
+  SUBROUTINE poisson_solver(charge_density, nx_end)
 
     ! This subroutine solves Poisson's equation
-    ! Input: charge_density array (data_array) and the length of the data array
+    ! Input: charge_density array and the length of the data array
     ! Output: electric potential array (data_array)
     INTEGER, INTENT(IN) :: nx_end
-    REAL(num), DIMENSION(1:nx_end), INTENT(INOUT) :: data_array
-    REAL(num) :: charg0
+    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: charge_density
+    REAL(num), DIMENSION(1:nx_end) :: b_array
+    REAL(num) :: constant
     INTEGER :: i
     REAL(num), DIMENSION(:), POINTER :: vec_pointer
 
     ! Get array ready for solver
-    charg0 = -dx*dx/epsilon0
-    data_array = data_array*charg0
-    data_array(1) = data_array(1) - set_potential_x_min()
-    data_array(nx_end) = data_array(nx_end) - set_potential_x_max()
+    constant = -dx*dx/epsilon0
+    b_array = charge_density * constant
+    b_array(1) = b_array(1) - set_potential_x_min()
+    b_array(nx_end) = b_array(nx_end) - set_potential_x_max()
 
     ! Get charge density data (data_array) into the Petsc vector
-    CALL VecGetArrayF90(es_potential_vec, vec_pointer, perr)
+    CALL VecGetArrayF90(charge_dens_vec, vec_pointer, perr)
     DO i = 1, nx_end
-      vec_pointer(i) = data_array(i)
+      vec_pointer(i) = b_array(i)
     END DO
-    CALL VecRestoreArrayF90(es_potential_vec, vec_pointer, perr)
+    CALL VecRestoreArrayF90(charge_dens_vec, vec_pointer, perr)
 
-    ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens
-    CALL KSPSolve(ksp, es_potential_vec, es_potential_vec, perr)
+    ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens_vec
+    !                      A * x = b
+    CALL KSPSolve(ksp, charge_dens_vec, es_potential_vec, perr)
 
-    ! Pass electric potential data (es_potential_vec) to data_array
+    ! Pass electric potential data from PETSc to Fortran
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
     DO i = 1, nx_end
-      data_array(i) = vec_pointer(i)
+      es_potential(i) = vec_pointer(i)
     END DO
     CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
 
@@ -275,10 +223,67 @@ CONTAINS
 
 
 
+  SUBROUTINE es_calc_ex(rhodx_min, rhodx_max)
+
+    INTEGER :: ix
+    REAL(num) :: idx
+    REAL(num), INTENT(IN) :: rhodx_min, rhodx_max
+
+    idx = 1._num/dx
+    ex = 0._num
+    
+    ! Calculate the electric field: Div(E) = -Phi
+    DO ix = 0, nx
+      ex(ix) = es_potential(ix-1) - es_potential(ix+1)
+    END DO
+    ex = ex * 0.5_num * idx
+
+    ! E-field boundaries
+    ! For between-processors boundaries and external (periodic) bc
+    CALL field_bc(ex, ng)
+
+    ! For non-periodic boundaries
+    IF (x_min_boundary_open) THEN
+      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
+      ! Wall charge and difference with respect to last time step
+      ! Previous wall charge surface density value
+      dwcharge_min = wcharge_min  
+      ! Charge surface density at wall
+      wcharge_min = ex(1) * epsilon0 - rhodx_min 
+      ! This is used for diagnostics
+      dwcharge_min = wcharge_min - dwcharge_min 
+
+      !Update E-field at wall
+      ex(0) = wcharge_min/epsilon0
+      ! Option two would be ex(0) = ex_half*2._num - ex(1)
+    END IF
+
+    IF (x_max_boundary_open) THEN
+      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
+      ! Wall charge and difference with respect to last time step
+      ! Previous wall charge surface density value
+      dwcharge_max = wcharge_max
+      ! Charge surface density at wall
+      wcharge_max = ex(nx-1) * epsilon0 + rhodx_max 
+      ! This is used for diagnostics
+      dwcharge_max = wcharge_max - dwcharge_max
+
+      !Update E-field at wall
+      ex(nx) = wcharge_max/epsilon0
+      ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
+    END IF
+
+    DO ix = 1, 2*c_ndims
+      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
+    END DO
+
+  END SUBROUTINE es_calc_ex
+
+
+
   SUBROUTINE setup_petsc_vector(ncells_local, ncells_global)
     
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
-    PetscScalar :: zero
     PetscInt :: nx_local, nx_glob
       
     ! Birdsall and Langdon, Appendix D:
@@ -288,14 +293,13 @@ CONTAINS
     nx_local = ncells_local
     IF (x_max_boundary) nx_local = nx_local - 1
     nx_glob = ncells_global - 1 ! don't count for last global cell
-      
-    CALL VecCreateMPI(comm, nx_local, nx_glob, es_potential_vec, perr)
-    CALL VecSetFromOptions(es_potential_vec, perr)
-    
-    ! Set initial vector values to zero
-    zero = 0._num
-    CALL VecSet(es_potential_vec, zero, perr)
 
+    ! Charge density vector
+    CALL VecCreateMPI(comm, nx_local, nx_glob, charge_dens_vec, perr)
+    CALL VecSetFromOptions(charge_dens_vec, perr)
+    ! Electric potential vector
+    CALL VecDuplicate(charge_dens_vec, es_potential_vec, perr)
+    
   END SUBROUTINE setup_petsc_vector
 
 
@@ -420,6 +424,7 @@ CONTAINS
   SUBROUTINE destroy_petsc
 
     CALL VecDestroy(es_potential_vec, perr)
+    CALL VecDestroy(charge_dens_vec, perr)
     CALL MatDestroy(transform_mtrx, perr)
     CALL MatNullSpaceDestroy(matnull, perr)
     CALL KSPDestroy(ksp, perr)
