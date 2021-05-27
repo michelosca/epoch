@@ -254,6 +254,7 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ALLOCATE(es_current(1-ng:nx+ng))
     ALLOCATE(es_potential(1-ng:nx+ng))
+    es_potential = 0._num
     CALL initialize_petsc(comm)
     CALL setup_petsc_variables(nx, nx_global)
 #endif

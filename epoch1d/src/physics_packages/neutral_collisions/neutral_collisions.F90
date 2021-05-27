@@ -522,7 +522,7 @@ CONTAINS
       gthreshold = coll_type_block%gthreshold
       
       !Check whether collision types with g_threshold!=0 are possible
-      IF (g < gthreshold) CYCLE
+      IF (g <= gthreshold) CYCLE
       
       ! Cross-section
       !Negative cross-section is initially assigned
