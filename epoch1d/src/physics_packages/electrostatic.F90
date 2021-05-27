@@ -14,8 +14,9 @@
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE electrostatic
-#include <petsc/finclude/petscksp.h>
+#include <petsc/finclude/petscvec.h>
 #include <petsc/finclude/petscmat.h>
+#include <petsc/finclude/petscksp.h>
   USE petscksp
   USE shared_data
   USE custom_electrostatic
@@ -36,7 +37,6 @@ MODULE electrostatic
   Mat, SAVE :: transform_mtrx
   PetscErrorCode, SAVE :: perr
   KSP, SAVE :: ksp
-  MatNullSpace, SAVE :: matnull
 
 
 CONTAINS
@@ -192,8 +192,9 @@ CONTAINS
     REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: charge_density
     REAL(num), DIMENSION(1:nx_end) :: b_array
     REAL(num) :: constant
-    INTEGER :: i
-    REAL(num), DIMENSION(:), POINTER :: vec_pointer
+    PetscInt :: i, nx_local, offset
+    PetscInt :: indices(nx_end)
+    PetscScalar :: values(nx_end)
 
     ! Get array ready for solver
     constant = -dx*dx/epsilon0
@@ -201,23 +202,25 @@ CONTAINS
     b_array(1) = b_array(1) - set_potential_x_min()
     b_array(nx_end) = b_array(nx_end) - set_potential_x_max()
 
-    ! Get charge density data (data_array) into the Petsc vector
-    CALL VecGetArrayF90(charge_dens_vec, vec_pointer, perr)
-    DO i = 1, nx_end
-      vec_pointer(i) = b_array(i)
+    ! Pass charge_density data from Fortran to PETSc
+    nx_local = nx_end
+    offset = nx_global_min - 1
+    DO i = 0, nx_local-1
+      indices(i+1) = i + offset 
     END DO
-    CALL VecRestoreArrayF90(charge_dens_vec, vec_pointer, perr)
+    values = b_array 
+    CALL VecSetValues(charge_dens_vec, nx_local, indices, values, &
+      INSERT_VALUES, perr)
+    CALL VecAssemblyBegin(charge_dens_vec, perr)
+    CALL VecAssemblyEnd(  charge_dens_vec, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens_vec
     !                      A * x = b
     CALL KSPSolve(ksp, charge_dens_vec, es_potential_vec, perr)
 
     ! Pass electric potential data from PETSc to Fortran
-    CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
-    DO i = 1, nx_end
-      es_potential(i) = vec_pointer(i)
-    END DO
-    CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
+    CALL VecGetValues(es_potential_vec, nx_local, indices, values, perr)
+    es_potential(1:nx_end) = values
 
   END SUBROUTINE poisson_solver
 
@@ -310,7 +313,7 @@ CONTAINS
     ! ncells_global: number of all cells (all processors)
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
     INTEGER :: n_first, n_last
-    PetscInt :: nx_local, nx_glob, zero
+    PetscInt :: nx_local, nx_glob
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
@@ -389,12 +392,6 @@ CONTAINS
     CALL MatAssemblyBegin(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
 
-    ! Generate nullspace required for GAMG preconditioner
-    zero = 0
-    CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
-      PETSC_NULL_VEC, matnull, perr)
-    CALL MatSetNearNullSpace(transform_mtrx, matnull, perr)
-
     CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
 
   END SUBROUTINE setup_petsc_matrix
@@ -426,7 +423,6 @@ CONTAINS
     CALL VecDestroy(es_potential_vec, perr)
     CALL VecDestroy(charge_dens_vec, perr)
     CALL MatDestroy(transform_mtrx, perr)
-    CALL MatNullSpaceDestroy(matnull, perr)
     CALL KSPDestroy(ksp, perr)
 
   END SUBROUTINE destroy_petsc
