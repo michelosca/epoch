@@ -17,6 +17,8 @@ MODULE electrostatic
 #include <petsc/finclude/petscvec.h>
 #include <petsc/finclude/petscmat.h>
 #include <petsc/finclude/petscksp.h>
+  USE petscvec
+  USE petscmat
   USE petscksp
   USE shared_data
   USE custom_electrostatic
