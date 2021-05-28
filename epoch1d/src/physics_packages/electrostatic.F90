@@ -194,9 +194,8 @@ CONTAINS
     REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: charge_density
     REAL(num), DIMENSION(1:nx_end) :: b_array
     REAL(num) :: constant
-    PetscInt :: i, nx_local, offset
-    PetscInt :: indices(nx_end)
-    PetscScalar :: values(nx_end)
+    INTEGER :: i
+    REAL(num), DIMENSION(:), POINTER :: vec_pointer
 
     ! Get array ready for solver
     constant = -dx*dx/epsilon0
@@ -204,25 +203,23 @@ CONTAINS
     b_array(1) = b_array(1) - set_potential_x_min()
     b_array(nx_end) = b_array(nx_end) - set_potential_x_max()
 
-    ! Pass charge_density data from Fortran to PETSc
-    nx_local = nx_end
-    offset = nx_global_min - 1
-    DO i = 0, nx_local-1
-      indices(i+1) = i + offset 
+    ! Get charge density data (data_array) into the Petsc vector
+    CALL VecGetArrayF90(charge_dens_vec, vec_pointer, perr)
+    DO i = 1, nx_end
+      vec_pointer(i) = b_array(i)
     END DO
-    values = b_array 
-    CALL VecSetValues(charge_dens_vec, nx_local, indices, values, &
-      INSERT_VALUES, perr)
-    CALL VecAssemblyBegin(charge_dens_vec, perr)
-    CALL VecAssemblyEnd(  charge_dens_vec, perr)
+    CALL VecRestoreArrayF90(charge_dens_vec, vec_pointer, perr)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens_vec
     !                      A * x = b
     CALL KSPSolve(ksp, charge_dens_vec, es_potential_vec, perr)
 
     ! Pass electric potential data from PETSc to Fortran
-    CALL VecGetValues(es_potential_vec, nx_local, indices, values, perr)
-    es_potential(1:nx_end) = values
+    CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
+    DO i = 1, nx_end
+      es_potential(i) = vec_pointer(i)
+    END DO
+    CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
 
   END SUBROUTINE poisson_solver
 
