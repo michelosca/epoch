@@ -601,15 +601,12 @@ CONTAINS
     
 
     REAL(num) :: g, g_min, g_max
-    REAL(num) :: gsigma,gsigma_min,gsigma_max,gsigma_total,global_gsigma_max
+    REAL(num) :: gsigma,gs_min,gs_max,gsigma_total,global_gsigma_max
     REAL(num) :: user_factor
-    REAL(num), ALLOCATABLE, DIMENSION(:) :: g_next
-    INTEGER :: ispecies, jspecies, ncolltypes
-    INTEGER :: ctype, line
-    INTEGER, ALLOCATABLE, DIMENSION(:) :: ie, tlen
-    LOGICAL, ALLOCATABLE, DIMENSION(:) :: completed
+    INTEGER :: ispecies, jspecies, ncolltypes, tlen
+    INTEGER :: ctype1, ctype2, line, g_entries, i
     TYPE(neutrals_block), POINTER :: coll_block
-    TYPE(collision_type_block), POINTER :: coll_type
+    TYPE(collision_type_block), POINTER :: coll_type1, coll_type2
 
     DO ispecies = 1, n_species
       DO jspecies = 1, n_species_bg
@@ -621,75 +618,65 @@ CONTAINS
           CYCLE
         END IF
 
-        ! Each collision type will have its own index: ie
-        ncolltypes = coll_block%ncolltypes
-        ALLOCATE(ie(ncolltypes), tlen(ncolltypes), g_next(ncolltypes))
-        ALLOCATE(completed(ncolltypes))
-        ie = 1
-        completed = .FALSE.
-        DO ctype = 1, ncolltypes
-          coll_type => coll_block%collision_set(ctype)
-          tlen(ctype) = coll_type%table_len
-          g_next(ctype) = coll_type%energy(1)
-        END DO
-
         ! Get MAX(g*sigma_total)
         global_gsigma_max = 0._num
-        DO WHILE ( .NOT.ALL(completed) )
 
-          g = MINVAL(g_next)
+        ! Go through all energy values present in this coll_block
+        ncolltypes = coll_block%ncolltypes
 
-          ! In case an g max.value is stopping the g-sweep
-          DO ctype = 1, ncolltypes
-            IF (ABS(g_next(ctype) - g) <= TINY(0._num) .AND. &
-              ie(ctype) == tlen(ctype)) THEN
-                completed(ctype) = .TRUE.
-                g_next(ctype) = HUGE(0._num)
-            END IF
-          END DO
+        ! Loop over collision types
+        DO ctype1 = 1, ncolltypes
+          coll_type1 => coll_block%collision_set(ctype1)
+          g_entries = coll_type1%table_len
 
-          ! Move index in table with min. g value
-          DO ctype = 1, ncolltypes
-            IF (.NOT.completed(ctype) .AND. &
-              ABS(g_next(ctype) - g) <= TINY(0._num)) THEN
-              coll_type => coll_block%collision_set(ctype)
-              ie(ctype) = ie(ctype) + 1
-              g_next(ctype) = coll_type%energy(ie(ctype))
-            END IF
-          END DO
+          ! Loop over g-values in cross-section tables
+          DO i = 1, g_entries
+            g = coll_type1%energy(i)
 
-          gsigma_total = 0._num
-          DO ctype = 1, ncolltypes
-            coll_type => coll_block%collision_set(ctype)
-            user_factor = coll_type%user_factor
-            gsigma = -1._num
-            IF (tlen(ctype) == 1) THEN
-              ! Only one line: cross-section is constant
-              gsigma = coll_type%cross_section(1)
-            ELSE
-              ! cross-section is energy dependent
-              DO line = 2, tlen(ctype)
-                g_min = coll_type%energy(line-1)
-                g_max = coll_type%energy(line)
-                IF (g < g_max .AND. g >= g_min ) THEN
-                  gsigma_min = coll_type%cross_section(line-1)
-                  gsigma_max = coll_type%cross_section(line)
-                  ! Interpolation
-                  gsigma = interpolation(g_min,g_max,gsigma_min,gsigma_max,g)
-                  gsigma = gsigma * user_factor
-                  EXIT
+            ! Get gsigma total for the current value of g
+            gsigma_total = 0._num
+
+            ! Loop over collision types
+            DO ctype2 = 1, ncolltypes
+
+              coll_type2 => coll_block%collision_set(ctype2)
+              user_factor = coll_type2%user_factor
+              ! Get g-cross-section value
+              IF (ctype1 == ctype2) THEN
+                gsigma = coll_type1%cross_section(i) * user_factor
+              ELSE
+                gsigma = -1._num
+                tlen = coll_type2%table_len
+                IF (tlen == 1) THEN
+                  ! Only one line: cross-section is constant
+                  gsigma = coll_type2%cross_section(1)
+                ELSE
+                  ! cross-section is energy dependent
+                  DO line = 2, tlen
+                    g_min = coll_type2%energy(line-1)
+                    g_max = coll_type2%energy(line)
+                    IF (g < g_max .AND. g >= g_min ) THEN
+                      gs_min = coll_type2%cross_section(line-1)
+                      gs_max = coll_type2%cross_section(line)
+                      ! Interpolation
+                      gsigma = interpolation(g_min, g_max, gs_min, gs_max, g)
+                      gsigma = gsigma * user_factor
+                      EXIT
+                    END IF
+                  END DO
+                  CALL crosssection_out_of_range(gsigma, g, coll_type2)
                 END IF
-              END DO
-              CALL crosssection_out_of_range(gsigma, g, coll_type)
-            END IF
+              END IF
 
-            gsigma_total = gsigma_total + gsigma
-          END DO ! collision types
-          global_gsigma_max = MAX(global_gsigma_max, gsigma_total)
+              gsigma_total = gsigma_total + gsigma
+            END DO ! collision types 2
+            NULLIFY(coll_type2)
 
-        END DO ! Do while loop
+            ! Checker whether current g-sigma is max.
+            global_gsigma_max = MAX(global_gsigma_max, gsigma_total)
 
-        DEALLOCATE(ie, tlen, completed, g_next)
+          END DO ! g-entries loop
+        END DO ! collision types 1
 
         ! Update coll_block
         coll_block%gsigma_max_total = global_gsigma_max

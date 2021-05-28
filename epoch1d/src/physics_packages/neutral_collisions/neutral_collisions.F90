@@ -450,7 +450,7 @@ CONTAINS
       p_low = 0._num
       p_top = prob_arr(1)
       DO ctype = 1, ncolltypes - 1
-        IF ( ran1 <= p_top .AND. ran1 > p_low ) THEN
+        IF ( ran1 < p_top .AND. ran1 >= p_low ) THEN
           chosen_ctype = ctype
           EXIT
         END IF
