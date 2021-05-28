@@ -1555,7 +1555,7 @@ CONTAINS
 
   SUBROUTINE check_scattering_energy(e_scat, collision, bad_e_scat)
 
-    TYPE(current_collision_block), POINTER, INTENT(IN) :: collision
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
     REAL(num), INTENT(IN) :: e_scat
     LOGICAL, INTENT(INOUT) :: bad_e_scat
     REAL(num), DIMENSION(3) :: u_2
@@ -1563,7 +1563,7 @@ CONTAINS
     IF (e_scat <= 0._num) THEN
       bad_e_scat = .TRUE.
       PRINT*, 'WARNING: Bad scattering energy!'
-      PRINT*, 'Collision type ', collision%type_block%name 
+      PRINT*, 'Collision type ', TRIM(ADJUSTL(collision%type_block%name))
       PRINT*, 'Part 1 velocity ', collision%part1%part_p * collision%im1
       IF (collision%collision_block%is_background) THEN
         u_2 = collision%u_2
@@ -1574,6 +1574,7 @@ CONTAINS
       PRINT*, 'g_mag', collision%g_mag
       PRINT*, 'E_threshold', collision%type_block%ethreshold
       PRINT*, 'G_threshold', collision%type_block%gthreshold
+      collision%same_species = .TRUE.
     END IF
 
   END SUBROUTINE check_scattering_energy
