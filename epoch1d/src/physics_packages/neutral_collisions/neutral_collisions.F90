@@ -487,6 +487,20 @@ CONTAINS
       ! Calculate post-collision momenta
       CALL coll_type_block%coll_subroutine(collision)
 
+      IF (collision%same_species) THEN
+        collision%same_species = .FALSE.
+        PRINT*, 'probability array', prob_arr
+        PRINT*, 'gsigma array', gsigma_arr
+        PRINT*, 'random numner', ran1
+        PRINT*, 'p_total', p_total
+        PRINT*, 'last p_low and p_top', p_low, p_top
+        PRINT*, 'processor', rank
+        PRINT*, 'Cell ', collision%ix
+        PRINT*, 'u_1 ', u_1
+        PRINT*, 'u_2 ', u_2
+        PRINT*, 'g_mag ', g_mag
+        PRINT*, ''
+      END IF
       collision%type_block => NULL()
     END IF
 
