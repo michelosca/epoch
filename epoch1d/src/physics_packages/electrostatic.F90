@@ -37,6 +37,7 @@ MODULE electrostatic
 
   Vec, SAVE :: es_potential_vec, charge_dens_vec
   Mat, SAVE :: transform_mtrx
+  MatNullSpace, SAVE :: matnull
   PetscErrorCode, SAVE :: perr
   KSP, SAVE :: ksp
 
@@ -312,7 +313,7 @@ CONTAINS
     ! ncells_global: number of all cells (all processors)
     INTEGER, INTENT(IN) :: ncells_local, ncells_global
     INTEGER :: n_first, n_last
-    PetscInt :: nx_local, nx_glob
+    PetscInt :: nx_local, nx_glob, zero
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
@@ -391,6 +392,14 @@ CONTAINS
     CALL MatAssemblyBegin(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(transform_mtrx, MAT_FINAL_ASSEMBLY, perr)
 
+   ! Generate nullspace required for GAMG preconditioner
+    zero = 0
+    CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
+      PETSC_NULL_VEC, matnull, perr)
+    CALL MatSetNearNullSpace(transform_mtrx, matnull, perr)
+
+    CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
+
     CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
 
   END SUBROUTINE setup_petsc_matrix
@@ -422,6 +431,7 @@ CONTAINS
     CALL VecDestroy(es_potential_vec, perr)
     CALL VecDestroy(charge_dens_vec, perr)
     CALL MatDestroy(transform_mtrx, perr)
+    CALL MatNullSpaceDestroy(matnull, perr)
     CALL KSPDestroy(ksp, perr)
 
   END SUBROUTINE destroy_petsc
