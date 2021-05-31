@@ -1,107 +1,52 @@
-### TOOLS #####################################################################
-#  -help # prints possible flags (as listed below)
-#  -log_view
+# DEBUGGING
+#  -info
+#  -help
+  -log_view
 #  -ksp_view
+#  -ksp_compute_eigenvalues
 #  -start_in_debugger
-#  -options_view
+#  -ksp_monitor
+#  -ksp_converged_reason
+  -options_view
 
+# MATRIX
+-mat_type mpiaij
+-mat_block_size 1
+#-mat_is_symmetric
 
+# LINEAR SOLVER
+  -ksp_type cg
+#  -ksp_rtol 1e-20 # 1e-05>: Relative decrease in residual norm (KSPSetTolerances)
+#  -ksp_atol 1e-70 # 1e-50>: Absolute value of residual norm (KSPSetTolerances)
 
-### MATRIX ####################################################################
-  -mat_type mpiaij
-  -mat_block_size 1
-#  -mat_is_symmetric #check whether the matrix is symmetric
-
-
-
-### LINEAR SOLVER #############################################################
-  -ksp_type cg # formerly gmres>: Krylov method (one of) cg groppcg pipecg pipecgrr pipelcg cgne nash stcg gltr richardson chebyshev gmres tcqmr fcg pipefcg bcgs ibcgs fbcgs pipebcgs fbcgsr bcgsl cgs tfqmr cr pipecr lsqr preonly qcg bicg fgmres pipefgmres minres symmlq lgmres lcd gcr pipegcr pgmres dgmres tsirm cgls fetidp (KSPSetType)
-#  -ksp_max_it 10000 # formerly 10000>: Maximum number of iterations (KSPSetTolerances)
-#  -ksp_rtol 1e-05 # 1e-05>: Relative decrease in residual norm (KSPSetTolerances)
-#  -ksp_atol 1e-50 # 1e-50>: Absolute value of residual norm (KSPSetTolerances)
-#  -ksp_divtol 10000. # 10000.>: Residual norm increase cause divergence (KSPSetTolerances)
-#  -ksp_converged_use_initial_residual_norm FALSE # FALSE> Use initial residual norm for computing relative convergence (KSPConvergedDefaultSetUIRNorm)
-#  -ksp_converged_use_min_initial_residual_norm FALSE # FALSE> Use minimum of initial residual norm and b for computing relative convergence (KSPConvergedDefaultSetUMIRNorm)
-#  -ksp_initial_guess_nonzero FALSE # FALSE> Use the contents of the solution vector for initial guess (KSPSetInitialNonzero)
-#  -ksp_reuse_preconditioner FALSE # FALSE> Use initial preconditioner and don't ever compute a new one  (KSPReusePreconditioner)
-#  -ksp_knoll FALSE # FALSE> Use preconditioner applied to b for initial guess (KSPSetInitialGuessKnoll)
-#  -ksp_error_if_not_converged FALSE # FALSE> Generate error if solver does not converge (KSPSetErrorIfNotConverged)
-#  -ksp_guess_type null # formerly (null)>: Initial guess in Krylov method (one of) fischer pod ((null))
-#  -ksp_fischer_guess 0 # default 0 Use Paul Fischer's algorithm for initial guess (KSPSetUseFischerGuess)
-#  -ksp_convergence_test default # formerly default> Convergence test (choose one of) default skip lsqr (KSPSetConvergenceTest)
-#  -ksp_norm_type PRECONDITIONED # formerly PRECONDITIONED> KSP Norm type (choose one of) NONE PRECONDITIONED UNPRECONDITIONED NATURAL (KSPSetNormType)
-#  -ksp_check_norm_iteration -1 # formerly -1>: First iteration to compute residual norm (KSPSetCheckNormIteration)
-#  -ksp_lag_norm FALSE # FALSE> Lag the calculation of the residual norm (KSPSetLagNorm)
-#  -ksp_diagonal_scale FALSE # FALSE> Diagonal scale matrix before building preconditioner (KSPSetDiagonalScale)
-#  -ksp_diagonal_scale_fix FALSE # FALSE> Fix diagonally scaled matrix after solve (KSPSetDiagonalScaleFix)
-#  -ksp_constant_null_space FALSE # FALSE> Add constant null space to Krylov solver matrix (MatSetNullSpace)
-#  -ksp_monitor_cancel FALSE # FALSE> Remove any hardwired monitor routines (KSPMonitorCancel)
-#  -ksp_pc_side LEFT # formerly LEFT> KSP preconditioner side (choose one of) LEFT RIGHT SYMMETRIC (KSPSetPCSide)
-##### KSP CG and CGNE options
-#  -ksp_cg_single_reduction FALSE # FALSE> Merge inner products into single MPIU_Allreduce() (KSPCGUseSingleReduction)
-
-
-
-### PRECONDITIONER ############################################################
-  -pc_type gamg #formerly bjacobi>: Preconditioner (one of) none jacobi pbjacobi vpbjacobi bjacobi sor lu shell mg eisenstat ilu icc cholesky asm gasm ksp composite redundant nn mat fieldsplit galerkin exotic cp lsc redistribute svd gamg kaczmarz telescope patch hmg hypre pfmg syspfmg tfs bddc lmvm deflation (PCSetType)
-#  -pc_use_amat TRUE #dafault TRUE> use Amat (instead of Pmat) to define preconditioner in nested inner solves (PCSetUseAmat)
-
-
-
-##### GAMG options
-  -pc_gamg_type agg #formerly agg>: Type of AMG method (one of) geo agg classical (PCGAMGSetType)
-#  -pc_gamg_repartition FALSE #default FALSE> Repartion coarse grids (PCGAMGSetRepartition)
-#  -pc_gamg_reuse_interpolation FALSE # default FALSE> Reuse prolongation operator (PCGAMGReuseInterpolation)
-#  -pc_gamg_asm_use_agg FALSE #default FALSE> Use aggregation aggregates for ASM smoother (PCGAMGASMSetUseAggs)
-#  -pc_gamg_use_parallel_coarse_grid_solver FALSE #default: FALSE> Use parallel coarse grid solver (otherwise put last grid on one process) (PCGAMGSetUseParallelCoarseGridSolve)
-#  -pc_gamg_cpu_pin_coarse_grids FALSE #default FALSE> Pin coarse grids to the CPU (PCGAMGSetCpuPinCoarseGrids)
-#  -pc_gamg_coarse_grid_layout_type spread # formerly spread> compact: place reduced grids on processes in natural order; spread: distribute to whole machine for more memory bandwidth (choose one of) compact spread (PCGAMGSetCoarseGridLayoutType)
-  -pc_gamg_process_eq_limit 4 #formerly 50>: Limit (goal) on number of equations per process on coarse grids (PCGAMGSetProcEqLim)
-#  -pc_gamg_coarse_eq_limit 50 #formerly 50>: Limit on number of equations for the coarse grid (PCGAMGSetCoarseEqLim)
-#  -pc_gamg_threshold_scale 1. #default 1.>: Scaling of threshold for each level not specified (PCGAMGSetThresholdScale)
-#  -pc_gamg_threshold 0. #default 0: Relative threshold to use for dropping edges in aggregation graph (PCGAMGSetThreshold)
+# PRECONDITIONER
+  -pc_type gamg
+  -gamg_est_ksp_type cg
+#  -pc_gamg_type agg # (agg) Type of AMG method (one of) geo agg classical (PCGAMGSetType)
+#  -pc_gamg_reuse_interpolation: <FALSE> Reuse prolongation operator (PCGAMGReuseInterpolation)
+#  -pc_gamg_asm_use_agg true # (false) Use aggregation aggregates for ASM smoother (PCGAMGASMSetUseAggs)
+#  -pc_gamg_use_parallel_coarse_grid_solver: <FALSE> Use parallel coarse grid solver (otherwise put last grid on one process) (PCGAMGSetUseParallelCoarseGridSolve)
+  -pc_gamg_process_eq_limit 3 # (50) Limit (goal) on number of equations per process on coarse grids (PCGAMGSetProcEqLim)
+  -pc_gamg_coarse_eq_limit 100 # <50>: Limit on number of equations for the coarse grid (PCGAMGSetCoarseEqLim)
+#  -pc_gamg_threshold_scale <1.>: Scaling of threshold for each level not specified (PCGAMGSetThresholdScale)
+#  -pc_gamg_threshold <0.>: Relative threshold to use for dropping edges in aggregation graph (PCGAMGSetThreshold)
+#  -pc_mg_levels 3 # (30) Set number of MG levels (PCGAMGSetNlevels) GAMG-AGG options
+#  -pc_gamg_agg_nsmooths <1>: smoothing steps for smoothed aggregation, usually 1 (PCGAMGSetNSmooths)
+#  -pc_gamg_square_graph 2 # (1) Number of levels to square graph for faster coarsening and lower coarse grid complexity (PCGAMGSetSquareGraph)
   -pc_gamg_esteig_ksp_type cg
 
-##### MG setup
-#  -pc_mg_type kaskade # formerly MULTIPLICATIVE> Multigrid type (choose one of) MULTIPLICATIVE ADDITIVE FULL KASKADE (PCMGSetType)
-#  -pc_mg_levels 30 # formerly 30>: Set number of MG levels (PCGAMGSetNlevels)
-#  -mg_levels_ksp_type cg
-#  -mg_levels_esteig_ksp_type cg
-#  -mg_levels_pc_factor_levels 2
-#  -pc_mg_cycles w # v, w
-
-##### GAMG-AGG options
-  -pc_gamg_agg_nsmooths 1 # formerly 1>: smoothing steps for smoothed aggregation, usually 1 (PCGAMGSetNSmooths)
-#  -pc_gamg_sym_graph FALSE #default FALSE> Set for asymmetric matrices (PCGAMGSetSymGraph)
-#  -pc_gamg_square_graph 1 # formerly 1>: Number of levels to square graph for faster coarsening and lower coarse grid complexity (PCGAMGSetSquareGraph)
-#  -gamg_est_pc_type jacobi # formerly jacobi>: Preconditioner (one of) none jacobi pbjacobi vpbjacobi bjacobi sor lu shell mg eisenstat ilu icc cholesky asm gasm ksp composite redundant nn mat fieldsplit galerkin exotic cp lsc redistribute svd gamg kaczmarz telescope patch hmg hypre pfmg syspfmg tfs bddc lmvm deflation (PCSetType)
-#  -gamg_est_pc_use_amat FALSE # FALSE> use Amat (instead of Pmat) to define preconditioner in nested inner solves (PCSetUseAmat)
-#####  Jacobi options
-#  -gamg_est_pc_jacobi_type DIAGONAL # formerly DIAGONAL> How to construct diagonal matrix (choose one of) DIAGONAL ROWMAX ROWSUM (PCJacobiSetType)
-#  -gamg_est_pc_jacobi_abs FALSE # FALSE> Use absolute values of diagaonal entries (PCJacobiSetUseAbs)
-
-##### Krylov Method (KSP) options -------------------------------------------------
-  -gamg_est_ksp_type cg # formerly gmres>: Krylov method (one of) cg groppcg pipecg pipecgrr pipelcg cgne nash stcg gltr richardson chebyshev gmres tcqmr fcg pipefcg bcgs ibcgs fbcgs pipebcgs fbcgsr bcgsl cgs tfqmr cr pipecr lsqr preonly qcg bicg fgmres pipefgmres minres symmlq lgmres lcd gcr pipegcr pgmres dgmres tsirm cgls fetidp (KSPSetType)
-#  -gamg_est_ksp_max_it 10 # formerly 10>: Maximum number of iterations (KSPSetTolerances)
-#  -gamg_est_ksp_rtol 1e-05 # 1e-05>: Relative decrease in residual norm (KSPSetTolerances)
-#  -gamg_est_ksp_atol 1e-50 # 1e-50>: Absolute value of residual norm (KSPSetTolerances)
-#  -gamg_est_ksp_divtol 10000. # 10000.>: Residual norm increase cause divergence (KSPSetTolerances)
-#  -gamg_est_ksp_converged_use_initial_residual_norm FALSE # FALSE> Use initial residual norm for computing relative convergence (KSPConvergedDefaultSetUIRNorm)
-#  -gamg_est_ksp_converged_use_min_initial_residual_norm FALSE # FALSE> Use minimum of initial residual norm and b for computing relative convergence (KSPConvergedDefaultSetUMIRNorm)
-#  -gamg_est_ksp_initial_guess_nonzero FALSE # FALSE> Use the contents of the solution vector for initial guess (KSPSetInitialNonzero)
-#  -gamg_est_ksp_reuse_preconditioner FALSE # FALSE> Use initial preconditioner and don't ever compute a new one  (KSPReusePreconditioner)
-#  -gamg_est_ksp_knoll FALSE # FALSE> Use preconditioner applied to b for initial guess (KSPSetInitialGuessKnoll)
-#  -gamg_est_ksp_error_if_not_converged FALSE # FALSE> Generate error if solver does not converge (KSPSetErrorIfNotConverged)
-#  -gamg_est_ksp_guess_type null # formerly (null)>: Initial guess in Krylov method (one of) fischer pod ((null))
-#  -gamg_est_ksp_fischer_guess 0 #default 0 Use Paul Fischer's algorithm for initial guess (KSPSetUseFischerGuess)
-#  -gamg_est_ksp_convergence_test default # formerly default> Convergence test (choose one of) default skip lsqr (KSPSetConvergenceTest)
-#  -gamg_est_ksp_norm_type NONE # formerly NONE> KSP Norm type (choose one of) NONE PRECONDITIONED UNPRECONDITIONED NATURAL (KSPSetNormType)
-#  -gamg_est_ksp_check_norm_iteration -1 # formerly -1>: First iteration to compute residual norm (KSPSetCheckNormIteration)
-#  -gamg_est_ksp_lag_norm FALSE # FALSE> Lag the calculation of the residual norm (KSPSetLagNorm)
-#  -gamg_est_ksp_diagonal_scale FALSE # FALSE> Diagonal scale matrix before building preconditioner (KSPSetDiagonalScale)
-#  -gamg_est_ksp_diagonal_scale_fix FALSE # FALSE> Fix diagonally scaled matrix after solve (KSPSetDiagonalScaleFix)
-#  -gamg_est_ksp_constant_null_space FALSE # FALSE> Add constant null space to Krylov solver matrix (MatSetNullSpace)
-#  -gamg_est_ksp_monitor_cancel FALSE # FALSE> Remove any hardwired monitor routines (KSPMonitorCancel)
-#  -gamg_est_ksp_pc_side LEFT # formerly LEFT> KSP preconditioner side (choose one of) LEFT RIGHT SYMMETRIC (KSPSetPCSide)
-##### KSP CG and CGNE options
-#  -gamg_est_ksp_cg_single_reduction FALSE # FALSE> Merge inner products into single MPIU_Allreduce() (KSPCGUseSingleReduction)
+## Coarse grid (mg_coarse_): linear solver
+#  -mg_coarse_ksp_type preonly
+## Coarse grid (mg_coarse_): preconditioner 
+#  -mg_coarse_pc_type bjacobi
+#  -mg_coarse_sub_ksp_type preonly
+#  -mg_coarse_sub_pc_type lu
+#  -mg_coarse_sub_pc_factor_zeropivot <2.22045e-14>: Pivot is considered zero if less than (PCFactorSetZeroPivot)
+  -mg_coarse_sub_pc_factor_nonzeros_along_diagonal 1.e-10 #<0.>: Reorder to remove zeros from diagonal (PCFactorReorderForNonzeroDiagonal)
+## Levels (mg_levels_ or mg_levels_<level>_): linear solver
+#  -mg_levels_ksp_type chebyshev
+  -mg_levels_esteig_ksp_type cg 
+#  -mg_levels_ksp_chebyshev_eigenvalues 0.01,2.0
+#  -mg_levels_ksp_chebyshev_esteig a,b,c,d # default (0,0.1; 0,1.1); such that minbound = a*minest + b*maxest; maxbound = c*minest + d*maxest
+## Levels (mg_levels_ or mg_levels_<level>_): preconditioner
+#  -mg_levels_pc_type sor 
