@@ -257,7 +257,7 @@ CONTAINS
       dwcharge_min = wcharge_min - dwcharge_min 
 
       !Update E-field at wall
-      ex(0) = wcharge_min/epsilon0
+      ex(1-ng:0) = wcharge_min/epsilon0
       ! Option two would be ex(0) = ex_half*2._num - ex(1)
     END IF
 
@@ -272,13 +272,9 @@ CONTAINS
       dwcharge_max = wcharge_max - dwcharge_max
 
       !Update E-field at wall
-      ex(nx) = wcharge_max/epsilon0
+      ex(nx:nx+ng) = wcharge_max/epsilon0
       ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
     END IF
-
-    DO ix = 1, 2*c_ndims
-      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
-    END DO
 
   END SUBROUTINE es_calc_ex
 
