@@ -1395,12 +1395,29 @@ CONTAINS
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1, mu
+    LOGICAL :: bad_e_scat
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
     ran_w = random()
     IF (ran_w > collision%w1_ratio) RETURN
 #endif
+
+    ! Calculate the scattering energy
+    m1 = collision%m1
+    mu = collision%reducedm
+    g_mag = collision%g_mag
+    e_inc = 0.5_num * mu * g_mag * g_mag
+    delta_e = collision%type_block%ethreshold
+    e_scat = e_inc - delta_e
+
+    ! Check that e_scat > 0
+    bad_e_scat = .FALSE.
+    CALL check_scattering_energy(e_scat, collision, bad_e_scat)
+    IF (bad_e_scat) RETURN
+    
+    ! Scattering CM-speed
+    g_scat = SQRT(2._num * e_scat / mu)
 
     ! Incoming normalised velocity vector
     v_inc = vector_normalisation(collision%g)
@@ -1422,14 +1439,6 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
-    m1 = collision%m1
-    mu = collision%reducedm
-    g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    delta_e = collision%type_block%ethreshold
-    e_scat = e_inc - delta_e
-    g_scat = SQRT(2._num * e_scat / mu)
-
     ! Post-collision momentum
     collision%part1%part_p = (collision%u_cm + v_scat * g_scat) * m1
 
@@ -1449,6 +1458,7 @@ CONTAINS
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1, part_pos, ran_e, mu
     INTEGER :: species_id
+    LOGICAL :: bad_e_scat
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1462,10 +1472,20 @@ CONTAINS
     mu = collision%reducedm
     g_mag = collision%g_mag
 
+    ! Calculate the scattering energy
     e_inc = 0.5_num * mu * g_mag * g_mag
     delta_e = collision%type_block%ethreshold
     e_scat = e_inc - delta_e
+    
+    ! Check that e_scat > 0
+    bad_e_scat = .FALSE.
+    CALL check_scattering_energy(e_scat, collision, bad_e_scat)
+    IF (bad_e_scat) RETURN
+    
+    ! Scattering CM-speed
     g_scat = SQRT(2._num * e_scat * collision%im1)
+    
+    ! Energy split ratio between electrons
     ran_e = 0.5_num ! random()
 
     ! Incoming normalised velocity vector
@@ -1530,5 +1550,33 @@ CONTAINS
     NULLIFY(new_part)
 
   END SUBROUTINE vahedi_ionisation_bg
+
+
+
+  SUBROUTINE check_scattering_energy(e_scat, collision, bad_e_scat)
+
+    TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+    REAL(num), INTENT(IN) :: e_scat
+    LOGICAL, INTENT(INOUT) :: bad_e_scat
+    REAL(num), DIMENSION(3) :: u_2
+
+    IF (e_scat <= 0._num) THEN
+      bad_e_scat = .TRUE.
+      PRINT*, 'WARNING: Bad scattering energy!'
+      PRINT*, 'Collision type ', TRIM(ADJUSTL(collision%type_block%name))
+      PRINT*, 'Part 1 velocity ', collision%part1%part_p * collision%im1
+      IF (collision%collision_block%is_background) THEN
+        u_2 = collision%u_2
+      ELSE
+        u_2 = collision%part2%part_p * collision%im2
+      END IF
+      PRINT*, 'Part 2 velocity ', u_2
+      PRINT*, 'g_mag', collision%g_mag
+      PRINT*, 'E_threshold', collision%type_block%ethreshold
+      PRINT*, 'G_threshold', collision%type_block%gthreshold
+      collision%same_species = .TRUE.
+    END IF
+
+  END SUBROUTINE check_scattering_energy
 
 END MODULE nc_subroutines

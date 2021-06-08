@@ -450,7 +450,7 @@ CONTAINS
       p_low = 0._num
       p_top = prob_arr(1)
       DO ctype = 1, ncolltypes - 1
-        IF ( ran1 <= p_top .AND. ran1 > p_low ) THEN
+        IF ( ran1 < p_top .AND. ran1 >= p_low ) THEN
           chosen_ctype = ctype
           EXIT
         END IF
@@ -487,6 +487,20 @@ CONTAINS
       ! Calculate post-collision momenta
       CALL coll_type_block%coll_subroutine(collision)
 
+      IF (collision%same_species) THEN
+        collision%same_species = .FALSE.
+        PRINT*, 'probability array', prob_arr
+        PRINT*, 'gsigma array', gsigma_arr
+        PRINT*, 'random numner', ran1
+        PRINT*, 'p_total', p_total
+        PRINT*, 'last p_low and p_top', p_low, p_top
+        PRINT*, 'processor', rank
+        PRINT*, 'Cell ', collision%ix
+        PRINT*, 'u_1 ', u_1
+        PRINT*, 'u_2 ', u_2
+        PRINT*, 'g_mag ', g_mag
+        PRINT*, ''
+      END IF
       collision%type_block => NULL()
     END IF
 
@@ -522,7 +536,7 @@ CONTAINS
       gthreshold = coll_type_block%gthreshold
       
       !Check whether collision types with g_threshold!=0 are possible
-      IF (g < gthreshold) CYCLE
+      IF (g <= gthreshold) CYCLE
       
       ! Cross-section
       !Negative cross-section is initially assigned

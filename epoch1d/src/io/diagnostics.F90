@@ -493,7 +493,7 @@ CONTAINS
           c_stagger_jz, jz)
 #ifdef ELECTROSTATIC
       CALL write_field(c_dump_es_potential, code, 'es_potential', &
-          'Electric Potential/Phi', 'V', c_stagger_electrostatic, es_potential)
+          'Electric Potential/Vx', 'V', c_stagger_electrostatic, es_potential)
       CALL write_field(c_dump_es_current, code, 'es_current', &
           'Electric Current/I', 'A/m^2', c_stagger_electrostatic, es_current)
 #endif
