@@ -1337,11 +1337,10 @@ CONTAINS
     ! e + N -> e + N
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, p_scat
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, mu, m1
-    REAL(num) , DIMENSION(3) :: u_cm, p_scat
+    REAL(num) :: sinratio, m1
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1367,19 +1366,17 @@ CONTAINS
     sinratio = sinchi / sintheta
     v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+    crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
-    mu = collision%reducedm
+    m1 = collision%m1
     g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
     e_scat = e_inc * coschi * coschi
-    g_scat = SQRT(2._num * e_scat / mu)
-    p_scat = v_scat * g_scat * mu
+    g_scat = SQRT(2._num * e_scat * collision%ireducedm)
+    p_scat = v_scat * g_scat
 
     ! Post-collision momentum
-    u_cm = collision%u_cm
-    m1 = collision%m1
-    collision%part1%part_p = u_cm*m1 + p_scat
+    collision%part1%part_p = (collision%u_2 + p_scat) * m1
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
