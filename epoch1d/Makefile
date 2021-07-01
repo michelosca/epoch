@@ -274,8 +274,12 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
-#DEFINES += $(D)PETSC
-DEFINES += $(D)TRIDIAG
+
+# Choose Poisson's eq. solver method
+ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
+  #DEFINES += $(D)PETSC
+  DEFINES += $(D)TRIDIAG
+endif
 
 # Automatically add -DPARSER_CHECKING for debug builds
 ifeq ($(strip $(MODE)),debug)
