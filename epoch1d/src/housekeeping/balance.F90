@@ -448,9 +448,11 @@ CONTAINS
     DEALLOCATE(es_potential)
     ALLOCATE(es_potential(1-ng:nx_new+ng))
     es_potential = temp
+#ifndef TRIDIAG
     CALL finalize_petsc
     CALL initialize_petsc(comm)
     CALL setup_petsc_variables(nx_new, nx_global)
+#endif
 #endif
 
     IF (pre_loading) THEN
