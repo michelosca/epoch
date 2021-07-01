@@ -451,7 +451,9 @@ CONTAINS
 #ifndef TRIDIAG
     CALL finalize_petsc
     CALL initialize_petsc(comm)
-    CALL setup_petsc_variables(nx_new, nx_global)
+    CALL setup_petsc_variables(nx_new)
+#else
+    CALL update_cell_count(nx_new)
 #endif
 #endif
 

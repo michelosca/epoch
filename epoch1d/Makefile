@@ -277,8 +277,8 @@ DEFINES += $(D)ELECTROSTATIC
 
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
-  #DEFINES += $(D)PETSC
-  DEFINES += $(D)TRIDIAG
+  DEFINES += $(D)PETSC
+  #DEFINES += $(D)TRIDIAG
 endif
 
 # Automatically add -DPARSER_CHECKING for debug builds

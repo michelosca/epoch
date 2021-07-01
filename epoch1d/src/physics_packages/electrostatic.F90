@@ -14,12 +14,14 @@
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE electrostatic
+#ifndef TRIDIAG
 #include <petsc/finclude/petscvec.h>
 #include <petsc/finclude/petscmat.h>
 #include <petsc/finclude/petscksp.h>
   USE petscvec
   USE petscmat
   USE petscksp
+#endif
   USE shared_data
   USE custom_electrostatic
   USE evaluator
@@ -31,15 +33,21 @@ MODULE electrostatic
 
   PUBLIC :: es_update_e_field, setup_electrostatic
   PUBLIC :: init_potential, es_wall_current_diagnostic
-  PUBLIC :: attach_potential, setup_petsc_variables, finalize_petsc
+  PUBLIC :: attach_potential, update_cell_count
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
-  PUBLIC :: initialize_petsc, finalize_electrostatic_solver
+  PUBLIC :: finalize_electrostatic_solver
+#ifndef TRIDIAG
+  PUBLIC :: initialize_petsc, setup_petsc_variables, finalize_petsc
 
   Vec, SAVE :: es_potential_vec, charge_dens_vec
   Mat, SAVE :: transform_mtrx
   MatNullSpace, SAVE :: matnull
   PetscErrorCode, SAVE :: perr
   KSP, SAVE :: ksp
+#else
+  INTEGER, ALLOCATABLE, DIMENSION(:) :: cell_start_each_rank
+#endif
+  INTEGER :: nx_end, nx_all
 
 
 CONTAINS
@@ -55,7 +63,7 @@ CONTAINS
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
-    CALL es_calc_potential(es_charge_density)
+    CALL es_calc_potential(es_charge_density(1:nx_end))
 
     ! Calculate electric field in x-direction
     !  - In case of non-periodic boundaries
@@ -64,7 +72,7 @@ CONTAINS
       rhodx_min = (es_charge_density(0)+es_charge_density(1)) * dx * 0.5_num
     END IF
     IF (x_max_boundary_open) THEN
-      ! chargdens_nx-1/2 = rho_nx*dx/2: charge density near wall
+      ! chargdens_nx-1/2 = (rho_nx_1 + rho_nx)/2*dx: charge density near wall
       rhodx_max = (es_charge_density(nx)+es_charge_density(nx-1)) * dx * 0.5_num
     END IF
     DEALLOCATE(es_charge_density)
@@ -165,15 +173,9 @@ CONTAINS
 
   SUBROUTINE es_calc_potential(charge_density)
   
-    REAL(num), DIMENSION(1-ng:nx+ng), INTENT(IN) :: charge_density
-    INTEGER :: nx_end
+    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: charge_density
     
-    ! The Poisson solver resolves the potential inside the grid with
-    !given boundary conditions.
-    nx_end = nx
-    IF (x_max_boundary) nx_end = nx_end - 1
-    
-    CALL poisson_solver(charge_density(1:nx_end), nx_end)
+    CALL poisson_solver(charge_density(1:nx_end))
     
     ! Potential boundaries (between MPI processors, valid for periodic bc)
     CALL field_bc(es_potential, ng)
@@ -185,14 +187,76 @@ CONTAINS
   END SUBROUTINE es_calc_potential
 
 
-
-  SUBROUTINE poisson_solver(charge_density, nx_end)
+#ifdef TRIDIAG
+  SUBROUTINE poisson_solver(rho)
 
     ! This subroutine solves Poisson's equation
     ! Input: charge_density array and the length of the data array
     ! Output: electric potential array (data_array)
-    INTEGER, INTENT(IN) :: nx_end
-    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: charge_density
+    INTEGER, PARAMETER :: dp = selected_real_kind(30,300)
+    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: rho
+    REAL(num), DIMENSION(1:nx_end) :: solver_rho
+    REAL(num) :: constant
+    INTEGER :: i
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: rho_all, pot_all
+    REAL(dp), ALLOCATABLE, DIMENSION(:) :: b
+    REAL(dp) :: w
+
+    ! Get charge density array ready for solver
+    constant = -dx*dx/epsilon0
+    solver_rho = rho * constant
+    solver_rho(1) = solver_rho(1) - set_potential_x_min()
+    solver_rho(nx_end) = solver_rho(nx_end) - set_potential_x_max()
+
+    IF (rank==0) THEN
+      ALLOCATE(rho_all(1:nx_all), pot_all(1:nx_all))
+      CALL MPI_GATHERV(solver_rho(1), nx_end, MPI_DOUBLE_PRECISION, rho_all(1),&
+        nx_each_rank, cell_start_each_rank, MPI_DOUBLE_PRECISION, 0, comm, &
+        errcode)
+
+      ! Tridiagonal solver method
+      ALLOCATE(b(1:nx_all))
+      b = -2._dp
+      DO i = 2, nx_all
+        w = 1._dp / b(i-1)
+        b(i) = b(i) - w
+        rho_all(i) = rho_all(i) - REAL(w * REAL(rho_all(i-1),dp),num)
+      END DO
+
+      pot_all(nx_all) = REAL(REAL(rho_all(nx_all),dp) /  b(nx_all), num)
+      DO i = nx_all-1, 1, -1
+        pot_all(i) = REAL((REAL(rho_all(i),dp) - REAL(pot_all(i+1),dp)) &
+          / b(i), num)
+      END DO
+
+      CALL MPI_SCATTERV(pot_all(1), nx_each_rank, cell_start_each_rank, &
+        MPI_DOUBLE_PRECISION, es_potential(1), nx_end, MPI_DOUBLE_PRECISION, &
+        0, comm, errcode)
+      DEALLOCATE(rho_all, pot_all, b)
+
+    ELSE
+      ALLOCATE(rho_all(0), pot_all(0))
+      CALL MPI_GATHERV(solver_rho(1), nx_end, MPI_DOUBLE_PRECISION, &
+        rho_all, nx_each_rank, cell_start_each_rank, &
+        MPI_DOUBLE_PRECISION, 0, comm, errcode)
+
+      CALL MPI_SCATTERV(pot_all, nx_each_rank, cell_start_each_rank, &
+        MPI_DOUBLE_PRECISION, es_potential(1), nx_end, MPI_DOUBLE_PRECISION, &
+        0, comm, errcode)
+      DEALLOCATE(rho_all, pot_all)
+    END IF
+
+  END SUBROUTINE poisson_solver
+
+#else
+
+
+  SUBROUTINE poisson_solver(rho)
+
+    ! This subroutine solves Poisson's equation
+    ! Input: charge_density array
+    ! Output: electric potential array (data_array)
+    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: rho
     REAL(num), DIMENSION(1:nx_end) :: b_array
     REAL(num) :: constant
     INTEGER :: i
@@ -200,7 +264,7 @@ CONTAINS
 
     ! Get array ready for solver
     constant = -dx*dx/epsilon0
-    b_array = charge_density * constant
+    b_array = rho * constant
     b_array(1) = b_array(1) - set_potential_x_min()
     b_array(nx_end) = b_array(nx_end) - set_potential_x_max()
 
@@ -226,75 +290,10 @@ CONTAINS
 
 
 
-  SUBROUTINE es_calc_ex(rhodx_min, rhodx_max)
-
-    INTEGER :: ix
-    REAL(num) :: idx
-    REAL(num), INTENT(IN) :: rhodx_min, rhodx_max
-
-    idx = 1._num/dx
-    ex = 0._num
+  SUBROUTINE setup_petsc_vector
     
-    ! Calculate the electric field: Div(E) = -Phi
-    DO ix = 0, nx
-      ex(ix) = es_potential(ix-1) - es_potential(ix+1)
-    END DO
-    ex = ex * 0.5_num * idx
-
-    ! E-field boundaries
-    ! For between-processors boundaries and external (periodic) bc
-    CALL field_bc(ex, ng)
-
-    ! For non-periodic boundaries
-    IF (x_min_boundary_open) THEN
-      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
-      ! Wall charge and difference with respect to last time step
-      ! Previous wall charge surface density value
-      dwcharge_min = wcharge_min  
-      ! Charge surface density at wall
-      wcharge_min = ex(1) * epsilon0 - rhodx_min 
-      ! This is used for diagnostics
-      dwcharge_min = wcharge_min - dwcharge_min 
-
-      !Update E-field at wall
-      ex(1-ng:0) = wcharge_min/epsilon0
-      ! Option two would be ex(0) = ex_half*2._num - ex(1)
-    END IF
-
-    IF (x_max_boundary_open) THEN
-      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
-      ! Wall charge and difference with respect to last time step
-      ! Previous wall charge surface density value
-      dwcharge_max = wcharge_max
-      ! Charge surface density at wall
-      wcharge_max = ex(nx-1) * epsilon0 + rhodx_max 
-      ! This is used for diagnostics
-      dwcharge_max = wcharge_max - dwcharge_max
-
-      !Update E-field at wall
-      ex(nx:nx+ng) = wcharge_max/epsilon0
-      ! Option two would be ex(nx) = ex_half*2._num - ex(nx-1)
-    END IF
-
-  END SUBROUTINE es_calc_ex
-
-
-
-  SUBROUTINE setup_petsc_vector(ncells_local, ncells_global)
-    
-    INTEGER, INTENT(IN) :: ncells_local, ncells_global
-    PetscInt :: nx_local, nx_glob
-      
-    ! Birdsall and Langdon, Appendix D:
-    ! vector size is (nx_glog-1), hence last processor
-    ! must do without the cell at the boundary. The potential at grid=0
-    ! and grid=nx are given by boundary conditions phiL and phiR
-    nx_local = ncells_local
-    IF (x_max_boundary) nx_local = nx_local - 1
-    nx_glob = ncells_global - 1 ! don't count for last global cell
-
     ! Charge density vector
-    CALL VecCreateMPI(comm, nx_local, nx_glob, charge_dens_vec, perr)
+    CALL VecCreateMPI(comm, nx_end, nx_all, charge_dens_vec, perr)
     CALL VecSetFromOptions(charge_dens_vec, perr)
     ! Electric potential vector
     CALL VecDuplicate(charge_dens_vec, es_potential_vec, perr)
@@ -303,37 +302,16 @@ CONTAINS
 
 
 
-  SUBROUTINE setup_petsc_matrix(ncells_local, ncells_global)
+  SUBROUTINE setup_petsc_matrix
     
-    ! ncells_local: number of cells in the processor
-    ! ncells_global: number of all cells (all processors)
-    INTEGER, INTENT(IN) :: ncells_local, ncells_global
     INTEGER :: n_first, n_last
-    PetscInt :: nx_local, nx_glob, zero
+    PetscInt :: zero
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
-    ! Birdsall and Langdon, Appendix D:
-    ! matrix size is (nx_glob-1)x(nx_glob-1), hence last processor
-    ! must do without the cell at the boundary.
-    nx_local = ncells_local
-    IF (x_max_boundary) nx_local = nx_local - 1
-    nx_glob = ncells_global - 1
-
     ! Petsc subroutines setting up the Matrix
-    ! MatCreateAIJ(MPI communicator,
-    !             number of local rows,
-    !             number of local columns,
-    !             number of global rows,
-    !             number of global columns,
-    !             d_nz: number of non-zeros per row in DIAGONAL portion of
-    !                   local submatrix
-    !             d_nnz-array -> same as d_nz but specifying each row
-    !             o_nz: number of non-zeros per row in the OFF-DIAGONAL portion
-    !                   of local submatrix
-    !             o_nnz-array -> same as o_nz but specifying each row
     CALL MatCreate(comm, transform_mtrx, perr)
-    CALL MatSetSizes(transform_mtrx, nx_local, nx_local, nx_glob, nx_glob, perr)
+    CALL MatSetSizes(transform_mtrx, nx_end, nx_end, nx_all, nx_all, perr)
     CALL MatSetFromOptions(transform_mtrx, perr)
     CALL MatSetUp(transform_mtrx, perr)
 
@@ -393,9 +371,6 @@ CONTAINS
     CALL MatNullSpaceCreate( comm, PETSC_TRUE, zero, &
       PETSC_NULL_VEC, matnull, perr)
     CALL MatSetNearNullSpace(transform_mtrx, matnull, perr)
-
-    CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
-
     CALL MatSetOption(transform_mtrx, MAT_SYMMETRIC, PETSC_TRUE, perr)
 
   END SUBROUTINE setup_petsc_matrix
@@ -431,6 +406,62 @@ CONTAINS
     CALL KSPDestroy(ksp, perr)
 
   END SUBROUTINE destroy_petsc
+#endif
+
+
+  SUBROUTINE es_calc_ex(rhodx_min, rhodx_max)
+
+    INTEGER :: ix
+    REAL(num) :: idx
+    REAL(num), INTENT(IN) :: rhodx_min, rhodx_max
+
+    idx = 1._num/dx
+    ex = 0._num
+
+    ! Calculate the electric field: Div(E) = -Phi
+    DO ix = 0, nx
+      ex(ix) = es_potential(ix-1) - es_potential(ix+1)
+    END DO
+    ex = ex * 0.5_num * idx
+
+    ! E-field boundaries
+    ! For between-processors boundaries and external (periodic) bc
+    CALL field_bc(ex, ng)
+
+    ! For non-periodic boundaries
+    IF (x_min_boundary_open) THEN
+      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
+      ! Wall charge and difference with respect to last time step
+      ! Previous wall charge surface density value
+      dwcharge_min = wcharge_min
+      ! Charge surface density at wall
+      wcharge_min = ex(1) * epsilon0 - rhodx_min
+      ! This is used for diagnostics
+      dwcharge_min = wcharge_min - dwcharge_min
+
+      !Update E-field at wall
+      ex(0) = wcharge_min/epsilon0
+    END IF
+
+    IF (x_max_boundary_open) THEN
+      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
+      ! Wall charge and difference with respect to last time step
+      ! Previous wall charge surface density value
+      dwcharge_max = wcharge_max
+      ! Charge surface density at wall
+      wcharge_max = ex(nx-1) * epsilon0 + rhodx_max
+      ! This is used for diagnostics
+      dwcharge_max = wcharge_max - dwcharge_max
+
+      !Update E-field at wall
+      ex(nx) = wcharge_max/epsilon0
+    END IF
+
+    DO ix = 1, 2*c_ndims
+      CALL field_clamp_wall(ex, ng, c_stagger_ex, ix)
+    END DO
+
+  END SUBROUTINE es_calc_ex
 
 
 
@@ -696,7 +727,29 @@ CONTAINS
 
     es_current = 0._num
 
+#ifdef TRIDIAG
+    ALLOCATE(nx_each_rank(nproc), cell_start_each_rank(nproc))
+    nx_each_rank = cell_x_max - cell_x_min + 1
+    nx_each_rank(nproc) = nx_each_rank(nproc) - 1
+    cell_start_each_rank = cell_x_min - 1
+#endif
+
+    CALL update_cell_count(nx)
+
   END SUBROUTINE setup_electrostatic
+
+
+
+  SUBROUTINE update_cell_count(nx)
+
+    INTEGER, INTENT(IN) :: nx
+
+    ! Number of cells to be solved on each processors
+    nx_end = nx
+    IF (x_max_boundary) nx_end = nx_end - 1
+    nx_all = nx_global - 1
+
+  END SUBROUTINE update_cell_count
 
 
 
@@ -751,12 +804,28 @@ CONTAINS
   END SUBROUTINE efield_update_profile
 
 
-  SUBROUTINE setup_petsc_variables(ncells_local, ncells_global)
 
-    INTEGER, INTENT(IN) :: ncells_local, ncells_global
+  SUBROUTINE finalize_electrostatic_solver
 
-    CALL setup_petsc_vector(ncells_local, ncells_global)
-    CALL setup_petsc_matrix(ncells_local, ncells_global)
+#ifdef TRIDIAG
+    DEALLOCATE(nx_each_rank, cell_start_each_rank)
+#endif
+    CALL deallocate_potentials
+    CALL deallocate_efield_profiles
+#ifndef TRIDIAG
+    CALL finalize_petsc
+#endif
+  END SUBROUTINE finalize_electrostatic_solver
+
+
+#ifndef TRIDIAG
+  SUBROUTINE setup_petsc_variables(nx)
+
+    INTEGER, INTENT(IN) :: nx
+
+    CALL update_cell_count(nx)
+    CALL setup_petsc_vector
+    CALL setup_petsc_matrix
     CALL setup_petsc_ksp
 
   END SUBROUTINE setup_petsc_variables
@@ -773,20 +842,13 @@ CONTAINS
   END SUBROUTINE initialize_petsc
 
 
+
   SUBROUTINE finalize_petsc
 
     CALL destroy_petsc
     CALL PetscFinalize(perr)
 
   END SUBROUTINE finalize_petsc
-
-
-  SUBROUTINE finalize_electrostatic_solver
-
-    CALL deallocate_potentials
-    CALL deallocate_efield_profiles
-    CALL finalize_petsc
-
-  END SUBROUTINE finalize_electrostatic_solver
+#endif
 
 END MODULE electrostatic
