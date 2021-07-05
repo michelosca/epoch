@@ -1287,7 +1287,7 @@ CONTAINS
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, im2, mu, imu
+    REAL(num) :: sinratio, m1, im12, mu, imu
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1316,12 +1316,12 @@ CONTAINS
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
     m1 = collision%m1
-    im2 = collision%im2
+    im12 = collision%im12
     mu = collision%reducedm
     imu = collision%ireducedm
     g_mag = collision%g_mag
     e_inc = 0.5_num * mu * g_mag * g_mag
-    delta_e = 2._num * m1 * im2 * (1._num - coschi)
+    delta_e = 2._num * mu * im12 * (1._num - coschi)
     e_scat = e_inc * (1._num - delta_e)
     g_scat = SQRT(2._num * e_scat * imu)
 
@@ -1338,7 +1338,7 @@ CONTAINS
     ! e + N -> e + N
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, p_scat
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1
@@ -1374,10 +1374,9 @@ CONTAINS
     e_inc = 0.5_num * m1 * g_mag * g_mag
     e_scat = e_inc * coschi * coschi
     g_scat = SQRT(2._num * e_scat * collision%im1)
-    p_scat = v_scat * g_scat
 
     ! Post-collision momentum
-    collision%part1%part_p = (collision%u_2 + p_scat) * m1
+    collision%part1%part_p = (collision%u_2 + v_scat*g_scat) * m1
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
@@ -1446,7 +1445,7 @@ CONTAINS
     TYPE(particle), POINTER :: new_part
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
-    REAL(num), DIMENSION(3) :: u_cm, v_inc, v_scat, v_inc_i
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
     REAL(num) :: sinratio, m1, part_pos, ran_e, mu
@@ -1459,7 +1458,6 @@ CONTAINS
 #endif
 
     part_pos = collision%part1%part_pos
-    u_cm = collision%u_cm
     m1 = collision%m1
     mu = collision%reducedm
     g_mag = collision%g_mag
@@ -1470,7 +1468,7 @@ CONTAINS
     e_scat = e_inc - delta_e
     
     ! Scattering CM-speed
-    g_scat = SQRT(2._num * e_scat * collision%im1)
+    g_scat = SQRT(2._num * e_scat * collision%ireducedm)
     
     ! Energy split ratio between electrons
     ran_e = 0.5_num ! random()

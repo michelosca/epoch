@@ -247,7 +247,6 @@ CONTAINS
     END IF
 
   END SUBROUTINE poisson_solver
-
 #else
 
 

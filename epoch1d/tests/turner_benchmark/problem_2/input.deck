@@ -105,6 +105,8 @@ begin:output
 
   # output start
   time_start = t_output_start
+  dump_last = F
+  dump_first = F
 
   # output snapshot
   dt_snapshot = t_av
