@@ -286,7 +286,7 @@ CONTAINS
     ELSE IF (boundary == c_bd_x_max .AND. x_max_boundary) THEN
       nn = nx
       IF (stagger(c_dir_x,stagger_type)) THEN
-        DO i = 1, ng-1
+        DO i = 1, ng
           field(nn+i) = 2._num*field(nn)-field(nn-i)
         END DO
       END IF

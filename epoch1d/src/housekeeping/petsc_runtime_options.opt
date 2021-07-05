@@ -1,7 +1,7 @@
 # DEBUGGING
 #  -info
 #  -help
-  -log_view
+#  -log_view
 #  -ksp_view
 #  -ksp_compute_eigenvalues
 #  -start_in_debugger
@@ -16,23 +16,23 @@
 
 # LINEAR SOLVER
   -ksp_type cg
-#  -ksp_rtol 1e-20 # 1e-05>: Relative decrease in residual norm (KSPSetTolerances)
-#  -ksp_atol 1e-70 # 1e-50>: Absolute value of residual norm (KSPSetTolerances)
+  -ksp_rtol 1e-10 # 1e-05>: Relative decrease in residual norm (KSPSetTolerances)
+#  -ksp_atol 1e-50 # 1e-50>: Absolute value of residual norm (KSPSetTolerances)
 
 # PRECONDITIONER
   -pc_type gamg
   -gamg_est_ksp_type cg
-#  -pc_gamg_type agg # (agg) Type of AMG method (one of) geo agg classical (PCGAMGSetType)
-#  -pc_gamg_reuse_interpolation: <FALSE> Reuse prolongation operator (PCGAMGReuseInterpolation)
+  -pc_gamg_type agg # (agg) Type of AMG method (one of) geo agg classical (PCGAMGSetType)
+#  -pc_gamg_reuse_interpolation true #: <FALSE> Reuse prolongation operator (PCGAMGReuseInterpolation)
 #  -pc_gamg_asm_use_agg true # (false) Use aggregation aggregates for ASM smoother (PCGAMGASMSetUseAggs)
-#  -pc_gamg_use_parallel_coarse_grid_solver: <FALSE> Use parallel coarse grid solver (otherwise put last grid on one process) (PCGAMGSetUseParallelCoarseGridSolve)
-  -pc_gamg_process_eq_limit 3 # (50) Limit (goal) on number of equations per process on coarse grids (PCGAMGSetProcEqLim)
-  -pc_gamg_coarse_eq_limit 100 # <50>: Limit on number of equations for the coarse grid (PCGAMGSetCoarseEqLim)
+#  -pc_gamg_use_parallel_coarse_grid_solver true #: <FALSE> Use parallel coarse grid solver (otherwise put last grid on one process) (PCGAMGSetUseParallelCoarseGridSolve)
+  -pc_gamg_process_eq_limit 4 # (50) Limit (goal) on number of equations per process on coarse grids (PCGAMGSetProcEqLim)
+  -pc_gamg_coarse_eq_limit 80 # <50>: Limit on number of equations for the coarse grid (PCGAMGSetCoarseEqLim)
 #  -pc_gamg_threshold_scale <1.>: Scaling of threshold for each level not specified (PCGAMGSetThresholdScale)
-#  -pc_gamg_threshold <0.>: Relative threshold to use for dropping edges in aggregation graph (PCGAMGSetThreshold)
+  -pc_gamg_threshold 0.01 #<0.>: Relative threshold to use for dropping edges in aggregation graph (PCGAMGSetThreshold)
 #  -pc_mg_levels 3 # (30) Set number of MG levels (PCGAMGSetNlevels) GAMG-AGG options
-#  -pc_gamg_agg_nsmooths <1>: smoothing steps for smoothed aggregation, usually 1 (PCGAMGSetNSmooths)
-#  -pc_gamg_square_graph 2 # (1) Number of levels to square graph for faster coarsening and lower coarse grid complexity (PCGAMGSetSquareGraph)
+  -pc_gamg_agg_nsmooths 4 #<1>: smoothing steps for smoothed aggregation, usually 1 (PCGAMGSetNSmooths)
+  -pc_gamg_square_graph 1 # (1) Number of levels to square graph for faster coarsening and lower coarse grid complexity (PCGAMGSetSquareGraph)
   -pc_gamg_esteig_ksp_type cg
 
 ## Coarse grid (mg_coarse_): linear solver
@@ -42,7 +42,7 @@
 #  -mg_coarse_sub_ksp_type preonly
 #  -mg_coarse_sub_pc_type lu
 #  -mg_coarse_sub_pc_factor_zeropivot <2.22045e-14>: Pivot is considered zero if less than (PCFactorSetZeroPivot)
-  -mg_coarse_sub_pc_factor_nonzeros_along_diagonal 1.e-10 #<0.>: Reorder to remove zeros from diagonal (PCFactorReorderForNonzeroDiagonal)
+#  -mg_coarse_sub_pc_factor_nonzeros_along_diagonal 1.e-10 #<0.>: Reorder to remove zeros from diagonal (PCFactorReorderForNonzeroDiagonal)
 ## Levels (mg_levels_ or mg_levels_<level>_): linear solver
 #  -mg_levels_ksp_type chebyshev
   -mg_levels_esteig_ksp_type cg 

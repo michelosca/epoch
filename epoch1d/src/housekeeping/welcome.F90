@@ -273,6 +273,13 @@ CONTAINS
 #ifdef ELECTROSTATIC
     defines = IOR(defines, c_def_electrostatic)
     WRITE(*,*) 'Electrostatic solver -DELECTROSTATIC'
+#ifdef TRIDIAG
+    defines = IOR(defines, c_def_es_tridiag)
+    WRITE(*,*) 'Tridiagonal matrix solver -DTRIDIAG'
+#else
+    defines = IOR(defines, c_def_es_petsc)
+    WRITE(*,*) 'PETSc linear solver -DPETSC'
+#endif
 #endif
     WRITE(*,*) '*************************************************************'
 

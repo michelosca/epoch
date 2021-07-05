@@ -275,6 +275,12 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
 
+# Choose Poisson's eq. solver method
+ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
+  DEFINES += $(D)PETSC
+  #DEFINES += $(D)TRIDIAG
+endif
+
 # Automatically add -DPARSER_CHECKING for debug builds
 ifeq ($(strip $(MODE)),debug)
   DEFINES += $(D)PARSER_CHECKING
@@ -369,18 +375,20 @@ PACK_OPTS = $(GIT_WORK_TREE) $(PACK_PREFIX) $(PACK_SOURCE_CODE) \
 
 -include $(SRCDIR)/COMMIT
 
+#PETSc linear solver
+ifeq ($(findstring PETSC, $(DEFINES)),PETSC)
+  -include $(PETSC_DIR)/lib/petsc/conf/variables
+  -include $(PETSC_DIR)/lib/petsc/conf/rules
+  CFLAGS = $(PETSC_CC_INCLUDES)
+  FFLAGS += $(PETSC_FC_INCLUDES) -fopenmp
+  LDFLAGS +=$(PETSC_LIB)
+endif
+
 ifeq ($(DONE_COMMIT),)
 main: commit
 else
 main: $(FULLTARGET)
 endif
-
-#PETSc
--include $(PETSC_DIR)/lib/petsc/conf/variables
--include $(PETSC_DIR)/lib/petsc/conf/rules
-CFLAGS = $(PETSC_CC_INCLUDES)
-FFLAGS += $(PETSC_FC_INCLUDES) -fopenmp
-LDFLAGS +=$(PETSC_LIB)
 
 # Rule to build the fortran files
 
