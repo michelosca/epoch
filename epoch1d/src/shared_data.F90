@@ -885,7 +885,7 @@ MODULE shared_data
 
     ! Speed and velocities
     REAL(num) :: g_mag
-    REAL(num), DIMENSION(3) :: u_cm, g, u_2
+    REAL(num), DIMENSION(3) :: g, u_2
 
     ! Background's local temperature
     REAL(num) :: ix_temp
