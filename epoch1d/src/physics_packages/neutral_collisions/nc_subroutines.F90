@@ -167,7 +167,7 @@ CONTAINS
 
     reducedm = collision%reducedm
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision)
 
     ! Post-collision momentum
     random_direction = random_unit_vector()
@@ -211,7 +211,7 @@ CONTAINS
     ireducedm = collision%ireducedm
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 
     !Random vector
     random_direction = random_unit_vector()
@@ -301,7 +301,7 @@ CONTAINS
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
       part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     reducedm = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
@@ -406,7 +406,7 @@ CONTAINS
     m2 = collision%m2
     part1 => collision%part1
     part2 => collision%part2
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     mu = collision%reducedm
     p_scat = mu * collision%g
 
@@ -497,7 +497,7 @@ CONTAINS
       w2 = w2, &
 #endif
       part1 = part1, part2 = part2, p_list2 = p_list2)
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     mu = collision%reducedm
 
@@ -574,7 +574,7 @@ CONTAINS
 
     mu = collision%reducedm
     g = collision%g
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 
     ! Post-collision momentum
     p_scat = mu * g
@@ -643,7 +643,7 @@ CONTAINS
 
     ! Post-collision momentum
     ran1 = random()
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     IF (ran1 <= collision%w2_ratio) THEN
       collision%part1%part_p = u_cm*m1 + p_scat
     END IF
@@ -697,7 +697,7 @@ CONTAINS
 
     ! Post-collision momentum
     ranw = random()
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     IF (ranw <= collision%w2_ratio) THEN
       collision%part1%part_p = u_cm*collision%m1 + p_scat
     END IF
@@ -731,7 +731,7 @@ CONTAINS
       m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
       part1 = part1, part2 = part2, p_list2 = p_list, g = g)
     mu = collision%reducedm
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
 
@@ -831,7 +831,7 @@ CONTAINS
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
     mu = collision%reducedm
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 
     e_inc = 0.5_num * mu * g_mag * g_mag
     e_scat = e_inc - e_threshold
@@ -945,7 +945,7 @@ CONTAINS
       w1max_rat = w1max_rat, w2max_rat = w2max_rat, &
       g = g, part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     mu = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
@@ -1089,7 +1089,7 @@ CONTAINS
 
     reducedm = collision%reducedm
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     m1 = collision%m1
 
     ! Post-collision momentum
@@ -1130,7 +1130,7 @@ CONTAINS
     im1 = collision%im1
     m2 = collision%m2
     im2 = collision%im2
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 #ifndef PER_SPECIES_WEIGHT
     w1 = collision%w1
 #endif
@@ -1207,7 +1207,7 @@ CONTAINS
     m1 = collision%m1
     reducedm = collision%reducedm
     ireducedm = collision%ireducedm
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     e_threshold = collision%type_block%ethreshold
     excited_id = collision%type_block%new_species_id
@@ -1262,7 +1262,7 @@ CONTAINS
 
     reducedm = collision%reducedm
     g = collision%g
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     m1 = collision%m1
 
     ! Post-collision momentum
@@ -1375,7 +1375,7 @@ CONTAINS
     im12 = collision%im12
     mu = collision%reducedm
     imu = collision%ireducedm
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     ucm_mag2 = DOT_PRODUCT(u_cm, u_cm)
     alpha_L = 2._num * mu * im12 * (1._num - coschi_CM)
@@ -1534,5 +1534,16 @@ CONTAINS
     NULLIFY(new_part)
 
   END SUBROUTINE vahedi_ionisation_bg
+
+  
+
+  FUNCTION cm_velocity(collision)
+
+    REAL(num), DIMENSION(3) :: cm_velocity
+    TYPE(current_collision_block) :: collision
+
+    cm_velocity = (collision%part1%part_p+collision%m2*collision%u_2) &
+      * collision%im12
+  END FUNCTION cm_velocity
 
 END MODULE nc_subroutines
