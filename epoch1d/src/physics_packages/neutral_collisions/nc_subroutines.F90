@@ -1338,8 +1338,8 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, u_cm
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, e_scat, g_scat, g_mag, ucm_mag2
-    REAL(num) :: sinratio, m1, m12, im12, mu, imu
+    REAL(num) :: e_inc, e_scat, g_scat_m1, g_mag, ucm_mag2
+    REAL(num) :: sinratio, m1, m12, im12, mu
     REAL(num) :: alpha_L, coschi_CM, ran1
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
@@ -1374,17 +1374,16 @@ CONTAINS
     m12 = collision%m12
     im12 = collision%im12
     mu = collision%reducedm
-    imu = collision%ireducedm
     u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     ucm_mag2 = DOT_PRODUCT(u_cm, u_cm)
     alpha_L = 2._num * mu * im12 * (1._num - coschi_CM)
-    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
     e_scat = e_inc * (1._num - alpha_L) + 0.5_num * m12 * ucm_mag2
-    g_scat = SQRT(2._num * e_scat * imu)
+    g_scat_m1 = SQRT(2._num * e_scat * m1)
 
     ! Post-collision momentum
-    collision%part1%part_p = v_scat * g_scat * m1
+    collision%part1%part_p = v_scat * g_scat_m1
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
