@@ -499,7 +499,11 @@ MODULE constants
   ! In shared_data:
   ! fng is the number of ghost cells needed by the field solver
   ! sng is the number of ghost cells needed by the current smoother
+#ifdef ELECTROSTATIC
+  INTEGER, PARAMETER :: ng = png
+#else
   INTEGER, PARAMETER :: ng = png + 2
+#endif  
   INTEGER, PARAMETER :: jng = MAX(ng,png)
   ! ncell_min is the number of cells needed by the domain before subcyling
   ! of communications is required
