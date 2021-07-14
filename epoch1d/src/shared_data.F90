@@ -90,7 +90,7 @@ MODULE shared_data
   ! particle pack and unpack routines
   TYPE particle
     REAL(num), DIMENSION(3) :: part_p
-    REAL(num) :: part_pos
+    REAL(num) :: part_pos, part_pos_y
 #if !defined(PER_SPECIES_WEIGHT) || defined(PHOTONS)
     REAL(num) :: weight
 #endif
@@ -489,7 +489,7 @@ MODULE shared_data
   ! If CPML boundaries are used then the whole grid is shifted along by
   ! cpml_thicknes cells and then x(1) (and also x_grid_min) is at
   ! the location x_min + dx*(1/2-cpml_thickness)
-  REAL(num) :: length_x, dx, x_grid_min, x_grid_max, x_min, x_max
+  REAL(num) :: length_x, dx, x_grid_min, x_grid_max, x_min, x_max, y_min, y_max
   REAL(num) :: x_grid_min_local, x_grid_max_local, x_min_local, x_max_local
   REAL(num), DIMENSION(:), ALLOCATABLE :: x_grid_mins, x_grid_maxs
   REAL(num) :: dir_d(c_ndims), dir_min(c_ndims), dir_max(c_ndims)
@@ -925,5 +925,8 @@ MODULE shared_data
 
   ! Output
   LOGICAL :: neutral_collision_counter
+
+  ! Perpendicular particle position
+  LOGICAL :: perp_pos_flag = .FALSE.
 
 END MODULE shared_data

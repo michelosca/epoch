@@ -637,6 +637,7 @@ CONTAINS
     REAL(num) :: part_pos, boundary_shift
     REAL(num) :: x_min_outer, x_max_outer
     REAL(num) :: x_shift
+    INTEGER :: y_min_count, y_max_count
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
 #endif
@@ -670,6 +671,11 @@ CONTAINS
         reinjection = .FALSE.
       END IF
 #endif
+
+      IF (perp_pos_flag) THEN
+        y_min_count = 0
+        y_max_count = 0
+      END IF
 
       DO ix = -1, 1, 2
         CALL create_empty_partlist(send(ix))
@@ -843,6 +849,19 @@ CONTAINS
           END IF
         END IF
 
+        ! Perpendicular particle position
+        IF (perp_pos_flag) THEN
+          IF (cur%part_pos_y > y_max) THEN
+            out_of_bounds = .TRUE.
+            y_max_count = y_max_count + 1
+          END IF
+
+          IF (cur%part_pos_y < y_min) THEN
+            out_of_bounds = .TRUE.
+            y_min_count = y_min_count + 1
+          END IF
+        END IF
+
         IF (out_of_bounds) THEN
           ! Particle has gone forever
           CALL remove_particle_from_partlist(&
@@ -866,11 +885,18 @@ CONTAINS
 
       IF (reinjection) THEN
 #ifndef PER_SPECIES_WEIGHT
-        CALL inject_electron_ion_pair(n_injections, species_list(ispecies), &
+        CALL reinject_particles(n_injections, species_list(ispecies), 0, &
           injection_weight)
 #else
-        CALL inject_electron_ion_pair(n_injections, species_list(ispecies))
+        CALL reinject_particles(n_injections, species_list(ispecies), 0)
 #endif
+      END IF
+
+      IF (perp_pos_flag) THEN
+        ! injection_flag == 1 set new part_pos_y = y_min
+        ! injection_flag == 2 set new part_pos_y = y_max
+        CALL reinject_particles(y_max_count, species_list(ispecies), 1)
+        CALL reinject_particles(y_min_count, species_list(ispecies), 2)
       END IF
 
       ! swap Particles
@@ -1201,23 +1227,28 @@ CONTAINS
 
 
 
-  SUBROUTINE inject_electron_ion_pair(outflow_particles, part_species, &
-    total_weight)
+  SUBROUTINE reinject_particles(outflow_particles, part_species, &
+    injection_flag, total_weight)
 
     INTEGER, INTENT(INOUT) :: outflow_particles
+    INTEGER, INTENT(IN) :: injection_flag
     TYPE(particle_species), INTENT(INOUT) :: part_species
     REAL(num), OPTIONAL, INTENT(INOUT) :: total_weight
     INTEGER :: proc_x_min_boundary, proc_x_max_boundary
     INTEGER :: injections_x_min, injections_x_max
-    INTEGER :: i, n_pairs
+    INTEGER :: i, n_parts
     REAL(num) :: local_length_x, inject_prob
     REAL(num) :: weight_x_min, weight_x_max
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: per_part_weight
 #endif
 
-    ! If no electron pair is defined reinjection does not happen
-    IF (part_species%reinjection_id <= 0) RETURN
+    IF (injection_flag == 0) THEN !electron-ion reinjection
+      ! If no electron pair is defined reinjection does not happen
+      IF (part_species%reinjection_id <= 0) RETURN
+    !ELSE IF (injection_flag == 1) THEN !perpendicular reinjection at y_min
+    !ELSE IF (injection_flag == 2) THEN !perpendicular reinjection at y_max
+    END IF
 
     ! Sets the processors where the boundaries are
     proc_x_min_boundary = 0
@@ -1264,61 +1295,81 @@ CONTAINS
 
     local_length_x = x_max_local - x_min_local
     inject_prob = local_length_x/length_x
-    n_pairs = 0
+    n_parts = 0
     DO i = 1, outflow_particles
-      IF (random() < inject_prob) n_pairs = n_pairs + 1
+      IF (random() < inject_prob) n_parts = n_parts + 1
     END DO
 
 #ifndef PER_SPECIES_WEIGHT
     per_part_weight = total_weight / REAL(outflow_particles,num)
-    CALL place_injected_particles(n_pairs, part_species, per_part_weight)
+    CALL place_injected_particles(n_parts, part_species, &
+      injection_flag, per_part_weight)
 #else
-    CALL place_injected_particles(n_pairs, part_species)
+    CALL place_injected_particles(n_parts, part_species, injection_flag)
 #endif
 
-  END SUBROUTINE inject_electron_ion_pair
+  END SUBROUTINE reinject_particles
 
 
 
-  SUBROUTINE place_injected_particles(n_pairs, species, weigth)
+  SUBROUTINE place_injected_particles(n_parts, species, injection_flag, weigth)
 
-    INTEGER, INTENT(IN) :: n_pairs
+    INTEGER, INTENT(IN) :: n_parts, injection_flag
     TYPE(particle_species), INTENT(INOUT) :: species
     REAL(num), OPTIONAL, INTENT(IN) :: weigth
 
-    INTEGER :: ipair, cell_x, i, j
-    INTEGER, DIMENSION(2) :: species_ids
-    REAL(num) :: local_length_x, x_pos, mass
+    INTEGER :: i, j, k, cell_x, nspecies
+    INTEGER, ALLOCATABLE, DIMENSION(:) :: species_id
+    REAL(num) :: local_length_x, x_pos, y_pos, mass
     REAL(num), DIMENSION(3) ::temp
     TYPE(parameter_pack) :: parameters
     TYPE(particle), POINTER :: new_part
     TYPE(particle_species), POINTER :: current_species
 
-    IF (n_pairs == 0) RETURN
+    IF (n_parts == 0) RETURN
 
-    species_ids(1) = species%id             ! Ejected species
-    species_ids(2) = species%reinjection_id ! Electron species
+    IF (injection_flag == 0) THEN !electron-ion pair reinjection
+      nspecies = 2
+      ALLOCATE(species_id(nspecies))
+      species_id(1) = species%id             ! Ejected species
+      species_id(2) = species%reinjection_id ! Electron species
+    ELSE IF (injection_flag == 1) THEN !perpendicular reinjection y_min
+      nspecies = 1
+      ALLOCATE(species_id(nspecies))
+      species_id(1) = species%id
+      y_pos = y_min
+    ELSE IF (injection_flag == 2) THEN !perpendicular reinjection y_max
+      nspecies = 1
+      ALLOCATE(species_id(nspecies))
+      species_id(1) = species%id
+      y_pos = y_max
+    END IF
+
+    ! Define processor spatial domain
     local_length_x = x_max_local - x_min_local
 
-      DO ipair = 1, n_pairs
+      DO i = 1, n_parts
         ! Random position of the new particles
         x_pos = random() * local_length_x
         cell_x = FLOOR(x_pos/dx) + 1
         parameters%pack_ix = cell_x
 
-        DO j = 1,2
-          current_species => species_list(species_ids(j))
+        DO j = 1,nspecies
+          current_species => species_list(species_id(j))
           mass = current_species%mass
 
           ! Get temperature
-          DO i = 1, 3
-            temp(i) = evaluate_with_parameters(&
-              current_species%temperature_function(i), parameters, errcode)
+          DO k = 1, 3
+            temp(k) = evaluate_with_parameters(&
+              current_species%temperature_function(k), parameters, errcode)
           END DO
 
           ! New particle
           CALL create_particle(new_part)
           new_part%part_pos = x_pos + x_min_local
+          IF (perp_pos_flag) THEN
+            new_part%part_pos_y = y_pos
+          END IF
           new_part%part_p = random_momentum(mass, temp)
 #ifndef PER_SPECIES_WEIGHT
           new_part%weight = weigth
@@ -1330,6 +1381,8 @@ CONTAINS
 
         END DO ! species loop
       END DO ! pairs loop
+
+      DEALLOCATE(species_id)
 
   END SUBROUTINE place_injected_particles
 
@@ -1348,5 +1401,6 @@ CONTAINS
     random_momentum(3) = random_box_muller(var(3))
 
   END FUNCTION random_momentum
+
 
 END MODULE boundary

@@ -30,6 +30,7 @@ MODULE deck_control_block
 
   LOGICAL :: got_time, got_grid(2*c_ndims)
   LOGICAL :: got_optimal_layout, got_nproc
+  LOGICAL :: y_min_flag, y_max_flag
 
 CONTAINS
 
@@ -81,6 +82,10 @@ CONTAINS
     user_max_b_field = 0._num
     user_max_e_field = 0._num
     user_max_neutral_coll_freq = TINY(0._num)
+
+    ! Perpendicular particle position
+    y_min_flag = .FALSE.
+    y_max_flag = .FALSE.
 
   END SUBROUTINE control_deck_initialise
 
@@ -169,6 +174,11 @@ CONTAINS
     IF (dlb_maximum_interval < 1) dlb_maximum_interval = HUGE(1)
     IF (dlb_force_interval < 1) dlb_force_interval = HUGE(1)
 
+    ! Perpendicular particle position
+    IF (y_min_flag .AND. y_max_flag) THEN
+      perp_pos_flag = .TRUE.
+    END IF
+
   END SUBROUTINE control_deck_finalise
 
 
@@ -218,9 +228,13 @@ CONTAINS
 
     ELSE IF (str_cmp(element, 'y_min') &
         .OR. str_cmp(element, 'y_start')) THEN
+      y_min = as_real_print(value, element, errcode)
+      y_min_flag = .TRUE.
 
     ELSE IF (str_cmp(element, 'y_max') &
         .OR. str_cmp(element, 'y_end')) THEN
+      y_max = as_real_print(value, element, errcode)
+      y_max_flag = .TRUE.
 
     ELSE IF (str_cmp(element, 'z_min') &
         .OR. str_cmp(element, 'z_start')) THEN
