@@ -1236,8 +1236,8 @@ CONTAINS
     REAL(num), OPTIONAL, INTENT(INOUT) :: total_weight
     INTEGER :: proc_x_min_boundary, proc_x_max_boundary
     INTEGER :: injections_x_min, injections_x_max
-    INTEGER :: i, n_parts
-    REAL(num) :: local_length_x, inject_prob
+    INTEGER :: i, n_parts, remainder
+    REAL(num) :: inject_prob, local_length_x
     REAL(num) :: weight_x_min, weight_x_max
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: per_part_weight
@@ -1246,8 +1246,6 @@ CONTAINS
     IF (injection_flag == 0) THEN !electron-ion reinjection
       ! If no electron pair is defined reinjection does not happen
       IF (part_species%reinjection_id <= 0) RETURN
-    !ELSE IF (injection_flag == 1) THEN !perpendicular reinjection at y_min
-    !ELSE IF (injection_flag == 2) THEN !perpendicular reinjection at y_max
     END IF
 
     ! Sets the processors where the boundaries are
@@ -1259,46 +1257,68 @@ CONTAINS
     injections_x_max = 0
     weight_x_min = 0._num
     weight_x_max = 0._num
-    IF (x_min_boundary) THEN
-      injections_x_min = outflow_particles
+
+    ! injection_flag == 0 : particle reinjection from wall loss
+    IF (injection_flag == 0 .AND. nproc > 1) THEN
+      IF (x_min_boundary) THEN
+        injections_x_min = outflow_particles
 #ifndef PER_SPECIES_WEIGHT
-      weight_x_min = total_weight
+        weight_x_min = total_weight
+#endif
+      END IF
+      IF (x_max_boundary .AND. nproc > 1 ) THEN
+        injections_x_max = outflow_particles
+#ifndef PER_SPECIES_WEIGHT
+        weight_x_max = total_weight
+#endif
+      END IF
+
+      ! Send number of outflowing particles to all processors
+      CALL MPI_BCAST(injections_x_min, 1, MPI_INTEGER, proc_x_min_boundary, &
+        comm, errcode)
+        CALL MPI_BCAST(injections_x_max, 1, MPI_INTEGER, proc_x_max_boundary, &
+          comm, errcode)
+      ! Total number of particles leaving the system
+      outflow_particles = injections_x_min + injections_x_max
+
+#ifndef PER_SPECIES_WEIGHT
+      ! Send total weight of ejected particles to all processors
+      CALL MPI_BCAST(weight_x_min, 1, MPI_DOUBLE, proc_x_min_boundary, &
+        comm, errcode)
+      CALL MPI_BCAST(weight_x_max, 1, MPI_DOUBLE, proc_x_max_boundary, &
+        comm, errcode)
+      ! Total weight leaving the system
+      total_weight = weight_x_min + weight_x_max
+#endif
+
+    ! injection_flag == 1 or ==2: particle reinjection from perpendicular losses
+    ELSE IF (injection_flag >= 1 .AND. nproc > 1) THEN
+      ! total number of particles that left the domain: reduce in injections_x_min
+      CALL MPI_ALLREDUCE(outflow_particles, injections_x_min, 1, MPI_INTEGER, &
+        MPI_SUM, comm, errcode)
+      ! total number of particles
+      outflow_particles = injections_x_min
+#ifndef PER_SPECIES_WEIGHT
+      CALL MPI_ALLREDUCE(total_weight, weight_x_min, 1, MPI_INTEGER, &
+        MPI_SUM, comm, errcode)
+      total_weight = weight_x_min
 #endif
     END IF
-    IF (x_max_boundary .AND. nproc > 1 ) THEN
-      injections_x_max = outflow_particles
-#ifndef PER_SPECIES_WEIGHT
-      weight_x_max = total_weight
-#endif
-    END IF
-
-    ! Send number of outflowing particles to all processors
-    CALL MPI_BCAST(injections_x_min, 1, MPI_INTEGER, proc_x_min_boundary, &
-      comm, errcode)
-    CALL MPI_BCAST(injections_x_max, 1, MPI_INTEGER, proc_x_max_boundary, &
-      comm, errcode)
-    ! Total number of particles leaving the system
-    outflow_particles = injections_x_min + injections_x_max
-
-#ifndef PER_SPECIES_WEIGHT
-    ! Send total weight of ejected particles to all processors
-    CALL MPI_BCAST(weight_x_min, 1, MPI_DOUBLE, proc_x_min_boundary, &
-      comm, errcode)
-    CALL MPI_BCAST(weight_x_max, 1, MPI_DOUBLE, proc_x_max_boundary, &
-      comm, errcode)
-    ! Total weight leaving the system
-    total_weight = weight_x_min + weight_x_max
-#endif
 
     ! If no particles leave the system, no particles are reinjected
     IF (outflow_particles <= 0) RETURN
 
-    local_length_x = x_max_local - x_min_local
-    inject_prob = local_length_x/length_x
-    n_parts = 0
-    DO i = 1, outflow_particles
-      IF (random() < inject_prob) n_parts = n_parts + 1
-    END DO
+    IF (nproc > 1) THEN
+      local_length_x = x_max_local - x_min_local
+      inject_prob = local_length_x/length_x
+      n_parts = outflow_particles / nproc
+      remainder = outflow_particles - n_parts * nproc
+      DO i = 1, remainder
+        IF (random() < inject_prob) n_parts = n_parts + 1
+      END DO
+    ELSE
+      n_parts = outflow_particles
+    END IF
 
 #ifndef PER_SPECIES_WEIGHT
     per_part_weight = total_weight / REAL(outflow_particles,num)
@@ -1370,7 +1390,7 @@ CONTAINS
           IF (perp_pos_flag) THEN
             new_part%part_pos_y = y_pos
           END IF
-          new_part%part_p = random_momentum(mass, temp)
+          new_part%part_p = random_momentum(mass, temp, injection_flag)
 #ifndef PER_SPECIES_WEIGHT
           new_part%weight = weigth
 #endif
@@ -1388,8 +1408,9 @@ CONTAINS
 
 
 
-  FUNCTION random_momentum(mass, temp)
+  FUNCTION random_momentum(mass, temp, injection_flag)
 
+    INTEGER :: injection_flag
     REAL(num), DIMENSION(3) :: random_momentum
     REAL(num) :: mass
     REAL(num), DIMENSION(3) :: var, temp
@@ -1397,7 +1418,16 @@ CONTAINS
     var = SQRT(kb*temp*mass)
 
     random_momentum(1) = random_box_muller(var(1))
-    random_momentum(2) = random_box_muller(var(2))
+    IF (injection_flag == 1) THEN
+      ! Injection to y-min
+      random_momentum(2) = var(2) * SQRT(-2._num * LOG(random()))
+    ELSE IF (injection_flag == 2) THEN
+      ! Injection to y-max
+      random_momentum(2) = -var(2) * SQRT(-2._num * LOG(random()))
+    ELSE
+      ! Isotropic momentum distribution
+      random_momentum(2) = random_box_muller(var(2))
+    END IF
     random_momentum(3) = random_box_muller(var(3))
 
   END FUNCTION random_momentum
