@@ -1487,44 +1487,46 @@ CONTAINS
     ! Post-collision momentum
     collision%part1%part_p = v_scat*g_scat_m1*SQRT(ran_e)
 
-
-    ! Electron #2:
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-    ! Create a new electron particle
-    species_id = collision%species1
-    CALL create_particle(new_part)
-    new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
-    new_part%part_pos = part_pos
-#ifndef PER_SPECIES_WEIGHT
-    new_part%weight = collision%w1 ! Electron's weight
-#endif
-    CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
-      new_part)
-    NULLIFY(new_part)
-
-
-    ! Ion
-    ! Create a new ion particle and assign neutral particle's momentum
+    ! Collision product from ionisation
     species_id = collision%type_block%new_species_id ! ions
-    CALL create_particle(new_part)
-    new_part%part_p = collision%u_2 * collision%m2
-    new_part%part_pos = part_pos
+    IF (species_id > 0) THEN
+      ! Electron #2:
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+      ! Create a new electron particle
+      species_id = collision%species1
+      CALL create_particle(new_part)
+      new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
+      new_part%part_pos = part_pos
 #ifndef PER_SPECIES_WEIGHT
-    new_part%weight = collision%w1 ! Electron's weight
+      new_part%weight = collision%w1 ! Electron's weight
 #endif
-    CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
-      new_part)
-    NULLIFY(new_part)
+      CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+        new_part)
+      NULLIFY(new_part)
+
+
+      ! Ion
+      ! Create a new ion particle and assign neutral particle's momentum
+      CALL create_particle(new_part)
+      new_part%part_p = collision%u_2 * collision%m2
+      new_part%part_pos = part_pos
+#ifndef PER_SPECIES_WEIGHT
+      new_part%weight = collision%w1 ! Electron's weight
+#endif
+      CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+        new_part)
+      NULLIFY(new_part)
+    END IF
 
   END SUBROUTINE vahedi_ionisation_bg
 
