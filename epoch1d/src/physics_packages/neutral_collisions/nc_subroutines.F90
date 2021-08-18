@@ -1503,14 +1503,14 @@ CONTAINS
       v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
         crossproduct(v_inc_i,v_inc) * sinratio * cosphi
       ! Create a new electron particle
-      species_id = collision%species1
       CALL create_particle(new_part)
       new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
       new_part%part_pos = part_pos
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = collision%w1 ! Electron's weight
 #endif
-      CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+      CALL add_particle_to_partlist(&
+        species_list(collision%species1)%attached_list, &
         new_part)
       NULLIFY(new_part)
 
