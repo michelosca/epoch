@@ -160,8 +160,9 @@ CONTAINS
                   .NOT.is_background) ncerr = 2
 
               ! Nanbu-ionisation requires species_target_id
-              IF (coll_type%new_species_id <= 0 .OR. &
-                 coll_type%new_species_id > n_species) ncerr = 3
+              IF ((coll_type%new_species_id <= 0 .OR. &
+                 coll_type%new_species_id > n_species) .AND. &
+                 .NOT.is_background) ncerr = 3
 
               ! Nanbu-ionisation requires same mass for source and new species 
               IF ( ncerr == 0 ) THEN
@@ -170,8 +171,10 @@ CONTAINS
                 ELSE
                   m_source = species_list(coll_type%source_species_id)%mass
                 END IF
-                m_new = species_list(coll_type%new_species_id)%mass
-                IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 11
+                IF (coll_type%new_species_id > 0) THEN
+                  m_new = species_list(coll_type%new_species_id)%mass
+                  IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 11
+                END IF
               END IF
 
             ELSE IF (coll_type%id == c_nc_excitation) THEN

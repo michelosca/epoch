@@ -817,16 +817,20 @@ CONTAINS
       ELSEIF (str_cmp(value, 'excitation')) THEN
         coll_type%id = c_nc_excitation
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'ionisation')) THEN
+      ELSEIF (str_cmp(value, 'ionisation') .OR. &
+          str_cmp(value, 'ionization')) THEN
         coll_type%id = c_nc_ionisation
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'charge exchange')) THEN
+      ELSEIF (str_cmp(value, 'charge exchange') .OR. &
+          str_cmp(value, 'charge_exchange')) THEN
         coll_type%id = c_nc_charge_exchange
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'elastic_electron')) THEN
+      ELSEIF (str_cmp(value, 'elastic_electron') .OR. &
+          str_cmp(value, 'elastic electron')) THEN
         coll_type%id = c_nc_elastic_electron
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'elastic_ion')) THEN
+      ELSEIF (str_cmp(value, 'elastic_ion') .OR. &
+          str_cmp(value, 'elastic ion')) THEN
         coll_type%id = c_nc_elastic_ion
         coll_type%name = TRIM(ADJUSTL(value))
       END IF
