@@ -637,7 +637,9 @@ CONTAINS
     REAL(num) :: part_pos, boundary_shift
     REAL(num) :: x_min_outer, x_max_outer
     REAL(num) :: x_shift
+#ifdef PART_PERP_POSITION
     INTEGER :: y_min_count, y_max_count
+#endif
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
 #endif
@@ -672,10 +674,10 @@ CONTAINS
       END IF
 #endif
 
-      IF (perp_pos_flag) THEN
-        y_min_count = 0
-        y_max_count = 0
-      END IF
+#ifdef PART_PERP_POSITION
+      y_min_count = 0
+      y_max_count = 0
+#endif
 
       DO ix = -1, 1, 2
         CALL create_empty_partlist(send(ix))
@@ -850,17 +852,17 @@ CONTAINS
         END IF
 
         ! Perpendicular particle position
-        IF (perp_pos_flag) THEN
-          IF (cur%part_pos_y > y_max) THEN
-            out_of_bounds = .TRUE.
-            y_max_count = y_max_count + 1
-          END IF
-
-          IF (cur%part_pos_y < y_min) THEN
-            out_of_bounds = .TRUE.
-            y_min_count = y_min_count + 1
-          END IF
+#ifdef PART_PERP_POSITION
+        IF (cur%part_pos_y > y_max) THEN
+          out_of_bounds = .TRUE.
+          y_max_count = y_max_count + 1
         END IF
+
+        IF (cur%part_pos_y < y_min) THEN
+          out_of_bounds = .TRUE.
+          y_min_count = y_min_count + 1
+        END IF
+#endif
 
         IF (out_of_bounds) THEN
           ! Particle has gone forever
@@ -892,12 +894,12 @@ CONTAINS
 #endif
       END IF
 
-      IF (perp_pos_flag) THEN
-        ! injection_flag == 1 set new part_pos_y = y_min
-        ! injection_flag == 2 set new part_pos_y = y_max
-        CALL reinject_particles(y_max_count, species_list(ispecies), 1)
-        CALL reinject_particles(y_min_count, species_list(ispecies), 2)
-      END IF
+#ifdef PART_PERP_POSITION
+      ! injection_flag == 1 set new part_pos_y = y_min
+      ! injection_flag == 2 set new part_pos_y = y_max
+      CALL reinject_particles(y_max_count, species_list(ispecies), 1)
+      CALL reinject_particles(y_min_count, species_list(ispecies), 2)
+#endif
 
       ! swap Particles
       DO ix = -1, 1, 2
@@ -1291,6 +1293,7 @@ CONTAINS
       total_weight = weight_x_min + weight_x_max
 #endif
 
+#ifdef PART_PERP_POSITION
     ! injection_flag == 1 or ==2: particle reinjection from perpendicular losses
     ELSE IF (injection_flag >= 1 .AND. nproc > 1) THEN
       ! total number of particles that left the domain: reduce in injections_x_min
@@ -1302,6 +1305,7 @@ CONTAINS
       CALL MPI_ALLREDUCE(total_weight, weight_x_min, 1, MPI_INTEGER, &
         MPI_SUM, comm, errcode)
       total_weight = weight_x_min
+#endif
 #endif
     END IF
 
@@ -1340,7 +1344,10 @@ CONTAINS
 
     INTEGER :: i, j, k, cell_x, nspecies
     INTEGER, ALLOCATABLE, DIMENSION(:) :: species_id
-    REAL(num) :: local_length_x, x_pos, y_pos, mass
+    REAL(num) :: local_length_x, x_pos, mass
+#ifdef PART_PERP_POSITION
+    REAL(num) :: y_pos
+#endif
     REAL(num), DIMENSION(3) ::temp
     TYPE(parameter_pack) :: parameters
     TYPE(particle), POINTER :: new_part
@@ -1353,6 +1360,7 @@ CONTAINS
       ALLOCATE(species_id(nspecies))
       species_id(1) = species%id             ! Ejected species
       species_id(2) = species%reinjection_id ! Electron species
+#ifdef PART_PERP_POSITION
     ELSE IF (injection_flag == 1) THEN !perpendicular reinjection y_min
       nspecies = 1
       ALLOCATE(species_id(nspecies))
@@ -1363,6 +1371,7 @@ CONTAINS
       ALLOCATE(species_id(nspecies))
       species_id(1) = species%id
       y_pos = y_max
+#endif
     END IF
 
     ! Define processor spatial domain
@@ -1387,9 +1396,9 @@ CONTAINS
           ! New particle
           CALL create_particle(new_part)
           new_part%part_pos = x_pos + x_min_local
-          IF (perp_pos_flag) THEN
-            new_part%part_pos_y = y_pos
-          END IF
+#ifdef PART_PERP_POSITION
+          new_part%part_pos_y = y_pos
+#endif
           new_part%part_p = random_momentum(mass, temp, injection_flag)
 #ifndef PER_SPECIES_WEIGHT
           new_part%weight = weigth

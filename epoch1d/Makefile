@@ -275,6 +275,9 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
 
+# Particle perpendicular (y-axis) position
+DEFINES += $(D)PART_PERP_POSITION
+
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
   DEFINES += $(D)PETSC

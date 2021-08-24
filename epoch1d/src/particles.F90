@@ -711,9 +711,9 @@ CONTAINS
         ! particle has now finished move to end of timestep, so copy back
         ! into particle array
         current%part_pos = part_x + x_grid_min_local
-        IF (perp_pos_flag) THEN
-          current%part_pos_y = current%part_pos_y + part_u(2) * dt
-        END IF
+#ifdef PART_PERP_POSITION
+        current%part_pos_y = current%part_pos_y + part_u(2) * dt
+#endif
 
         current => current%next
       END DO
