@@ -381,6 +381,9 @@ CONTAINS
       NULLIFY(species_list(ispecies)%attached_probes)
 #endif
       NULLIFY(species_list(ispecies)%neutrals)
+#ifdef SEE
+      NULLIFY(species_list(ispecies)%see)
+#endif
     END DO
 
   END SUBROUTINE setup_species

@@ -267,7 +267,9 @@ MODULE shared_data
 
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
-
+#ifdef SEE
+    TYPE(see_type), POINTER :: see
+#endif
   END TYPE particle_species
 
   REAL(num), ALLOCATABLE, TARGET :: global_species_density(:)
@@ -927,5 +929,23 @@ MODULE shared_data
 
   ! Output
   LOGICAL :: neutral_collision_counter
+
+#ifdef SEE
+  TYPE see_type
+    INTEGER :: species_impact, species_electron
+    LOGICAL :: const_yield_model
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: cross_section, energy
+    PROCEDURE(see_process), POINTER, NOPASS :: see_subroutine
+  END TYPE see_type
+
+  ABSTRACT INTERFACE
+    SUBROUTINE see_process(current_part, current_species)
+      IMPORT particle
+      IMPORT particle_species
+      TYPE(particle), POINTER, INTENT(INOUT) :: current_part
+      TYPE(particle_species), POINTER, INTENT(IN) :: current_species
+    END SUBROUTINE see_process
+  END INTERFACE
+#endif
 
 END MODULE shared_data

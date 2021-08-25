@@ -275,6 +275,9 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
 
+# Secondary electron emission
+DEFINES += $(D)SEE
+
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
   DEFINES += $(D)PETSC
@@ -332,7 +335,7 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
   electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.f90 \
   neutral_collisions.F90 background.f90 deck_background_block.F90 \
-  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90
+  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.f90 deck_see_block.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
 OBJFILES := $(OBJFILES:.F90=.o)
@@ -484,7 +487,8 @@ deck.o: deck.F90 bremsstrahlung.o custom_deck.o deck_boundaries_block.o \
   deck_laser_block.o deck_part_from_file_block.o deck_particle_probe_block.o \
   deck_qed_block.o deck_species_block.o deck_stencil_block.o \
   deck_subset_block.o deck_window_block.o photons.o strings.o utilities.o \
-  version_data.o deck_electrostatic_block.o deck_background_block.o $(SDFMOD)
+  version_data.o deck_electrostatic_block.o deck_background_block.o \
+  deck_see_block.o $(SDFMOD)
 
 deck_background_block.o: deck_background_block.F90 background.o constants.o \
   strings_advanced.o
@@ -512,6 +516,7 @@ deck_part_from_file_block.o: deck_part_from_file_block.F90 \
 deck_particle_probe_block.o: deck_particle_probe_block.F90 probes.o \
   strings_advanced.o utilities.o
 deck_qed_block.o: deck_qed_block.F90 strings_advanced.o utilities.o
+deck_see_block.o: deck_see_block.F90 see.o strings_advanced.o
 deck_species_block.o: deck_species_block.F90 partlist.o setup.o simple_io.o \
   strings_advanced.o utilities.o
 deck_stencil_block.o: deck_stencil_block.f90 fields.o strings_advanced.o
@@ -570,6 +575,7 @@ prefetch.o: prefetch.F90 shared_data.o
 probes.o: probes.F90 partlist.o $(SDFMOD)
 random_generator.o: random_generator.f90
 redblack_module.o: redblack_module.f90 partlist.o
+see.o: see.f90 strings_advanced.o shared_data.o
 setup.o: setup.F90 balance.o boundary.o constants.o fields.o helper.o \
   injectors.o laser.o mpi_routines.o mpi_subtype_control.o particle_id_hash.o \
   shunt.o split_particle.o timer.o version_data.o welcome.o window.o $(SDFMOD)\

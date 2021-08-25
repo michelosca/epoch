@@ -53,6 +53,9 @@ MODULE deck
 #endif
   ! Neutral background block
   USE deck_background_block
+#ifdef SEE
+  USE deck_see_block
+#endif
   ! Custom blocks
   USE custom_deck
   USE utilities
@@ -116,6 +119,9 @@ CONTAINS
     CALL electrostatic_deck_initialise
 #endif
     CALL background_deck_initialise
+#ifdef SEE
+    CALL see_deck_initialise
+#endif
 
   END SUBROUTINE deck_initialise
 
@@ -150,6 +156,9 @@ CONTAINS
     CALL window_deck_finalise
 #ifdef ELECTROSTATIC
     CALL electrostatic_deck_finalise
+#endif
+#ifdef SEE
+    CALL see_deck_finalise
 #endif
   END SUBROUTINE deck_finalise
 
@@ -204,6 +213,10 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_start
+#endif
+#ifdef SEE
+    ELSE IF (str_cmp(block_name, 'see')) THEN
+      CALL see_block_start
 #endif
     END IF
 
@@ -261,6 +274,10 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_end
+#endif
+#ifdef SEE
+    ELSE IF (str_cmp(block_name, 'see')) THEN
+      CALL see_block_end
 #endif
     END IF
 
@@ -363,6 +380,12 @@ CONTAINS
           electrostatic_block_handle_element(block_element, block_value)
       RETURN
 #endif
+#ifdef SEE
+    ELSE IF (str_cmp(block_name, 'see')) THEN
+      handle_block = &
+          see_block_handle_element(block_element, block_value)
+      RETURN
+#endif
     END IF
 
     handle_block = c_err_unknown_block
@@ -420,6 +443,9 @@ CONTAINS
 
 #ifdef ELECTROSTATIC
     errcode_deck = IOR(errcode_deck, electrostatic_block_check())
+#endif
+#ifdef SEE
+    errcode_deck = IOR(errcode_deck, see_block_check())
 #endif
 
     ! Collision with neutral background
