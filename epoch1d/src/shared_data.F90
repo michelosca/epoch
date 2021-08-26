@@ -936,14 +936,15 @@ MODULE shared_data
     LOGICAL :: const_yield_model
     REAL(num), ALLOCATABLE, DIMENSION(:) :: cross_section, energy
     PROCEDURE(see_process), POINTER, NOPASS :: see_subroutine
+    REAL(num) :: see_temp
   END TYPE see_type
 
   ABSTRACT INTERFACE
-    SUBROUTINE see_process(current_part, current_species)
+    SUBROUTINE see_process(current_part, species_id, pos_id, out_of_bounds)
       IMPORT particle
-      IMPORT particle_species
       TYPE(particle), POINTER, INTENT(INOUT) :: current_part
-      TYPE(particle_species), POINTER, INTENT(IN) :: current_species
+      INTEGER, INTENT(IN) :: species_id, pos_id
+      LOGICAL, INTENT(INOUT) :: out_of_bounds
     END SUBROUTINE see_process
   END INTERFACE
 #endif

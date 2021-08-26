@@ -23,6 +23,9 @@ MODULE boundary
   USE particle_id_hash_mod
   USE injectors
   USE random_generator
+#ifdef SEE
+  USE see
+#endif
 
   IMPLICIT NONE
 
@@ -640,6 +643,9 @@ CONTAINS
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
 #endif
+#ifdef SEE
+    TYPE(see_type), POINTER :: see_block
+#endif
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: injection_weight
 #endif
@@ -669,6 +675,9 @@ CONTAINS
       ELSE
         reinjection = .FALSE.
       END IF
+#ifdef SEE
+      see_block => species_list(ispecies)%see
+#endif
 #endif
 
       DO ix = -1, 1, 2
@@ -725,6 +734,12 @@ CONTAINS
                   injection_weight = injection_weight + part_weight 
 #endif
                 END IF
+#ifdef SEE
+                IF (ASSOCIATED(see_block)) THEN
+                  CALL see_block%see_subroutine(cur, ispecies, &
+                    0, out_of_bounds)
+                END IF
+#endif
 #endif
               END IF
             END IF
@@ -805,6 +820,12 @@ CONTAINS
                   injection_weight = injection_weight + part_weight
 #endif
                 END IF
+#ifdef SEE
+                IF (ASSOCIATED(see_block)) THEN
+                  CALL see_block%see_subroutine(cur, ispecies, &
+                    1, out_of_bounds)
+                END IF
+#endif
 #endif
               END IF
             END IF
@@ -887,6 +908,9 @@ CONTAINS
         CALL destroy_partlist(recv(ix))
       END DO
 
+#ifdef SEE
+      see_block => NULL()
+#endif
     END DO
 
   END SUBROUTINE particle_bcs

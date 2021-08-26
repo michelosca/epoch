@@ -470,7 +470,8 @@ background.o: background.f90 evaluate.o nc_auxiliary.o random_generator.o
 balance.o: balance.F90 boundary.o constants.o mpi_subtype_control.o \
   redblack_module.o timer.o utilities.o electrostatic.o
 boundary.o: boundary.F90 injectors.o laser.o mpi_subtype_control.o \
-  particle_id_hash.o particle_temperature.o partlist.o utilities.o
+  particle_id_hash.o particle_temperature.o partlist.o utilities.o \
+  see.o
 bremsstrahlung.o: bremsstrahlung.F90 calc_df.o partlist.o setup.o
 calc_df.o: calc_df.F90 boundary.o
 collisions.o: collisions.F90 calc_df.o prefetch.o
@@ -575,7 +576,7 @@ prefetch.o: prefetch.F90 shared_data.o
 probes.o: probes.F90 partlist.o $(SDFMOD)
 random_generator.o: random_generator.f90
 redblack_module.o: redblack_module.f90 partlist.o
-see.o: see.f90 strings_advanced.o shared_data.o
+see.o: see.f90 strings_advanced.o shared_data.o random_generator.o
 setup.o: setup.F90 balance.o boundary.o constants.o fields.o helper.o \
   injectors.o laser.o mpi_routines.o mpi_subtype_control.o particle_id_hash.o \
   shunt.o split_particle.o timer.o version_data.o welcome.o window.o $(SDFMOD)\

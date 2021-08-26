@@ -31,6 +31,7 @@ MODULE deck_see_block
   
   TYPE(see_type), POINTER :: see_block
   LOGICAL :: name_set
+  INTEGER :: species_id
   
 CONTAINS
 
@@ -56,7 +57,26 @@ CONTAINS
   
 
   SUBROUTINE see_block_end
-    
+
+    INTEGER, DIMENSION(2) :: bc_species
+
+    IF (deck_state /= c_ds_first) THEN
+      bc_species = species_list(species_id)%bc_particle
+      IF (bc_species(1) /= c_bc_open) THEN
+        IF (rank == 0) THEN
+          WRITE(*,*) '*** WARNING ***'
+          WRITE(*,*) 'SEE module wont work at x-min unless open bc is set'
+        END IF
+      END IF
+
+      IF (bc_species(2) /= c_bc_open) THEN
+        IF (rank == 0) THEN
+          WRITE(*,*) '*** WARNING ***'
+          WRITE(*,*) 'SEE module wont work at x-max unless open bc is set'
+        END IF
+      END IF
+    END IF
+
   END SUBROUTINE see_block_end
   
   
@@ -77,6 +97,7 @@ CONTAINS
       DO i = 1, n_species
         species_name = TRIM(ADJUSTL(species_list(i)%name))
         IF (str_cmp(value, species_name)) THEN
+          species_id = i
           CALL init_see_block(i)
           see_block => species_list(i)%see
           name_set = .TRUE.
@@ -140,6 +161,16 @@ CONTAINS
       RETURN
     END IF
 
+    IF (str_cmp(element, 'see_temp')) THEN
+      see_block%see_temp = as_real_print(value, element, errcode)
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 'see_temp_ev')) THEN
+      see_block%see_temp = as_real_print(value, element, errcode) * 1.16e4_num
+      RETURN
+    END IF
+
   END FUNCTION see_block_handle_element
   
   
@@ -176,6 +207,14 @@ CONTAINS
       errcode = c_err_missing_elements
     END IF
     
+    IF (see_block%see_temp <= 0._num) THEN
+      IF (rank == 0) THEN
+        PRINT*, '*** ERROR ***'
+        PRINT*, 'Secondary electron tempererature, "see_temp(_ev)", ', &
+          'has not been defined'
+      END IF
+      errcode = c_err_missing_elements
+    END IF
   END FUNCTION see_block_check
 
 END MODULE deck_see_block
