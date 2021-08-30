@@ -20,6 +20,7 @@ MODULE see
   USE strings_advanced
   USE shared_data
   USE random_generator
+  USE partlist
 
   PRIVATE
 
@@ -75,34 +76,51 @@ CONTAINS
     TYPE(particle), POINTER, INTENT(INOUT) :: current_part
     INTEGER, INTENT(IN) :: ispecies, x_dir
     LOGICAL, INTENT(INOUT) :: rm_flag
-    TYPE(particle_species), POINTER :: species
+    TYPE(particle_species), POINTER :: impact_species
     TYPE(see_type), POINTER :: see_block
+    TYPE(particle), POINTER :: electron_part
     REAL(num) :: ran, see_rate, mass, x_pos
+    INTEGER :: ispecies_impact, ispecies_e
     REAL(num), DIMENSION(3) :: p_scat
 
-    species => species_list(ispecies)
-    see_block => species%see
+    impact_species => species_list(ispecies)
+    see_block => impact_species%see
+    see_rate = see_block%cross_section(1)
 
     ran = random()
-    see_rate = see_block%cross_section(1)
     IF (ran < see_rate) THEN
+      ispecies_impact = see_block%species_impact
+      ispecies_e = see_block%species_electron
+
+      ! Slightly different process for ions and electrons
+      IF (ispecies_e == ispecies) THEN
+        mass = impact_species%mass
+        electron_part => current_part
+        rm_flag = .FALSE.
+      ELSEIF (ispecies_impact == ispecies) THEN
+        mass = species_list(ispecies_e)%mass
+        CALL create_particle(electron_part)
+        CALL add_particle_to_partlist(species_list(ispecies_e)%attached_list, &
+          electron_part)
+      END IF
+
       ! Scatter particle
-      p_scat = random_momentum(species%mass, see_block%see_temp, x_dir)
-      current_part%part_p = p_scat
+      p_scat = random_momentum(mass, see_block%see_temp, x_dir)
+      electron_part%part_p = p_scat
+
       ! Place particle
       ran = random()
-      mass = species%mass
       IF (x_dir==0) THEN
         x_pos = x_min + p_scat(1) / mass * ran * dt
       ELSEIF (x_dir==1) THEN
         x_pos = x_max - p_scat(1) / mass * ran * dt
       ENDIF
-      current_part%part_pos = x_pos
-      ! This flag avoids the bc-subroutine from removing the particle
-      rm_flag = .FALSE.
+      electron_part%part_pos = x_pos
+
+      NULLIFY(electron_part)
     END IF
 
-    NULLIFY(see_block, species)
+    NULLIFY(see_block, impact_species)
 
   END SUBROUTINE see_constant_yield
 
