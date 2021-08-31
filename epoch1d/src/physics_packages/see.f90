@@ -113,7 +113,7 @@ CONTAINS
       IF (x_dir==0) THEN
         x_pos = x_min + p_scat(1) / mass * ran * dt
       ELSEIF (x_dir==1) THEN
-        x_pos = x_max - p_scat(1) / mass * ran * dt
+        x_pos = x_max + p_scat(1) / mass * ran * dt
       ENDIF
       electron_part%part_pos = x_pos
 

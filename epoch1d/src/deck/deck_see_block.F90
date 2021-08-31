@@ -30,15 +30,14 @@ MODULE deck_see_block
   PUBLIC :: see_block_handle_element, see_block_check
   
   TYPE(see_type), POINTER :: see_block
-  LOGICAL :: name_set
+  LOGICAL :: model_set, name_set
   INTEGER :: species_id
+  REAL(num) :: see_rate_buffer
   
 CONTAINS
 
   SUBROUTINE see_deck_initialise
 
-    name_set = .FALSE.
-    see_block => NULL()
   
   END SUBROUTINE see_deck_initialise
 
@@ -51,6 +50,13 @@ CONTAINS
   
   
   SUBROUTINE see_block_start
+
+    IF (deck_state /= c_ds_first) THEN
+      name_set = .FALSE.
+      see_block => NULL()
+      model_set = .FALSE.
+      see_rate_buffer = -1._num
+    END IF
   
   END SUBROUTINE see_block_start
   
@@ -75,6 +81,15 @@ CONTAINS
           WRITE(*,*) 'SEE module wont work at x-max unless open bc is set'
         END IF
       END IF
+
+      IF (.NOT.model_set) THEN
+        IF (rank == 0) THEN
+          WRITE(*,*) '*** ERROR ***'
+          WRITE(*,*) 'SEE model has not been defined'
+          CALL abort_code(c_err_required_element_not_set)
+        END IF
+      END IF
+
     END IF
 
   END SUBROUTINE see_block_end
@@ -141,6 +156,12 @@ CONTAINS
       ! Input in electron mass units
       CALL setup_see_model(see_block, value, errcode)
 
+      IF (see_rate_buffer > 0._num .AND. see_block%const_yield_model) THEN
+        see_block%cross_section(1) = see_rate_buffer
+        see_rate_buffer = -1._num
+      END IF
+
+      model_set = .TRUE.
       ! Check a see_model has been detected
       IF (errcode /= c_err_none) THEN
         IF (rank == 0) THEN
@@ -157,6 +178,8 @@ CONTAINS
     IF (str_cmp(element, 'see_rate')) THEN
       IF (see_block%const_yield_model) THEN
         see_block%cross_section(1) = as_real_print(value, element, errcode)
+      ELSE
+        see_rate_buffer = as_real_print(value, element, errcode)
       END IF
       RETURN
     END IF
