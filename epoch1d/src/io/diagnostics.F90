@@ -753,11 +753,12 @@ CONTAINS
             'poynt_flux', 'Poynting Flux', 'W/m^2', &
             c_stagger_cell_centre, calc_poynt_flux, array, fluxdir(1:3), &
             dim_tags)
-
+#ifdef NEUTRAL_COLLISIONS
         CALL write_nspecies_field(c_dump_neutral_collision, code, &
             'neutral_collisions', 'Neutral Collisions', &
             'Number of collisions', c_stagger_cell_centre, &
             calc_neutral_collisions, array)
+#endif
         IF (isubset /= 1) THEN
           DO i = 1, n_species
             CALL append_partlist(species_list(i)%attached_list, &
@@ -1579,6 +1580,7 @@ CONTAINS
               + REAL(array * dt, r4)
         END DO
         DEALLOCATE(array)
+#ifdef NEUTRAL_COLLISIONS
       CASE(c_dump_neutral_collision)
         ALLOCATE(array(1-ng:nx+ng))
         nd = 1
@@ -1593,6 +1595,7 @@ CONTAINS
           nd = nd + 1
         END DO
         DEALLOCATE(array)
+#endif
       END SELECT
 
     ELSE
@@ -1730,6 +1733,7 @@ CONTAINS
           avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
         END DO
         DEALLOCATE(array)
+#ifdef NEUTRAL_COLLISIONS
       CASE(c_dump_neutral_collision)
         ALLOCATE(array(1-ng:nx+ng))
         nd = 1
@@ -1744,6 +1748,7 @@ CONTAINS
           nd = nd + 1
         END DO
         DEALLOCATE(array)
+#endif
       END SELECT
     END IF
 
@@ -1983,6 +1988,7 @@ CONTAINS
     TYPE(subset), POINTER :: sub
     INTEGER, DIMENSION(2,c_ndims) :: ranges, ran_no_ng
     INTEGER, DIMENSION(c_ndims) :: new_dims
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collision variables
     INTEGER :: jspecies, nc_type, species1, species2, coll_index
     LOGICAL :: nc_flag, next_species
@@ -1990,6 +1996,7 @@ CONTAINS
     CHARACTER(LEN=string_length) :: ispecies_str, jspecies_str
     TYPE(neutrals_block), POINTER :: coll_block
     TYPE(collision_type_block), POINTER :: coll_type_block
+#endif
 
     INTERFACE
       SUBROUTINE func(data_array, current_species, direction)
@@ -2025,9 +2032,12 @@ CONTAINS
       subarray = subarray_field
     END IF
 
+#ifdef NEUTRAL_COLLISIONS
     nc_flag = .FALSE.
+#endif
     IF (PRESENT(fluxdir)) THEN
       ndirs = SIZE(fluxdir)
+#ifdef NEUTRAL_COLLISIONS
     ELSEIF (id == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
       nc_average = .FALSE.
       nc_flag = .TRUE.
@@ -2042,6 +2052,7 @@ CONTAINS
         IF (.NOT.avg%started) CYCLE
         nc_average = .TRUE.
       END DO
+#endif
     ELSE
       ndirs = 1
     END IF
@@ -2182,6 +2193,7 @@ CONTAINS
       temp_grid_id = 'grid/r_' // TRIM(sub%name)
 
       DO ispecies = 1, n_species
+#ifdef NEUTRAL_COLLISIONS
         IF (nc_flag) THEN ! neutral collisions
           IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
           idir = 0
@@ -2239,56 +2251,60 @@ CONTAINS
             END DO
           END DO
         ELSE
-          IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
-          DO idir = 1, ndirs
-            IF (PRESENT(dir_tags)) THEN
-              CALL check_name_length('dir tag', &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name))
+#endif
+        IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+        DO idir = 1, ndirs
+          IF (PRESENT(dir_tags)) THEN
+            CALL check_name_length('dir tag', &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-            ELSE
-              CALL check_name_length('species', &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
+            temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+          ELSE
+            CALL check_name_length('species', &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
-            END IF
+            temp_block_id = TRIM(block_id) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
+          END IF
 
-            CALL check_name_length('subset', &
-              TRIM(temp_name) // '/Reduced_' // TRIM(sub%name))
+          CALL check_name_length('subset', &
+            TRIM(temp_name) // '/Reduced_' // TRIM(sub%name))
 
-            temp_block_id = TRIM(temp_block_id) // '/r_' // TRIM(sub%name)
-            temp_name = TRIM(temp_name) // '/Reduced_' // TRIM(sub%name)
+          temp_block_id = TRIM(temp_block_id) // '/r_' // TRIM(sub%name)
+          temp_name = TRIM(temp_name) // '/Reduced_' // TRIM(sub%name)
 
-            IF (PRESENT(fluxdir)) THEN
-              CALL func(array, ispecies, fluxdir(idir))
-            ELSE
-              CALL func(array, ispecies)
-            END IF
+          IF (PRESENT(fluxdir)) THEN
+            CALL func(array, ispecies, fluxdir(idir))
+          ELSE
+            CALL func(array, ispecies)
+          END IF
 
-            ii = sub%n_start(1) + 1
-            DO i = 1, rnx
-              reduced(i) = array(ii)
-              ii = ii + sub%skip_dir(1)
-            END DO
-
-            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-              TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
-              TRIM(temp_grid_id), reduced, rsubtype, rsubarray, convert)
-
-            sub%dump_field_grid = .TRUE.
+          ii = sub%n_start(1) + 1
+          DO i = 1, rnx
+            reduced(i) = array(ii)
+            ii = ii + sub%skip_dir(1)
           END DO
+
+          CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+            TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+            TRIM(temp_grid_id), reduced, rsubtype, rsubarray, convert)
+
+          sub%dump_field_grid = .TRUE.
+        END DO
+#ifdef NEUTRAL_COLLISIONS
         END IF
+#endif
       END DO
     ELSE IF (dump_species) THEN
       DO ispecies = 1, n_species
+#ifdef NEUTRAL_COLLISIONS
         IF (nc_flag) THEN ! neutral collisions
           IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
           idir = 0
@@ -2346,58 +2362,61 @@ CONTAINS
             END DO
           END DO
         ELSE
-          IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
-          DO idir = 1, ndirs
-            IF (PRESENT(dir_tags)) THEN
-              CALL check_name_length('dir tag', &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name))
+#endif
+        IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+        DO idir = 1, ndirs
+          IF (PRESENT(dir_tags)) THEN
+            CALL check_name_length('dir tag', &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-            ELSE
-              CALL check_name_length('species', &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
+            temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+          ELSE
+            CALL check_name_length('species', &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
+            temp_block_id = TRIM(block_id) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
+          END IF
+
+          IF (PRESENT(fluxdir)) THEN
+            CALL func(array, ispecies, fluxdir(idir))
+          ELSE
+            CALL func(array, ispecies)
+          END IF
+
+          IF (dump_part) THEN
+            ! First subset is main dump so there wont be any restrictions
+            temp_grid_id = 'grid/' // TRIM(sub%name)
+
+            i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
+            IF (i1 < i0) THEN
+              i0 = 1
+              i1 = i0
             END IF
 
-            IF (PRESENT(fluxdir)) THEN
-              CALL func(array, ispecies, fluxdir(idir))
-            ELSE
-              CALL func(array, ispecies)
-            END IF
+            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+              TRIM(temp_name), TRIM(units), new_dims, stagger, temp_grid_id, &
+              array(i0:i1), rsubtype, rsubarray, convert)
 
-            IF (dump_part) THEN
-              ! First subset is main dump so there wont be any restrictions
-              temp_grid_id = 'grid/' // TRIM(sub%name)
+            sub%dump_field_grid = .TRUE.
+          ELSE
+            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+              TRIM(temp_name), TRIM(units), dims, stagger, 'grid', array, &
+              subtype, subarray, convert)
 
-              i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
-              IF (i1 < i0) THEN
-                i0 = 1
-                i1 = i0
-              END IF
-
-              CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-                TRIM(temp_name), TRIM(units), new_dims, stagger, temp_grid_id, &
-                array(i0:i1), rsubtype, rsubarray, convert)
-
-              sub%dump_field_grid = .TRUE.
-            ELSE
-              CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-                TRIM(temp_name), TRIM(units), dims, stagger, 'grid', array, &
-                subtype, subarray, convert)
-
-              dump_field_grid = .TRUE.
-            END IF
-          END DO
+            dump_field_grid = .TRUE.
+          END IF
+        END DO
+#ifdef NEUTRAL_COLLISIONS
         END IF
+#endif
       END DO
     END IF
 
@@ -2447,8 +2466,11 @@ CONTAINS
 
         IF (avg%n_species > 0) THEN
           iav = avg%species_sum
+#ifdef NEUTRAL_COLLISIONS
           IF (nc_flag) ndirs = 1
+#endif
           DO ispecies = 1, avg%n_species / ndirs
+#ifdef NEUTRAL_COLLISIONS
             IF (nc_flag) THEN ! This determines the collision type
               coll_index = 0
               next_species = .TRUE.
@@ -2472,6 +2494,9 @@ CONTAINS
             ELSE
               IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
             END IF
+#else
+            IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+#endif
 
             DO idir = 1, ndirs
               IF (PRESENT(dir_tags)) THEN
@@ -2484,6 +2509,7 @@ CONTAINS
                 temp_name = &
                     'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
                     // '_averaged/' // TRIM(io_list(ispecies)%name)
+#ifdef NEUTRAL_COLLISIONS
               ELSE IF (nc_flag) THEN
                 colltype_str = coll_type_block%io_name
                 IF (str_cmp(colltype_str, 'none')) THEN
@@ -2503,6 +2529,7 @@ CONTAINS
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
                 temp_name = 'Derived/' // TRIM(name) // '_averaged/' // &
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
+#endif
               ELSE
                 CALL check_name_length('species', &
                     'Derived/' // TRIM(name) &
@@ -2557,8 +2584,11 @@ CONTAINS
 
         IF (avg%n_species > 0) THEN
           iav = avg%species_sum
+#ifdef NEUTRAL_COLLISIONS
           IF (nc_flag) ndirs = 1
+#endif
           DO ispecies = 1, avg%n_species / ndirs
+#ifdef NEUTRAL_COLLISIONS
             IF (nc_flag) THEN ! This determines the collision type
               coll_index = 0
               next_species = .TRUE.
@@ -2582,6 +2612,9 @@ CONTAINS
             ELSE
               IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
             END IF
+#else
+            IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+#endif
 
             DO idir = 1, ndirs
               IF (PRESENT(dir_tags)) THEN
@@ -2594,6 +2627,7 @@ CONTAINS
                 temp_name = &
                     'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
                     // '_averaged/' // TRIM(io_list(ispecies)%name)
+#ifdef NEUTRAL_COLLISIONS
               ELSE IF (nc_flag) THEN
                 colltype_str = coll_type_block%io_name
                 IF (str_cmp(colltype_str, 'none')) THEN
@@ -2613,6 +2647,7 @@ CONTAINS
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
                 temp_name = 'Derived/' // TRIM(name) // '_averaged/' // &
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
+#endif
               ELSE
                 CALL check_name_length('species', &
                     'Derived/' // TRIM(name) &
@@ -2638,15 +2673,19 @@ CONTAINS
         avg%array = 0.0_num
       END IF
 
+#ifdef NEUTRAL_COLLISIONS
       IF (nc_flag) reset_collisions = .TRUE.
+#endif
       avg%real_time = 0.0_num
       avg%started = .FALSE.
     END DO
 
+#ifdef NEUTRAL_COLLISIONS
     IF (nc_flag .AND. &
       IAND(mask, c_io_never) == 0 .AND. IAND(mask, code) /= 0) THEN
       reset_collisions = .TRUE.
     END IF
+#endif
 
   END SUBROUTINE write_nspecies_field
 
@@ -3690,6 +3729,7 @@ CONTAINS
 
 
 
+#ifdef NEUTRAL_COLLISIONS
   SUBROUTINE collision_counter_set_zero
 
     INTEGER :: ispecies, jspecies, nc_type
@@ -3708,5 +3748,6 @@ CONTAINS
     END DO
 
   END SUBROUTINE collision_counter_set_zero
+#endif
 
 END MODULE diagnostics
