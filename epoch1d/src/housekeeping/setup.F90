@@ -349,7 +349,9 @@ CONTAINS
       NULLIFY(species_list(ispecies)%secondary_list)
       NULLIFY(species_list(ispecies)%background_density)
       species_list(ispecies)%bc_particle = c_bc_null
+#ifdef ELECTROSTATIC
       species_list(ispecies)%reinjection_id = -1
+#endif
     END DO
 
     DO ispecies = 1, n_species

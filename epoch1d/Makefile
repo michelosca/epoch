@@ -333,7 +333,7 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   shared_data.F90 shunt.F90 simple_io.F90 split_particle.F90 stack.f90 \
   strings.f90 strings_advanced.f90 terminal_controls.F90 timer.f90 \
   tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
-  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.f90 \
+  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
   neutral_collisions.F90 background.F90 deck_background_block.F90 \
   nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90
 
@@ -502,7 +502,7 @@ deck_control_block.o: deck_control_block.F90 fields.o strings_advanced.o \
   timer.o $(SDFMOD)
 deck_dist_fn_block.o: deck_dist_fn_block.f90 dist_fn.o strings_advanced.o \
   utilities.o
-deck_electrostatic_block.o: deck_electrostatic_block.f90 strings_advanced.o \
+deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
 deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
 deck_injector_block.o: deck_injector_block.f90 injectors.o shunt.o \

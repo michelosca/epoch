@@ -264,8 +264,10 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
+#ifdef ELECTROSTATIC
     ! Species reinjection
     INTEGER :: reinjection_id
+#endif
 #ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
