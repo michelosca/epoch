@@ -546,7 +546,8 @@ CONTAINS
       errcode = c_err_terminate
     END IF
 #ifdef PART_PERP_POSITION
-    IF ( (.NOT.y_min_flag) .OR. (.NOT.y_max_flag)) THEN
+    IF ( (.NOT.y_min_flag .AND. y_max_flag) &
+      .OR. (y_min_flag .AND. .NOT.y_max_flag)) THEN
       IF (rank == 0) THEN
         DO iu = 1, nio_units ! Print to stdout and to file
           io = io_units(iu)
