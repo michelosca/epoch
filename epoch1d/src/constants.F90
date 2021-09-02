@@ -645,8 +645,11 @@ MODULE constants
   INTEGER, PARAMETER :: c_subset_id_min     = 22
   INTEGER, PARAMETER :: c_subset_id_max     = 23
   INTEGER, PARAMETER :: c_subset_max        = 23
-
+#ifdef NEUTRAL_COLLISIONS
+  INTEGER, PARAMETER :: c_max_string_length = 72
+#else
   INTEGER, PARAMETER :: c_max_string_length = 68
+#endif
   INTEGER, PARAMETER :: c_max_prefix = 16
   ! Maximum path length on Linux machines
   INTEGER, PARAMETER :: c_max_path_length = 4096 + c_max_prefix

@@ -14,6 +14,7 @@
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE electrostatic
+#ifdef ELECTROSTATIC
 #ifndef TRIDIAG
 #include <petsc/finclude/petscvec.h>
 #include <petsc/finclude/petscmat.h>
@@ -849,5 +850,5 @@ CONTAINS
 
   END SUBROUTINE finalize_petsc
 #endif
-
+#endif
 END MODULE electrostatic

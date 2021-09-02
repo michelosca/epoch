@@ -16,7 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE nc_auxiliary
-
+#ifdef NEUTRAL_COLLISIONS
   USE shared_data
   USE utilities
 
@@ -396,4 +396,5 @@ CONTAINS
 
   END SUBROUTINE print_collision_type
 
+#endif
 END MODULE nc_auxiliary

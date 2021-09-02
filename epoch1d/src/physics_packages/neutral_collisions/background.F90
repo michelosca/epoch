@@ -16,6 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE background
+#ifdef NEUTRAL_COLLISIONS
 
   USE evaluator
   USE nc_auxiliary
@@ -146,4 +147,5 @@ CONTAINS
 
   END FUNCTION random_background_velocity  
   
+#endif
 END MODULE background

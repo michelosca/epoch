@@ -45,7 +45,6 @@ PROGRAM pic
   USE split_particle
   USE collisions
   USE nc_setup
-  USE neutral_collisions
   USE particle_migration
   USE ionise
   USE calc_df
@@ -59,6 +58,9 @@ PROGRAM pic
 #endif
 #ifdef ELECTROSTATIC
   USE electrostatic
+#endif
+#ifdef NEUTRAL_COLLISIONS
+  USE neutral_collisions
 #endif
 
   IMPLICIT NONE
@@ -131,7 +133,9 @@ PROGRAM pic
   CALL manual_load
   CALL finish_injector_setup
 
+#ifdef NEUTRAL_COLLISIONS
   IF (ANY(neutral_coll)) CALL final_nc_setup
+#endif
 
   CALL initialise_window ! window.f90
   CALL set_dt
@@ -251,8 +255,12 @@ PROGRAM pic
           IF (use_collisional_ionisation) THEN
             CALL collisional_ionisation
           ELSE
+#ifdef NEUTRAL_COLLISIONS
             IF (ANY(coulomb_coll)) CALL particle_collisions
             IF (ANY(neutral_coll)) CALL run_neutral_collisions
+#else
+            CALL particle_collisions
+#endif
           END IF
         END IF
 

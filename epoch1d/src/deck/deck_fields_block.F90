@@ -71,7 +71,9 @@ CONTAINS
     CHARACTER(LEN=string_length) :: filename
     INTEGER :: err
     LOGICAL :: got_file
+#ifdef ELECTROSTATIC
     REAL(num) :: dummy
+#endif
 
     errcode = c_err_none
     IF (deck_state == c_ds_first) RETURN

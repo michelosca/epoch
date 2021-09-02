@@ -47,7 +47,9 @@ CONTAINS
     dumpmask_warned = .FALSE.
 
     track_ejected_particles = .FALSE.
-    neutral_collision_counter = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
+   neutral_collision_counter = .FALSE.
+#endif
     dump_absorption = .FALSE.
     averaged_var_block = 0
     new_style_io_block = .FALSE.
@@ -727,9 +729,11 @@ CONTAINS
     ELSE IF (str_cmp(element, 'total_energy_sum')) THEN
       elementselected = c_dump_total_energy_sum
 
+#ifdef NEUTRAL_COLLISIONS
     ELSE IF (str_cmp(element, 'neutral_collisions')) THEN
       elementselected = c_dump_neutral_collision
       neutral_collision_counter = .TRUE.
+#endif
     ELSE
       got_element = .FALSE.
 
@@ -852,7 +856,9 @@ CONTAINS
         IF (mask_element == c_dump_jy) bad = .FALSE.
         IF (mask_element == c_dump_jz) bad = .FALSE.
         IF (mask_element == c_dump_total_energy_sum) bad = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
         IF (mask_element == c_dump_neutral_collision) bad = .FALSE.
+#endif
 
         IF (bad) THEN
           IF (rank == 0 .AND. IAND(mask, c_io_species) /= 0) THEN
@@ -905,7 +911,9 @@ CONTAINS
         IF (mask_element == c_dump_temperature_y) bad = .FALSE.
         IF (mask_element == c_dump_temperature_z) bad = .FALSE.
         IF (mask_element == c_dump_ekflux) bad = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
         IF (mask_element == c_dump_neutral_collision) bad = .FALSE.
+#endif
         IF (bad) THEN
           IF (rank == 0) THEN
             DO iu = 1, nio_units ! Print to stdout and to file

@@ -634,14 +634,16 @@ CONTAINS
     INTEGER :: xbd
     INTEGER(i8) :: ixp
     INTEGER, DIMENSION(2*c_ndims) :: bc_species
-    LOGICAL :: out_of_bounds, reinjection
-    INTEGER :: sgn, bc, ispecies, i, ix, n_injections
+    LOGICAL :: out_of_bounds
+    INTEGER :: sgn, bc, ispecies, i, ix
     REAL(num) :: temp(3)
     REAL(num) :: part_pos, boundary_shift
     REAL(num) :: x_min_outer, x_max_outer
     REAL(num) :: x_shift
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
+    LOGICAL :: reinjection
+    INTEGER :: n_injections
 #endif
 #ifdef SEE
     TYPE(see_type), POINTER :: see_block
@@ -885,6 +887,7 @@ CONTAINS
         cur => next
       END DO
 
+#ifdef ELECTROSTATIC
       IF (reinjection) THEN
 #ifndef PER_SPECIES_WEIGHT
         CALL inject_electron_ion_pair(n_injections, species_list(ispecies), &
@@ -893,6 +896,7 @@ CONTAINS
         CALL inject_electron_ion_pair(n_injections, species_list(ispecies))
 #endif
       END IF
+#endif
 
       ! swap Particles
       DO ix = -1, 1, 2
@@ -1225,6 +1229,7 @@ CONTAINS
 
 
 
+#ifdef ELECTROSTATIC
   SUBROUTINE inject_electron_ion_pair(outflow_particles, part_species, &
     total_weight)
 
@@ -1372,5 +1377,6 @@ CONTAINS
     random_momentum(3) = random_box_muller(var(3))
 
   END FUNCTION random_momentum
+#endif
 
 END MODULE boundary

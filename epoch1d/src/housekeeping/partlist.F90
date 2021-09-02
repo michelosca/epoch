@@ -119,7 +119,9 @@ CONTAINS
     NULLIFY(partlist%head)
     NULLIFY(partlist%tail)
     partlist%count = 0
+#ifdef NEUTRAL_COLLISIONS
     partlist%coll_counter = 0
+#endif
     partlist%id_update = 0
     partlist%safe = .TRUE.
     IF (PRESENT(holds_copies)) THEN
