@@ -17,7 +17,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE deck_see_block
-
+#ifdef SEE
   USE strings_advanced
   USE see
 
@@ -204,6 +204,8 @@ CONTAINS
 
     errcode = c_err_none
 
+    IF (.NOT.ASSOCIATED(see_block)) RETURN
+
     IF (see_block%const_yield_model) THEN
       IF (see_block%cross_section(1) < 0._num) THEN
         IF (rank == 0) THEN
@@ -239,5 +241,5 @@ CONTAINS
       errcode = c_err_missing_elements
     END IF
   END FUNCTION see_block_check
-
+#endif
 END MODULE deck_see_block

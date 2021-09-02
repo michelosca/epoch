@@ -16,7 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE see
-
+#ifdef SEE
   USE strings_advanced
   USE shared_data
   USE random_generator
@@ -143,4 +143,5 @@ CONTAINS
 
   END FUNCTION random_momentum
 
+#endif
 END MODULE see 
