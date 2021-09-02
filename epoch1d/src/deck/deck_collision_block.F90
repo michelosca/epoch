@@ -41,7 +41,6 @@ CONTAINS
 #ifdef NEUTRAL_COLLISIONS
       cross_section_table_location = &
         'src/physics_packages/TABLES/neutral_collisions'
-      resolve_sheath = .FALSE.
 #endif
    ELSE
       ALLOCATE(coll_pairs_touched(1:n_species, 1:n_species))
@@ -201,11 +200,6 @@ CONTAINS
 #ifdef NEUTRAL_COLLISIONS
     IF (str_cmp(element, 'cross_section_table_location')) THEN
       cross_section_table_location = TRIM(ADJUSTL(value))
-      RETURN
-    END IF
-
-    IF (str_cmp(element, 'resolve_sheath')) THEN
-      resolve_sheath = as_logical_print(value, element, errcode)
       RETURN
     END IF
 #endif
