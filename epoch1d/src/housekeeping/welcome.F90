@@ -159,6 +159,9 @@ CONTAINS
 #ifdef ELECTROSTATIC
     found = .TRUE.
 #endif
+#ifdef PART_PERP_POSITION
+    found = .TRUE.
+#endif
     IF (.NOT.found) THEN
       WRITE(*,*) '*************************************************************'
       WRITE(*,*) 'The code was compiled with no compile time options'
@@ -279,6 +282,10 @@ CONTAINS
 #else
     defines = IOR(defines, c_def_es_petsc)
     WRITE(*,*) 'PETSc linear solver -DPETSC'
+#endif
+#ifdef PART_PERP_POSITION
+    defines = IOR(defines, c_def_part_perp_position)
+    WRITE(*,*) 'Particle y-position -DPART_PERP_POSITION'
 #endif
 #endif
     WRITE(*,*) '*************************************************************'
