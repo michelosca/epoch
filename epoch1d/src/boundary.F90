@@ -631,8 +631,8 @@ CONTAINS
     INTEGER :: xbd
     INTEGER(i8) :: ixp
     INTEGER, DIMENSION(2*c_ndims) :: bc_species
-    LOGICAL :: out_of_bounds, reinjection
-    INTEGER :: sgn, bc, ispecies, i, ix, n_injections
+    LOGICAL :: out_of_bounds
+    INTEGER :: sgn, bc, ispecies, i, ix
     REAL(num) :: temp(3)
     REAL(num) :: part_pos, boundary_shift
     REAL(num) :: x_min_outer, x_max_outer
@@ -642,6 +642,8 @@ CONTAINS
 #endif
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
+    LOGICAL :: reinjection
+    INTEGER :: n_injections
 #endif
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: injection_weight
@@ -885,6 +887,7 @@ CONTAINS
         cur => next
       END DO
 
+#ifdef ELECTROSTATIC
       IF (reinjection) THEN
 #ifndef PER_SPECIES_WEIGHT
         CALL reinject_particles(n_injections, species_list(ispecies), 0, &
@@ -893,6 +896,7 @@ CONTAINS
         CALL reinject_particles(n_injections, species_list(ispecies), 0)
 #endif
       END IF
+#endif
 
 #ifdef PART_PERP_POSITION
       ! injection_flag == 1 set new part_pos_y = y_min
@@ -1228,7 +1232,7 @@ CONTAINS
   END SUBROUTINE cpml_advance_b_currents
 
 
-
+#ifdef ELECTROSTATIC
   SUBROUTINE reinject_particles(outflow_particles, part_species, &
     injection_flag, total_weight)
 
@@ -1440,6 +1444,7 @@ CONTAINS
     random_momentum(3) = random_box_muller(var(3))
 
   END FUNCTION random_momentum
+#endif
 
 
 END MODULE boundary

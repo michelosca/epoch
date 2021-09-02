@@ -275,13 +275,16 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
 
-# Particle perpendicular (y-axis) position
-DEFINES += $(D)PART_PERP_POSITION
+# Collisions between neutral and chaged particles
+DEFINES += $(D)NEUTRAL_COLLISIONS
 
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
   DEFINES += $(D)PETSC
   #DEFINES += $(D)TRIDIAG
+
+  # Particle perpendicular (y-axis) position
+  DEFINES += $(D)PART_PERP_POSITION
 endif
 
 # Automatically add -DPARSER_CHECKING for debug builds
@@ -333,8 +336,8 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   shared_data.F90 shunt.F90 simple_io.F90 split_particle.F90 stack.f90 \
   strings.f90 strings_advanced.f90 terminal_controls.F90 timer.f90 \
   tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
-  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.f90 \
-  neutral_collisions.F90 background.f90 deck_background_block.F90 \
+  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
+  neutral_collisions.F90 background.F90 deck_background_block.F90 \
   nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
@@ -466,7 +469,7 @@ FORCE:
 
 # All the dependencies
 
-background.o: background.f90 evaluate.o nc_auxiliary.o random_generator.o
+background.o: background.F90 evaluate.o nc_auxiliary.o random_generator.o
 balance.o: balance.F90 boundary.o constants.o mpi_subtype_control.o \
   redblack_module.o timer.o utilities.o electrostatic.o
 boundary.o: boundary.F90 injectors.o laser.o mpi_subtype_control.o \
@@ -502,7 +505,7 @@ deck_control_block.o: deck_control_block.F90 fields.o strings_advanced.o \
   timer.o $(SDFMOD)
 deck_dist_fn_block.o: deck_dist_fn_block.f90 dist_fn.o strings_advanced.o \
   utilities.o
-deck_electrostatic_block.o: deck_electrostatic_block.f90 strings_advanced.o \
+deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
 deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
 deck_injector_block.o: deck_injector_block.f90 injectors.o shunt.o \

@@ -51,8 +51,10 @@ MODULE deck
 #ifdef ELECTROSTATIC
   USE deck_electrostatic_block
 #endif
+#ifdef NEUTRAL_COLLISIONS
   ! Neutral background block
   USE deck_background_block
+#endif
   ! Custom blocks
   USE custom_deck
   USE utilities
@@ -115,7 +117,9 @@ CONTAINS
 #ifdef ELECTROSTATIC
     CALL electrostatic_deck_initialise
 #endif
+#ifdef NEUTRAL_COLLISIONS
     CALL background_deck_initialise
+#endif
 
   END SUBROUTINE deck_initialise
 
@@ -143,7 +147,9 @@ CONTAINS
 #endif
     CALL qed_deck_finalise
     CALL bremsstrahlung_deck_finalise
+#ifdef NEUTRAL_COLLISIONS
     CALL background_deck_finalise
+#endif
     CALL species_deck_finalise
     CALL part_from_file_deck_finalise ! Must be called after
                                       ! species_deck_finalise
@@ -193,8 +199,10 @@ CONTAINS
       CALL qed_block_start
     ELSE IF (str_cmp(block_name, 'bremsstrahlung')) THEN
       CALL bremsstrahlung_block_start
+#ifdef NEUTRAL_COLLISIONS
     ELSE IF (str_cmp(block_name, 'background')) THEN
       CALL background_block_start
+#endif
     ELSE IF (str_cmp(block_name, 'species')) THEN
       CALL species_block_start
     ELSE IF (str_cmp(block_name, 'window')) THEN
@@ -250,8 +258,10 @@ CONTAINS
       CALL qed_block_end
     ELSE IF (str_cmp(block_name, 'bremsstrahlung')) THEN
       CALL bremsstrahlung_block_end
+#ifdef NEUTRAL_COLLISIONS
     ELSE IF (str_cmp(block_name, 'background')) THEN
       CALL background_block_end
+#endif
     ELSE IF (str_cmp(block_name, 'species')) THEN
       CALL species_block_end
     ELSE IF (str_cmp(block_name, 'window')) THEN
@@ -343,10 +353,12 @@ CONTAINS
       handle_block = bremsstrahlung_block_handle_element(block_element, &
           block_value)
       RETURN
+#ifdef NEUTRAL_COLLISIONS
     ELSE IF (str_cmp(block_name, 'background')) THEN
       handle_block = background_block_handle_element(block_element, &
           block_value)
       RETURN
+#endif
     ELSE IF (str_cmp(block_name, 'species')) THEN
       handle_block = species_block_handle_element(block_element, block_value)
       RETURN
@@ -422,10 +434,12 @@ CONTAINS
     errcode_deck = IOR(errcode_deck, electrostatic_block_check())
 #endif
 
+#ifdef NEUTRAL_COLLISIONS
     ! Collision with neutral background
     IF (n_species_bg > n_species) THEN
       errcode_deck = IOR(errcode_deck, background_block_check())
     END IF
+#endif
 
     errcode_deck = IOR(errcode_deck, custom_blocks_check())
 

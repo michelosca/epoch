@@ -80,10 +80,12 @@ CONTAINS
     user_dt = 0._num
     force_user_dt= .FALSE.
 
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     user_max_b_field = 0._num
     user_max_e_field = 0._num
     user_max_neutral_coll_freq = TINY(0._num)
+#endif
 
     ! Perpendicular particle position
 #ifdef PART_PERP_POSITION
@@ -461,6 +463,7 @@ CONTAINS
       force_user_dt= .TRUE.
 #endif
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     ELSE IF (str_cmp(element, 'neutral_coll_frequency_factor')) THEN
       neutral_coll_freq_fact = as_real_print(value, element, errcode)
@@ -472,6 +475,7 @@ CONTAINS
       user_max_neutral_coll_freq = as_real_print(value, element, errcode)
     ELSE
       errcode = c_err_unknown_element
+#endif
 
     END IF
 

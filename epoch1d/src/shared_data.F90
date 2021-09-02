@@ -160,7 +160,9 @@ MODULE shared_data
     TYPE(particle), POINTER :: head
     TYPE(particle), POINTER :: tail
     INTEGER(i8) :: count
+#ifdef NEUTRAL_COLLISIONS
     INTEGER(i8) :: coll_counter
+#endif
     INTEGER :: id_update
     ! Pointer is safe if the particles in it are all unambiguously linked
     LOGICAL :: safe
@@ -265,11 +267,14 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
+#ifdef ELECTROSTATIC
     ! Species reinjection
     INTEGER :: reinjection_id
-
+#endif
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
+#endif
 
   END TYPE particle_species
 
@@ -809,6 +814,7 @@ MODULE shared_data
   REAL(num) :: convect_curr_min, convect_curr_max
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
 
+#ifdef NEUTRAL_COLLISIONS
 !------------------------------------------------------------------------------
 ! Charged-neutral collisions - Written by M. Osca Engelbrecht
 !------------------------------------------------------------------------------
@@ -928,10 +934,10 @@ MODULE shared_data
   REAL(num) :: dt_neutral_collisions, dt_accel
   INTEGER :: n_species_bg, n_backgrounds
   INTEGER, ALLOCATABLE, DIMENSION(:) :: total_collision_types
-  LOGICAL :: resolve_sheath
   TYPE(background_block), DIMENSION(:), POINTER :: background_list
 
   ! Output
   LOGICAL :: neutral_collision_counter
+#endif
 
 END MODULE shared_data

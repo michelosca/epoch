@@ -86,7 +86,6 @@ begin:collisions
   use_collisions = T
   collide = none
   use_nanbu = T
-  resolve_sheath = T
 end:collisions
 
 
