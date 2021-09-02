@@ -285,6 +285,9 @@ ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
 
   # Secondary electron emission
   DEFINES += $(D)SEE
+
+  # Particle perpendicular (y-axis) position
+  DEFINES += $(D)PART_PERP_POSITION
 endif
 
 # Automatically add -DPARSER_CHECKING for debug builds

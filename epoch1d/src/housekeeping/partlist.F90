@@ -76,6 +76,9 @@ CONTAINS
 #ifdef WORK_DONE_INTEGRATED
     nvar = nvar+6
 #endif
+#ifdef PART_PERP_POSITION
+    nvar = nvar+1
+#endif
     ! Persistent IDs
     IF (any_persistent_subset) nvar = nvar+1
 
@@ -473,6 +476,11 @@ CONTAINS
     array(cpos+5) = a_particle%work_z_total
     cpos = cpos+6
 #endif
+#ifdef PART_PERP_POSITION
+    ! y-position of particle
+    array(cpos) = a_particle%part_pos_y
+    cpos = cpos+1
+#endif
     IF (any_persistent_subset) THEN
       temp_i8 = id_registry%map(a_particle)
       array(cpos) = TRANSFER(temp_i8, 1.0_num)
@@ -547,6 +555,11 @@ CONTAINS
     a_particle%work_y_total = array(cpos+4)
     a_particle%work_z_total = array(cpos+5)
     cpos = cpos+6
+#endif
+#ifdef PART_PERP_POSITION
+    ! unpack y-pos from particle
+    a_particle%part_pos_y= array(cpos)
+    cpos = cpos+1
 #endif
     IF (any_persistent_subset) THEN
       CALL id_registry%add_with_map(a_particle, TRANSFER(array(cpos), temp_i8))
