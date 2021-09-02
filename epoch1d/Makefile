@@ -341,7 +341,7 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
   electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
   neutral_collisions.F90 background.F90 deck_background_block.F90 \
-  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.f90 deck_see_block.F90
+  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.F90 deck_see_block.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
 OBJFILES := $(OBJFILES:.F90=.o)
@@ -582,7 +582,7 @@ prefetch.o: prefetch.F90 shared_data.o
 probes.o: probes.F90 partlist.o $(SDFMOD)
 random_generator.o: random_generator.f90
 redblack_module.o: redblack_module.f90 partlist.o
-see.o: see.f90 strings_advanced.o shared_data.o random_generator.o partlist.o
+see.o: see.F90 strings_advanced.o shared_data.o random_generator.o partlist.o
 setup.o: setup.F90 balance.o boundary.o constants.o fields.o helper.o \
   injectors.o laser.o mpi_routines.o mpi_subtype_control.o particle_id_hash.o \
   shunt.o split_particle.o timer.o version_data.o welcome.o window.o $(SDFMOD)\
