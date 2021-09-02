@@ -51,7 +51,9 @@ MODULE diagnostics
   INTEGER(i8), ALLOCATABLE :: species_offset(:)
   INTEGER(i8), ALLOCATABLE :: ejected_offset(:)
   LOGICAL :: reset_ejected, done_species_offset_init, done_subset_init
+#ifdef NEUTRAL_COLLISIONS
   LOGICAL :: reset_collisions, nc_average
+#endif
   LOGICAL :: restart_flag, dump_source_code, dump_input_decks
   LOGICAL :: dump_field_grid, skipped_any_set
   LOGICAL :: got_request_dump_name = .FALSE.
@@ -311,7 +313,9 @@ CONTAINS
 
     dims = (/nx_global/)
 
+#ifdef NEUTRAL_COLLISIONS
     reset_collisions = .FALSE.
+#endif
     reset_ejected = .FALSE.
     any_written = .FALSE.
 
@@ -960,7 +964,9 @@ CONTAINS
       END DO
     END IF
 
+#ifdef NEUTRAL_COLLISIONS
     IF (reset_collisions) CALL collision_counter_set_zero
+#endif
 
     IF (timer_collect) CALL timer_stop(c_timer_io)
 

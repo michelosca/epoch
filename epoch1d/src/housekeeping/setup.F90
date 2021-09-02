@@ -391,7 +391,9 @@ CONTAINS
 #ifndef NO_PARTICLE_PROBES
       NULLIFY(species_list(ispecies)%attached_probes)
 #endif
+#ifdef NEUTRAL_COLLISIONS
       NULLIFY(species_list(ispecies)%neutrals)
+#endif
     END DO
 
   END SUBROUTINE setup_species

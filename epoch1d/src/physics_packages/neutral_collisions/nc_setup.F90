@@ -16,6 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE nc_setup
+#ifdef NEUTRAL_COLLISIONS
 
   USE strings_advanced
   USE shared_data
@@ -1006,4 +1007,5 @@ CONTAINS
 
   END SUBROUTINE deallocate_collision_type_block
 
+#endif
 END MODULE nc_setup

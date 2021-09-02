@@ -16,6 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE nc_subroutines
+#ifdef NEUTRAL_COLLISIONS
 
   USE shared_data
   USE partlist
@@ -1541,4 +1542,5 @@ CONTAINS
       * collision%im12
   END FUNCTION cm_velocity
 
+#endif
 END MODULE nc_subroutines
