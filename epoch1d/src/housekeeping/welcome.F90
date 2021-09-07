@@ -280,6 +280,10 @@ CONTAINS
     defines = IOR(defines, c_def_es_petsc)
     WRITE(*,*) 'PETSc linear solver -DPETSC'
 #endif
+#ifdef SEE
+    defines = IOR(defines, c_def_see)
+    WRITE(*,*) 'Secondary electron emission -DSEE'
+#endif
 #endif
     WRITE(*,*) '*************************************************************'
 
