@@ -269,6 +269,7 @@ MODULE constants
   INTEGER(i8), PARAMETER :: c_def_electrostatic = 2**27
   INTEGER(i8), PARAMETER :: c_def_es_tridiag = 2**28
   INTEGER(i8), PARAMETER :: c_def_es_petsc = 2**29
+  INTEGER(i8), PARAMETER :: c_def_part_perp_position = 2**30
 
   ! Stagger types
   INTEGER, PARAMETER :: c_stagger_ex = c_stagger_face_x
@@ -645,8 +646,11 @@ MODULE constants
   INTEGER, PARAMETER :: c_subset_id_min     = 22
   INTEGER, PARAMETER :: c_subset_id_max     = 23
   INTEGER, PARAMETER :: c_subset_max        = 23
-
+#ifdef NEUTRAL_COLLISIONS
+  INTEGER, PARAMETER :: c_max_string_length = 72
+#else
   INTEGER, PARAMETER :: c_max_string_length = 68
+#endif
   INTEGER, PARAMETER :: c_max_prefix = 16
   ! Maximum path length on Linux machines
   INTEGER, PARAMETER :: c_max_path_length = 4096 + c_max_prefix

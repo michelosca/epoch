@@ -93,6 +93,9 @@ MODULE shared_data
   TYPE particle
     REAL(num), DIMENSION(3) :: part_p
     REAL(num) :: part_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
+#endif
 #if !defined(PER_SPECIES_WEIGHT) || defined(PHOTONS)
     REAL(num) :: weight
 #endif
@@ -157,7 +160,9 @@ MODULE shared_data
     TYPE(particle), POINTER :: head
     TYPE(particle), POINTER :: tail
     INTEGER(i8) :: count
+#ifdef NEUTRAL_COLLISIONS
     INTEGER(i8) :: coll_counter
+#endif
     INTEGER :: id_update
     ! Pointer is safe if the particles in it are all unambiguously linked
     LOGICAL :: safe
@@ -262,12 +267,17 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
+#ifdef ELECTROSTATIC
     ! Species reinjection
     INTEGER :: reinjection_id
-
+#endif
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
-
+#endif
+#ifdef SEE
+    TYPE(see_type), POINTER :: see
+#endif
   END TYPE particle_species
 
   REAL(num), ALLOCATABLE, TARGET :: global_species_density(:)
@@ -492,6 +502,9 @@ MODULE shared_data
   ! cpml_thicknes cells and then x(1) (and also x_grid_min) is at
   ! the location x_min + dx*(1/2-cpml_thickness)
   REAL(num) :: length_x, dx, x_grid_min, x_grid_max, x_min, x_max
+#ifdef PART_PERP_POSITION
+  REAL(num) :: y_min, y_max
+#endif
   REAL(num) :: x_grid_min_local, x_grid_max_local, x_min_local, x_max_local
   REAL(num), DIMENSION(:), ALLOCATABLE :: x_grid_mins, x_grid_maxs
   REAL(num) :: dir_d(c_ndims), dir_min(c_ndims), dir_max(c_ndims)
@@ -803,6 +816,7 @@ MODULE shared_data
   REAL(num) :: convect_curr_min, convect_curr_max
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
 
+#ifdef NEUTRAL_COLLISIONS
 !------------------------------------------------------------------------------
 ! Charged-neutral collisions - Written by M. Osca Engelbrecht
 !------------------------------------------------------------------------------
@@ -922,10 +936,29 @@ MODULE shared_data
   REAL(num) :: dt_neutral_collisions, dt_accel
   INTEGER :: n_species_bg, n_backgrounds
   INTEGER, ALLOCATABLE, DIMENSION(:) :: total_collision_types
-  LOGICAL :: resolve_sheath
   TYPE(background_block), DIMENSION(:), POINTER :: background_list
 
   ! Output
   LOGICAL :: neutral_collision_counter
+#endif
+
+#ifdef SEE
+  TYPE see_type
+    INTEGER :: species_impact, species_electron
+    LOGICAL :: const_yield_model
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: cross_section, energy
+    PROCEDURE(see_process), POINTER, NOPASS :: see_subroutine
+    REAL(num) :: see_temp
+  END TYPE see_type
+
+  ABSTRACT INTERFACE
+    SUBROUTINE see_process(current_part, species_id, pos_id, out_of_bounds)
+      IMPORT particle
+      TYPE(particle), POINTER, INTENT(INOUT) :: current_part
+      INTEGER, INTENT(IN) :: species_id, pos_id
+      LOGICAL, INTENT(INOUT) :: out_of_bounds
+    END SUBROUTINE see_process
+  END INTERFACE
+#endif
 
 END MODULE shared_data

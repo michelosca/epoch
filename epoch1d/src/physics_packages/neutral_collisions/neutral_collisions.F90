@@ -21,7 +21,7 @@
 ! Communications, Vol. 87, 179-198, 1995)
 
 MODULE neutral_collisions
-
+#ifdef NEUTRAL_COLLISIONS
   USE shared_data
   USE background
   USE nc_subroutines
@@ -627,4 +627,5 @@ CONTAINS
 
   END SUBROUTINE end_current_collision_block
 
+#endif
 END MODULE neutral_collisions

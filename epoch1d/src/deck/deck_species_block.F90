@@ -34,7 +34,7 @@ MODULE deck_species_block
   INTEGER(KIND=MPI_OFFSET_KIND) :: offset = 0
   CHARACTER(LEN=string_length), DIMENSION(:), POINTER :: species_names
   INTEGER, DIMENSION(:), POINTER :: species_blocks
-  LOGICAL :: got_name, reinjection_flag
+  LOGICAL :: got_name
   INTEGER :: check_block = c_err_none
   LOGICAL, DIMENSION(:), ALLOCATABLE :: species_charge_set
   INTEGER :: n_secondary_species_in_block
@@ -48,6 +48,9 @@ MODULE deck_species_block
   INTEGER, DIMENSION(:,:), POINTER :: bc_particle_array
   REAL(num) :: species_mass, species_charge
   INTEGER :: species_dumpmask
+#ifdef ELECTROSTATIC
+  LOGICAL :: reinjection_flag
+#endif
 #ifdef BREMSSTRAHLUNG
   INTEGER :: species_atomic_number
 #endif
@@ -293,7 +296,9 @@ CONTAINS
     IF (deck_state == c_ds_first) RETURN
     species_id = species_blocks(current_block)
     offset = 0
+#ifdef ELECTROSTATIC
     reinjection_flag = .FALSE.
+#endif
 
   END SUBROUTINE species_block_start
 
@@ -744,6 +749,7 @@ CONTAINS
       RETURN
     END IF
 
+#ifdef ELECTROSTATIC
     ! *************************************************************
     ! This section sets properties for particle reinjection
     ! *************************************************************
@@ -759,6 +765,7 @@ CONTAINS
       IF (.NOT.reinjection_flag) errcode = c_err_bad_setup
       RETURN
     END IF
+#endif
 
     ! Initial conditions
 
@@ -1157,7 +1164,7 @@ CONTAINS
         END IF
         species_list(i)%count = INT(species_list(i)%npart_per_cell, i8)
       END IF
-
+#ifdef ELECTROSTATIC
       IF (species_list(i)%reinjection_id >= 0 .AND. &
         species_list(i)%bc_particle(1) /= c_bc_open .AND. &
         species_list(i)%bc_particle(2) /= c_bc_open) THEN
@@ -1170,6 +1177,7 @@ CONTAINS
           END DO
         END IF
       END IF
+#endif
     END DO
 
 #ifdef BREMSSTRAHLUNG

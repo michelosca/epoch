@@ -17,6 +17,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE deck_background_block
+#ifdef NEUTRAL_COLLISIONS
 
   USE strings_advanced
   USE background
@@ -302,4 +303,5 @@ CONTAINS
     
   END FUNCTION background_block_check
 
+#endif
 END MODULE deck_background_block

@@ -30,6 +30,9 @@ MODULE deck_control_block
 
   LOGICAL :: got_time, got_grid(2*c_ndims)
   LOGICAL :: got_optimal_layout, got_nproc
+#ifdef PART_PERP_POSITION
+  LOGICAL :: y_min_flag, y_max_flag
+#endif
 
 CONTAINS
 
@@ -77,11 +80,18 @@ CONTAINS
     user_dt = 0._num
     force_user_dt= .FALSE.
 
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     user_max_b_field = 0._num
     user_max_e_field = 0._num
     user_max_neutral_coll_freq = TINY(0._num)
+#endif
 
+    ! Perpendicular particle position
+#ifdef PART_PERP_POSITION
+    y_min_flag = .FALSE.
+    y_max_flag = .FALSE.
+#endif
   END SUBROUTINE control_deck_initialise
 
 
@@ -218,10 +228,16 @@ CONTAINS
 
     ELSE IF (str_cmp(element, 'y_min') &
         .OR. str_cmp(element, 'y_start')) THEN
-
+#ifdef PART_PERP_POSITION
+      y_min = as_real_print(value, element, errcode)
+      y_min_flag = .TRUE.
+#endif
     ELSE IF (str_cmp(element, 'y_max') &
         .OR. str_cmp(element, 'y_end')) THEN
-
+#ifdef PART_PERP_POSITION
+      y_max = as_real_print(value, element, errcode)
+      y_max_flag = .TRUE.
+#endif
     ELSE IF (str_cmp(element, 'z_min') &
         .OR. str_cmp(element, 'z_start')) THEN
 
@@ -447,6 +463,7 @@ CONTAINS
       force_user_dt= .TRUE.
 #endif
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     ELSE IF (str_cmp(element, 'neutral_coll_frequency_factor')) THEN
       neutral_coll_freq_fact = as_real_print(value, element, errcode)
@@ -458,6 +475,7 @@ CONTAINS
       user_max_neutral_coll_freq = as_real_print(value, element, errcode)
     ELSE
       errcode = c_err_unknown_element
+#endif
 
     END IF
 
@@ -527,7 +545,21 @@ CONTAINS
       END IF
       errcode = c_err_terminate
     END IF
-
+#ifdef PART_PERP_POSITION
+    IF ( (.NOT.y_min_flag .AND. y_max_flag) &
+      .OR. (y_min_flag .AND. .NOT.y_max_flag)) THEN
+      IF (rank == 0) THEN
+        DO iu = 1, nio_units ! Print to stdout and to file
+          io = io_units(iu)
+          WRITE(io,*)
+          WRITE(io,*) '*** ERROR ***'
+          WRITE(io,*) 'y_min and y_max boundaries must be defined in the', &
+           ' input.deck'
+        END DO
+      END IF
+      errcode = c_err_terminate
+    END IF
+#endif
     IF (field_order == 2 .AND. maxwell_solver == c_maxwell_solver_cowan) THEN
       maxwell_solver = c_maxwell_solver_yee
     END IF

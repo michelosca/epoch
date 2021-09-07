@@ -14,7 +14,7 @@
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE deck_electrostatic_block
-
+#ifdef ELECTROSTATIC
   USE strings_advanced
   USE electrostatic
   
@@ -183,6 +183,5 @@ CONTAINS
     END IF
   
   END FUNCTION electrostatic_block_check
-  
-  
+#endif  
 END MODULE deck_electrostatic_block

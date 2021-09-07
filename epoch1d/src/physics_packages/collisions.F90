@@ -2058,7 +2058,11 @@ CONTAINS
 
   SUBROUTINE setup_collisions
 
+#ifdef NEUTRAL_COLLISIONS
     ALLOCATE(coll_pairs(n_species_bg, n_species_bg))
+#else
+    ALLOCATE(coll_pairs(n_species, n_species))
+#endif
     coll_pairs = 1.0_num
     coll_sort_array_size = 1
     ALLOCATE(coll_sort_array(coll_sort_array_size))

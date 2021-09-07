@@ -77,7 +77,9 @@ CONTAINS
           DEALLOCATE(species_list(i)%background_density, STAT=stat)
     END DO
 
-    CALL deallocate_neutral_collisions
+#ifdef NEUTRAL_COLLISIONS
+   CALL deallocate_neutral_collisions
+#endif
 
     DEALLOCATE(species_list, STAT=stat)
 

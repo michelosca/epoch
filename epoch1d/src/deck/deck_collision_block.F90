@@ -38,14 +38,17 @@ CONTAINS
       use_collisions = .FALSE.
       use_collisional_ionisation = .FALSE.
       got_nanbu = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
       cross_section_table_location = &
         'src/physics_packages/TABLES/neutral_collisions'
-      resolve_sheath = .FALSE.
-    ELSE
+#endif
+   ELSE
       ALLOCATE(coll_pairs_touched(1:n_species, 1:n_species))
       coll_pairs_touched = .FALSE.
       CALL setup_collisions ! Only coulomb collisions
+#ifdef NEUTRAL_COLLISIONS
       CALL neutral_collisions_start
+#endif
     END IF
 
   END SUBROUTINE collision_deck_initialise
@@ -55,7 +58,9 @@ CONTAINS
   SUBROUTINE collision_deck_finalise
 
     INTEGER :: i, j
+#ifdef NEUTRAL_COLLISIONS
     REAL(num) :: qi, qj
+#endif
     LOGICAL, SAVE :: first = .TRUE.
 
     IF (deck_state == c_ds_first) RETURN
@@ -63,15 +68,22 @@ CONTAINS
 
     IF (use_collisions) THEN
       use_collisions = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
       DO j = 1, n_species_bg
         DO i = 1, n_species_bg
-          IF (coll_pairs(i,j) > 0) THEN
+#else
+      DO j = 1, n_species
+        DO i = 1, n_species
+#endif
+         IF (coll_pairs(i,j) > 0) THEN
             use_collisions = .TRUE.
             EXIT
           END IF
         END DO
       END DO
+#ifdef NEUTRAL_COLLISIONS
       IF (n_backgrounds > 0) use_collisions = .TRUE.
+#endif
       use_particle_lists = use_particle_lists .OR. use_collisions
       need_random_state = .TRUE.
 
@@ -95,6 +107,7 @@ CONTAINS
       END IF
     END IF
 
+#ifdef NEUTRAL_COLLISIONS
     ! Determines whether it is a Coulomb collision or not
     IF ( use_collisions ) THEN
       DO i = 1, n_species
@@ -112,6 +125,7 @@ CONTAINS
         END DO ! jspecies
       END DO ! ispecies
     END IF
+#endif
 
   END SUBROUTINE collision_deck_finalise
 
@@ -183,15 +197,12 @@ CONTAINS
       RETURN
     END IF
 
+#ifdef NEUTRAL_COLLISIONS
     IF (str_cmp(element, 'cross_section_table_location')) THEN
       cross_section_table_location = TRIM(ADJUSTL(value))
       RETURN
     END IF
-
-    IF (str_cmp(element, 'resolve_sheath')) THEN
-      resolve_sheath = as_logical_print(value, element, errcode)
-      RETURN
-    END IF
+#endif
 
     errcode = c_err_unknown_element
 

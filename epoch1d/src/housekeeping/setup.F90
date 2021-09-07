@@ -146,10 +146,12 @@ CONTAINS
 
     CALL eval_stack_init
 
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collision parameters
     dt_neutral_collisions = HUGE(0._num)
     neutral_coll_freq_fact = 0.01_num
     NULLIFY(background_list)
+#endif
 
   END SUBROUTINE minimal_init
 
@@ -199,8 +201,9 @@ CONTAINS
   SUBROUTINE after_deck_last
 
     INTEGER :: i
-
+#ifdef NEUTRAL_COLLISIONS
     IF (ANY(neutral_coll)) CALL load_neutral_collisions
+#endif
     CALL setup_data_averaging
     CALL setup_split_particles
     CALL setup_field_boundaries
@@ -269,11 +272,15 @@ CONTAINS
         IF (IAND(mask, c_io_no_sum) == 0) &
             nspec_local = 1
         IF (IAND(mask, c_io_species) /= 0) THEN
+#ifdef NEUTRAL_COLLISIONS
           IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
             nspec_local = nspec_local + SUM(total_collision_types)
           ELSE
             nspec_local = nspec_local + n_species
           END IF
+#else
+          nspec_local = nspec_local + n_species
+#endif
         END IF
 
         IF (nspec_local <= 0) CYCLE
@@ -293,11 +300,15 @@ CONTAINS
         IF (IAND(mask, c_io_no_sum) == 0) &
             avg%species_sum = averaged_var_dims(io)
         IF (IAND(mask, c_io_species) /= 0) THEN
+#ifdef NEUTRAL_COLLISIONS
           IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
             avg%n_species = SUM(total_collision_types)
           ELSE
             avg%n_species = n_species * averaged_var_dims(io)
           END IF
+#else
+          avg%n_species = n_species * averaged_var_dims(io)
+#endif
         END IF
         avg%real_time = 0.0_num
         avg%started = .FALSE.
@@ -338,7 +349,9 @@ CONTAINS
       NULLIFY(species_list(ispecies)%secondary_list)
       NULLIFY(species_list(ispecies)%background_density)
       species_list(ispecies)%bc_particle = c_bc_null
+#ifdef ELECTROSTATIC
       species_list(ispecies)%reinjection_id = -1
+#endif
     END DO
 
     DO ispecies = 1, n_species
@@ -380,7 +393,12 @@ CONTAINS
 #ifndef NO_PARTICLE_PROBES
       NULLIFY(species_list(ispecies)%attached_probes)
 #endif
+#ifdef NEUTRAL_COLLISIONS
       NULLIFY(species_list(ispecies)%neutrals)
+#endif
+#ifdef SEE
+      NULLIFY(species_list(ispecies)%see)
+#endif
     END DO
 
   END SUBROUTINE setup_species
@@ -726,10 +744,6 @@ CONTAINS
       dt_uppercutofffreq)
     dt = MIN(dt, dt_freq)
 
-    !Laser time restrictions
-    CALL set_laser_dt
-    dt = MIN(dt, dt_laser)
-
     !Courant time restriction
     CALL set_max_speed
     IF (max_speed < TINY(0._num)) max_speed = TINY(0._num)
@@ -740,9 +754,11 @@ CONTAINS
     dt_inputdeck = es_dt_fact/max_perturbation_freq
     dt = MIN(dt, dt_inputdeck)
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
+#endif
 
     ! Force user time step
     IF (force_user_dt) dt = user_dt
@@ -851,9 +867,11 @@ CONTAINS
 
     dt = dt_multiplier * dt
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
+#endif
 
     IF (rank==0) THEN
       WRITE(*,*) &
@@ -891,9 +909,10 @@ CONTAINS
 987 FORMAT (A25, ES10.4)
 
   END SUBROUTINE set_dt
-
 #endif
 
+
+#ifdef NEUTRAL_COLLISIONS
   SUBROUTINE set_max_collision_frequency
 
     INTEGER :: ispecies, jspecies
@@ -1032,7 +1051,7 @@ CONTAINS
 
 987 FORMAT (A25, ES10.4, A2)
   END SUBROUTINE set_dt_neutral_collisions
-
+#endif
 
 
   SUBROUTINE find_species_by_blockid(specname, species_number)

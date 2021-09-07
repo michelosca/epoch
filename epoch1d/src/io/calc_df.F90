@@ -1244,6 +1244,7 @@ CONTAINS
 
 
 
+#ifdef NEUTRAL_COLLISIONS
   SUBROUTINE calc_neutral_collisions(data_array, current_species, direction)
 
     REAL(num), DIMENSION(1-ng:), INTENT(OUT) :: data_array
@@ -1305,5 +1306,6 @@ CONTAINS
     END IF
 
   END SUBROUTINE calc_neutral_collisions
+#endif
 
 END MODULE calc_df
