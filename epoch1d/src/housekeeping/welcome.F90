@@ -287,6 +287,10 @@ CONTAINS
     defines = IOR(defines, c_def_part_perp_position)
     WRITE(*,*) 'Particle y-position -DPART_PERP_POSITION'
 #endif
+#ifdef SEE
+    defines = IOR(defines, c_def_see)
+    WRITE(*,*) 'Secondary electron emission -DSEE'
+#endif
 #endif
     WRITE(*,*) '*************************************************************'
 
