@@ -74,7 +74,6 @@ CONTAINS
   
     CHARACTER(*), INTENT(IN) :: element, value
     INTEGER :: errcode
-    INTEGER :: io, iu
     REAL(num) :: dummy
 
     errcode = c_err_none
@@ -94,12 +93,9 @@ CONTAINS
 
     IF (.NOT. boundary_set) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Cannot set potential source properties', & 
-            ' before boundary is set'
-        END DO
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Cannot set potential source properties', &
+          ' before boundary is set'
         CALL abort_code(c_err_required_element_not_set)
       END IF
       extended_error_string = 'boundary'
@@ -146,6 +142,25 @@ CONTAINS
       RETURN
     END IF
     
+    IF (str_cmp(element, 'capacitor') .OR. &
+      str_cmp(element, 'capacitor_nF')) THEN
+      IF (capacitor_flag) THEN
+        IF (rank == 0 ) THEN
+          WRITE(*,*) '*** WARNING ***'
+          WRITE(*,*) ' Several capacitors were defined,'
+          WRITE(*,*) ' the last one defined is used.'
+        END IF
+      END IF
+      IF (potential_source%boundary == c_bd_x_min) capacitor_max = .TRUE.
+      IF (potential_source%boundary == c_bd_x_max) capacitor_min = .TRUE.
+      capacitor_flag = .TRUE.
+      capacitor = as_real_print(value, element, errcode)
+      IF (str_cmp(element, 'capacitor_nF')) THEN
+        capacitor = capacitor * 1.e-9_num
+      END IF
+      RETURN
+    END IF
+
   END FUNCTION electrostatic_block_handle_element
   
   
@@ -154,7 +169,7 @@ CONTAINS
   
     INTEGER :: errcode
     TYPE(potential_block), POINTER :: current
-    INTEGER :: error, io, iu
+    INTEGER :: error
 
     errcode = c_err_none
 
@@ -162,26 +177,35 @@ CONTAINS
     current => potential_list_x_min
     DO WHILE(ASSOCIATED(current))
       IF (ABS(current%amp) < TINY(0._num)) error = IOR(error, 1)
+      IF (capacitor_min) error = IOR(error, 2)
       current => current%next
     END DO
 
     current => potential_list_x_max
     DO WHILE(ASSOCIATED(current))
       IF (ABS(current%amp) < TINY(0._num)) error = IOR(error, 1)
+      IF (capacitor_max) error = IOR(error, 2)
       current => current%next
     END DO
 
     IF (IAND(error, 1) /= 0) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Must define an "amp" for every potential source.'
-        END DO
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Must define an "amp" for every potential source.'
       END IF
       errcode = c_err_missing_elements
     END IF
   
+    IF (IAND(error, 2) /= 0) THEN
+      IF (rank == 0) THEN
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'When capacitor is defined potential sources can only'
+        WRITE(*,*) 'be defined on one side, i.e. x_min or x_max boundary'
+      END IF
+      errcode = c_err_missing_elements
+    END IF
+
   END FUNCTION electrostatic_block_check
-#endif  
+#endif
+
 END MODULE deck_electrostatic_block
