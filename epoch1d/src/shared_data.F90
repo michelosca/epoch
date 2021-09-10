@@ -812,9 +812,11 @@ MODULE shared_data
   TYPE(efield_block), POINTER :: ey_profile, ez_profile
 
   !Current diagnostics
-  REAL(num) :: wcharge_min, wcharge_max, dwcharge_min, dwcharge_max
   REAL(num) :: convect_curr_min, convect_curr_max
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
+
+  LOGICAL :: capacitor_flag, capacitor_min, capacitor_max
+  REAL(num) :: capacitor
 
 #ifdef NEUTRAL_COLLISIONS
 !------------------------------------------------------------------------------
