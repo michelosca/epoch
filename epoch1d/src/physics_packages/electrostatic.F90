@@ -500,49 +500,26 @@ print*, rank,nx_start,nx_end,nx,'nx_each_rank',nx_each_rank,nx_start,nx_all
   SUBROUTINE es_calc_charge_density_at_wall(rho_min, rho_max)
 
     REAL(num), INTENT(IN) :: rho_min, rho_max
-!    REAL(num) :: applied_pot, phi_0, Q_before, delta_Q
 
     ! This subroutine only makes sense for open boundary conditions
     IF (x_min_boundary_open) THEN
-
       ! Previous wall charge surface density value
       dwcharge_min = wcharge_min
 
-      ! Charge surface density at wall
-!      IF (capacitor_max) THEN
-!        applied_pot = set_potential_x_min()
-!        phi_0 = es_potential(0)
-!        Q_before = Q_now
-!        Q_now = capacitor * (applied_pot - phi_0)
-!        delta_Q = Q_now - Q_before
-!        wcharge_min = dwcharge_min + delta_Q + convect_curr_min
-!      ELSE
-        ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
-        wcharge_min = ex(1) * epsilon0 - rho_min * dx
-!      END IF
+      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
+      wcharge_min = ex(1) * epsilon0 - rho_min * dx
+
       ! This is used for diagnostics
       dwcharge_min = wcharge_min - dwcharge_min
     END IF
 
     IF (x_max_boundary_open) THEN
-
       ! Previous wall charge surface density value
       dwcharge_max = wcharge_max
 
-      ! Charge surface density at wall
-!      IF (capacitor_max) THEN
-!        applied_pot = set_potential_x_min()
-!        IF (nproc == 1) THEN
-!          phi_0 = es_potential(0)
-!        END IF
-!        Q_before = Q_now
-!        Q_now = capacitor * (applied_pot - phi_0)
-!        delta_Q = Q_now - Q_before
-!        wcharge_max = dwcharge_max + delta_Q + convect_curr_max
-!      ELSE
-        ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
-        wcharge_max = ex(nx-1) * epsilon0 + rho_max * dx
-!      END IF
+      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
+      wcharge_max = ex(nx-1) * epsilon0 + rho_max * dx
+
       ! This is used for diagnostics
       dwcharge_max = wcharge_max - dwcharge_max
     END IF
