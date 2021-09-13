@@ -233,14 +233,9 @@ CONTAINS
       END IF
     END IF
 
-print*, rank,nx_start,nx_end,nx,'nx_each_rank',nx_each_rank,nx_start,nx_all
     IF (rank==0) THEN
       ALLOCATE(rho_all(nx_start:nx_all), pot_all(nx_start:nx_all))
       IF (nproc > 1) THEN
-        print*, 'gatherv',rank,'send buf',SIZE(solver_rho),&
-          'send count',nx_each_rank(rank+1)
-        print*, 'gatherv',rank,'recv buf',SIZE(rho_all),&
-          'recv count',nx_each_rank, 'pos', cell_start_each_rank
         CALL MPI_GATHERV(solver_rho(nx_start), nx_each_rank(rank+1), &
           MPI_DOUBLE_PRECISION, rho_all(nx_start), nx_each_rank, &
           cell_start_each_rank, MPI_DOUBLE_PRECISION, 0, comm, errcode)
@@ -265,10 +260,6 @@ print*, rank,nx_start,nx_end,nx,'nx_each_rank',nx_each_rank,nx_start,nx_all
         pot_all(i) = (rho_all(i) - pot_all(i+1)) / REAL(b(i),num)
       END DO
 
-      print*, 'scatv',rank,'send buf',SIZE(pot_all),&
-        'send count',nx_each_rank,'pos',cell_start_each_rank
-      print*, 'scatv',rank,'recv buf',SIZE(es_potential(nx_start:nx_end)),&
-        'recv count',nx_each_rank(rank+1)
       CALL MPI_SCATTERV(pot_all(nx_start), nx_each_rank, cell_start_each_rank, &
         MPI_DOUBLE_PRECISION, es_potential(nx_start), nx_each_rank(rank+1), &
         MPI_DOUBLE_PRECISION, 0, comm, errcode)
@@ -276,19 +267,10 @@ print*, rank,nx_start,nx_end,nx,'nx_each_rank',nx_each_rank,nx_start,nx_all
 
     ELSE
       ALLOCATE(rho_all(0), pot_all(0))
-        print*, 'gatherv',rank,'send buf',SIZE(solver_rho),&
-          'send count',nx_each_rank(rank+1)
-        print*, 'gatherv',rank,'recv buf',SIZE(rho_all),&
-          'recv count',nx_each_rank, 'pos', cell_start_each_rank
       CALL MPI_GATHERV(solver_rho(nx_start), nx_each_rank(rank+1), &
         MPI_DOUBLE_PRECISION, &
         rho_all, nx_each_rank, cell_start_each_rank, &
         MPI_DOUBLE_PRECISION, 0, comm, errcode)
-
-      print*, 'scatv',rank,'send buf',SIZE(pot_all),&
-        'send count',nx_each_rank,'pos',cell_start_each_rank
-      print*, 'scatv',rank,'recv buf',SIZE(es_potential(nx_start:nx_end)),&
-        'recv count',nx_each_rank(rank+1)
       CALL MPI_SCATTERV(pot_all, nx_each_rank, cell_start_each_rank, &
         MPI_DOUBLE_PRECISION, es_potential(nx_start), nx_each_rank(rank+1), &
         MPI_DOUBLE_PRECISION, 0, comm, errcode)
