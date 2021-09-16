@@ -677,8 +677,10 @@ CONTAINS
 #endif
 
 #ifdef PART_PERP_POSITION
-      y_min_count = 0
-      y_max_count = 0
+      IF (y_perp_flag) THEN
+        y_min_count = 0
+        y_max_count = 0
+      END IF
 #endif
 
       DO ix = -1, 1, 2
@@ -855,14 +857,16 @@ CONTAINS
 
         ! Perpendicular particle position
 #ifdef PART_PERP_POSITION
-        IF (cur%part_pos_y > y_max) THEN
-          out_of_bounds = .TRUE.
-          y_max_count = y_max_count + 1
-        END IF
+        IF (y_perp_flag) THEN
+          IF (cur%part_pos_y > y_max) THEN
+            out_of_bounds = .TRUE.
+            y_max_count = y_max_count + 1
+          END IF
 
-        IF (cur%part_pos_y < y_min) THEN
-          out_of_bounds = .TRUE.
-          y_min_count = y_min_count + 1
+          IF (cur%part_pos_y < y_min) THEN
+            out_of_bounds = .TRUE.
+            y_min_count = y_min_count + 1
+          END IF
         END IF
 #endif
 
@@ -899,10 +903,12 @@ CONTAINS
 #endif
 
 #ifdef PART_PERP_POSITION
-      ! injection_flag == 1 set new part_pos_y = y_min
-      ! injection_flag == 2 set new part_pos_y = y_max
-      CALL reinject_particles(y_max_count, species_list(ispecies), 1)
-      CALL reinject_particles(y_min_count, species_list(ispecies), 2)
+      IF (y_perp_flag) THEN
+        ! injection_flag == 1 set new part_pos_y = y_min
+        ! injection_flag == 2 set new part_pos_y = y_max
+        CALL reinject_particles(y_max_count, species_list(ispecies), 1)
+        CALL reinject_particles(y_min_count, species_list(ispecies), 2)
+      END IF
 #endif
 
       ! swap Particles
