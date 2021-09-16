@@ -504,6 +504,7 @@ MODULE shared_data
   REAL(num) :: length_x, dx, x_grid_min, x_grid_max, x_min, x_max
 #ifdef PART_PERP_POSITION
   REAL(num) :: y_min, y_max
+  LOGICAL :: y_perp_flag
 #endif
   REAL(num) :: x_grid_min_local, x_grid_max_local, x_min_local, x_max_local
   REAL(num), DIMENSION(:), ALLOCATABLE :: x_grid_mins, x_grid_maxs

@@ -712,7 +712,9 @@ CONTAINS
         ! into particle array
         current%part_pos = part_x + x_grid_min_local
 #ifdef PART_PERP_POSITION
-        current%part_pos_y = current%part_pos_y + part_u(2) * dt
+        IF (y_perp_flag) THEN
+          current%part_pos_y = current%part_pos_y + part_u(2) * dt
+        END IF
 #endif
 
         current => current%next

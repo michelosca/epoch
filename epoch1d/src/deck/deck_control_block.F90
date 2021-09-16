@@ -87,10 +87,11 @@ CONTAINS
     user_max_neutral_coll_freq = TINY(0._num)
 #endif
 
-    ! Perpendicular particle position
 #ifdef PART_PERP_POSITION
+    ! Perpendicular particle position
     y_min_flag = .FALSE.
     y_max_flag = .FALSE.
+    y_perp_flag = .FALSE.
 #endif
   END SUBROUTINE control_deck_initialise
 
@@ -166,6 +167,12 @@ CONTAINS
     ELSE IF (got_nproc .AND. .NOT.got_optimal_layout) THEN
       use_optimal_layout = .FALSE.
     END IF
+
+#ifdef PART_PERP_POSITION
+    IF (y_min_flag .AND. y_max_flag) THEN
+      y_perp_flag = .TRUE.
+    END IF
+#endif
 
     IF (deck_state == c_ds_first) RETURN
 
