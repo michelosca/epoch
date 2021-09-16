@@ -270,7 +270,7 @@ MODULE constants
   INTEGER(i8), PARAMETER :: c_def_es_tridiag = 2**28
   INTEGER(i8), PARAMETER :: c_def_es_petsc = 2**29
   INTEGER(i8), PARAMETER :: c_def_part_perp_position = 2**30
-  INTEGER(i8), PARAMETER :: c_def_see = 2**31
+  INTEGER(i8), PARAMETER :: c_def_see = 2**30 - 1
 
   ! Stagger types
   INTEGER, PARAMETER :: c_stagger_ex = c_stagger_face_x
