@@ -50,8 +50,10 @@ MODULE electrostatic
 #endif
   INTEGER :: nx_start, nx_end, nx_all
   ! Wall charge surface density
+  REAL(num) :: wcharge_min_prev, wcharge_min_now
+  REAL(num) :: wcharge_max_prev, wcharge_max_now
   REAL(num) :: wcharge_min, wcharge_max, dwcharge_min, dwcharge_max
-  REAL(num) :: Q_now
+  REAL(num) :: Q_now, Q_prev
 
 
 CONTAINS
@@ -60,7 +62,7 @@ CONTAINS
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
     REAL(num) :: rho_min, rho_max
-
+integer :: i
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
@@ -73,6 +75,12 @@ CONTAINS
     IF (x_min_boundary_open) rho_min = SUM(es_charge_density(0:1)) * 0.5_num
     IF (x_max_boundary_open) rho_max = SUM(es_charge_density(nx-1:nx)) * 0.5_num
     CALL es_calc_ex(rho_min, rho_max)
+do i = 0, nx
+  print*,step,'pot',i*dx+x_min_local, es_potential(i)
+end do
+do i = 0, nx
+  print*,step,'ex',i*dx+x_min_local, ex(i)
+end do
     
     DEALLOCATE(es_charge_density)
 
@@ -202,7 +210,7 @@ CONTAINS
     REAL(num), DIMENSION(nx_start:nx_end), INTENT(IN) :: rho
     REAL(num), DIMENSION(nx_start:nx_end) :: solver_rho
     INTEGER, PARAMETER :: dp = selected_real_kind(30,300)
-    REAL(num) :: fac
+    REAL(num) :: fac, Q_conv
     INTEGER :: i
     REAL(num), ALLOCATABLE, DIMENSION(:) :: rho_all, pot_all
     REAL(dp), ALLOCATABLE, DIMENSION(:) :: b
@@ -215,9 +223,14 @@ CONTAINS
     IF (x_min_boundary) THEN
       IF (capacitor_max) THEN
         term0 = rho(nx_start) * 0.5_num
-        term1 = wcharge_min / dx
         pot_ext = set_potential_x_min()
-        term2 = convect_curr_min - Q_now + pot_ext * capacitor
+        Q_now = capacitor * (pot_ext - es_potential(0))
+        Q_conv = convect_curr_min
+        wcharge_min_prev = wcharge_min_now
+        wcharge_min_now = wcharge_min_prev + Q_conv + Q_now - Q_prev
+        term1 = wcharge_min_prev / dx
+        term2 = Q_conv - Q_prev + pot_ext * capacitor
+        Q_prev = Q_now
         solver_rho(nx_start) = term0 + term1 + term2 / dx
         solver_rho(nx_start) = solver_rho(nx_start) * fac
       ELSE IF (.NOT.capacitor_flag) THEN
@@ -226,7 +239,16 @@ CONTAINS
     END IF
     IF (x_max_boundary) THEN
       IF (capacitor_min) THEN
-        solver_rho(nx_end) = wcharge_max / dx + rho(nx_end) * 0.5_num
+        term0 = rho(nx_end) * 0.5_num
+        pot_ext = set_potential_x_max()
+        Q_now = capacitor * (pot_ext + es_potential(nx_end))
+        Q_conv = convect_curr_max
+        wcharge_max_prev = wcharge_max_now
+        wcharge_max_now = wcharge_max_prev + Q_conv + Q_now - Q_prev
+        term1 = wcharge_max_prev / dx
+        term2 = Q_conv - Q_prev + pot_ext * capacitor
+        Q_prev = Q_now
+        solver_rho(nx_end) = term0 + term1 + term2 / dx
         solver_rho(nx_end) = solver_rho(nx_end) * fac
       ELSE IF (.NOT.capacitor_flag) THEN
         solver_rho(nx_end) = solver_rho(nx_end) - set_potential_x_max()
@@ -247,7 +269,7 @@ CONTAINS
       ALLOCATE(b(nx_start:nx_all))
       b = -2._dp
       IF (capacitor_max) b(nx_start) = -1._dp - REAL(dx*capacitor/epsilon0,dp)
-      IF (capacitor_min) b(nx_all) = -1._dp
+      IF (capacitor_min) b(nx_all) = -1._dp - REAL(dx*capacitor/epsilon0,dp)
 
       DO i = nx_start+1, nx_all
         w = 1._dp / b(i-1)
@@ -271,6 +293,7 @@ CONTAINS
         MPI_DOUBLE_PRECISION, &
         rho_all, nx_each_rank, cell_start_each_rank, &
         MPI_DOUBLE_PRECISION, 0, comm, errcode)
+
       CALL MPI_SCATTERV(pot_all, nx_each_rank, cell_start_each_rank, &
         MPI_DOUBLE_PRECISION, es_potential(nx_start), nx_each_rank(rank+1), &
         MPI_DOUBLE_PRECISION, 0, comm, errcode)
@@ -772,7 +795,12 @@ CONTAINS
     dwcharge_max = 0._num      ! charge density difference between time steps
     convect_curr_min = 0._num  ! charge density due to particles
     convect_curr_max = 0._num  ! charge density due to particles
-    Q_now = 0._num             ! charge current due to the capacitor
+    Q_now = 0._num
+    Q_prev = Q_now             ! charge current due to the capacitor
+    wcharge_min_now = 0._num       ! charge density at x_min
+    wcharge_max_now = 0._num       ! charge density at x_min
+    wcharge_min_prev = 0._num       ! charge density at x_min
+    wcharge_max_prev = 0._num       ! charge density at x_min
 
     es_current = 0._num
 
@@ -785,6 +813,9 @@ CONTAINS
         cell_start_each_rank(1) = cell_x_min(1) - 1
         nx_each_rank(1) = nx_each_rank(1) + 1
         nx_each_rank(nproc) = nx_each_rank(nproc) - 1
+      END IF
+      IF (capacitor_min) THEN
+        cell_start_each_rank = cell_x_min - 1
       END IF
     ELSE
       nx_each_rank(nproc) = nx_each_rank(nproc) - 1
@@ -812,7 +843,9 @@ CONTAINS
       IF (.NOT.capacitor_min) nx_end = nx_end - 1
     END IF
 
-    IF (.NOT.capacitor_min) THEN
+    IF (capacitor_min) THEN
+      nx_all = nx_global
+    ELSE
       nx_all = nx_global - 1
     END IF
 
@@ -824,10 +857,12 @@ CONTAINS
 
     IF (x_min_boundary_open) THEN
       es_current(1) = (dwcharge_min - convect_curr_min) / dt
+      convect_curr_min = 0._num
     END IF
 
     IF (x_max_boundary_open) THEN
       es_current(nx) = (dwcharge_max - convect_curr_max) / dt
+      convect_curr_max = 0._num
     END IF
 
   END SUBROUTINE es_wall_current_diagnostic
