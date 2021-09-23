@@ -52,8 +52,11 @@ MODULE electrostatic
   ! Wall charge surface density
   REAL(num) :: wcharge_min_prev, wcharge_min_now
   REAL(num) :: wcharge_max_prev, wcharge_max_now
-  REAL(num) :: wcharge_min, wcharge_max, dwcharge_min, dwcharge_max
-  REAL(num) :: Q_now, Q_prev
+  REAL(num) :: wcharge_min_diff, wcharge_max_diff
+  REAL(num) :: Q_min_now, Q_min_prev
+  REAL(num) :: Q_max_now, Q_max_prev
+  REAL(num) :: Q_conv_max, Q_conv_min
+  REAL(num) :: pot_ext_max, pot_ext_min
 
 
 CONTAINS
@@ -61,28 +64,26 @@ CONTAINS
   SUBROUTINE es_update_e_field
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
-    REAL(num) :: rho_min, rho_max
-integer :: i
+    REAL(num) :: rho_max, rho_min
+
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
+
+    ! This subroutine updates the charge surface density values at wall
+    CALL es_calc_charge_density_at_wall
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential(es_charge_density(nx_start:nx_end))
 
-    ! - Calculate electric field in x-direction
+    ! Save charge density at dx/2 from boundary and deallocate
     IF (x_min_boundary_open) rho_min = SUM(es_charge_density(0:1)) * 0.5_num
     IF (x_max_boundary_open) rho_max = SUM(es_charge_density(nx-1:nx)) * 0.5_num
-    CALL es_calc_ex(rho_min, rho_max)
-do i = 0, nx
-  print*,step,'pot',i*dx+x_min_local, es_potential(i)
-end do
-do i = 0, nx
-  print*,step,'ex',i*dx+x_min_local, ex(i)
-end do
-    
     DEALLOCATE(es_charge_density)
+
+    ! Calculate electric field in x-direction
+    CALL es_calc_ex(rho_min, rho_max)
 
     ! - Update electric field in y- and z-direction
     CALL set_ez
@@ -210,12 +211,11 @@ end do
     REAL(num), DIMENSION(nx_start:nx_end), INTENT(IN) :: rho
     REAL(num), DIMENSION(nx_start:nx_end) :: solver_rho
     INTEGER, PARAMETER :: dp = selected_real_kind(30,300)
-    REAL(num) :: fac, Q_conv
     INTEGER :: i
     REAL(num), ALLOCATABLE, DIMENSION(:) :: rho_all, pot_all
     REAL(dp), ALLOCATABLE, DIMENSION(:) :: b
     REAL(dp) :: w
-    REAL(num) :: term0, term1, term2, pot_ext
+    REAL(num) :: fac, term0, term1, term2
 
     ! Get charge density array ready for solver
     fac = -dx*dx/epsilon0
@@ -223,14 +223,8 @@ end do
     IF (x_min_boundary) THEN
       IF (capacitor_max) THEN
         term0 = rho(nx_start) * 0.5_num
-        pot_ext = set_potential_x_min()
-        Q_now = capacitor * (pot_ext - es_potential(0))
-        Q_conv = convect_curr_min
-        wcharge_min_prev = wcharge_min_now
-        wcharge_min_now = wcharge_min_prev + Q_conv + Q_now - Q_prev
         term1 = wcharge_min_prev / dx
-        term2 = Q_conv - Q_prev + pot_ext * capacitor
-        Q_prev = Q_now
+        term2 = Q_conv_min - Q_min_prev + pot_ext_min * capacitor
         solver_rho(nx_start) = term0 + term1 + term2 / dx
         solver_rho(nx_start) = solver_rho(nx_start) * fac
       ELSE IF (.NOT.capacitor_flag) THEN
@@ -240,14 +234,8 @@ end do
     IF (x_max_boundary) THEN
       IF (capacitor_min) THEN
         term0 = rho(nx_end) * 0.5_num
-        pot_ext = set_potential_x_max()
-        Q_now = capacitor * (pot_ext + es_potential(nx_end))
-        Q_conv = convect_curr_max
-        wcharge_max_prev = wcharge_max_now
-        wcharge_max_now = wcharge_max_prev + Q_conv + Q_now - Q_prev
         term1 = wcharge_max_prev / dx
-        term2 = Q_conv - Q_prev + pot_ext * capacitor
-        Q_prev = Q_now
+        term2 = Q_conv_max - Q_max_prev + pot_ext_max * capacitor
         solver_rho(nx_end) = term0 + term1 + term2 / dx
         solver_rho(nx_end) = solver_rho(nx_end) * fac
       ELSE IF (.NOT.capacitor_flag) THEN
@@ -477,21 +465,18 @@ end do
     END DO
     ex = ex * 0.5_num * idx
 
-    ! This subroutine updates the charge surface density values at wall
-    CALL es_calc_charge_density_at_wall(rho_min, rho_max)
-
     ! E-field boundaries
     ! For between-processors boundaries and external (periodic) bc
     CALL field_bc(ex, ng)
 
     IF (x_min_boundary_open) THEN
       !Update E-field at wall
-      ex(0) = wcharge_min/epsilon0
+      ex(0) = ex(1) - rho_min * dx / epsilon0
     END IF
 
     IF (x_max_boundary_open) THEN
       !Update E-field at wall
-      ex(nx) = wcharge_max/epsilon0
+      ex(nx) = ex(nx-1) + rho_max * dx / epsilon0
     END IF
 
     DO ix = 1, 2*c_ndims
@@ -502,31 +487,37 @@ end do
 
 
 
-  SUBROUTINE es_calc_charge_density_at_wall(rho_min, rho_max)
-
-    REAL(num), INTENT(IN) :: rho_min, rho_max
+  SUBROUTINE es_calc_charge_density_at_wall
 
     ! This subroutine only makes sense for open boundary conditions
     IF (x_min_boundary_open) THEN
-      ! Previous wall charge surface density value
-      dwcharge_min = wcharge_min
+      ! Buffer previous values
+      Q_min_prev = Q_min_now
+      wcharge_min_prev = wcharge_min_now
 
-      ! (E_{1} - E_0) / dx = rho_1/2/epsilon0
-      wcharge_min = ex(1) * epsilon0 - rho_min * dx
+      ! Calculate new surface charge density
+      pot_ext_min = set_potential_x_min()
+      Q_min_now = capacitor * (pot_ext_min - es_potential(0))
+      Q_conv_min = convect_curr_min
+      wcharge_min_now = wcharge_min_prev + Q_conv_min + Q_min_now - Q_min_prev
 
-      ! This is used for diagnostics
-      dwcharge_min = wcharge_min - dwcharge_min
+      ! Charge wall difference
+      wcharge_min_diff = wcharge_min_now - wcharge_min_prev
     END IF
 
     IF (x_max_boundary_open) THEN
-      ! Previous wall charge surface density value
-      dwcharge_max = wcharge_max
+      ! Buffer previous values
+      Q_max_prev = Q_max_now
+      wcharge_max_prev = wcharge_max_now
 
-      ! (E_{nx} - E_{nx-1}) / dx = rho_{nx-1/2}/epsilon0
-      wcharge_max = ex(nx-1) * epsilon0 + rho_max * dx
+      ! Calculate new surface charge density
+      pot_ext_max = set_potential_x_max()
+      Q_max_now = capacitor * (pot_ext_max + es_potential(nx_end))
+      Q_conv_max = convect_curr_max
+      wcharge_max_now = wcharge_max_prev + Q_conv_max + Q_max_now - Q_max_prev
 
-      ! This is used for diagnostics
-      dwcharge_max = wcharge_max - dwcharge_max
+      ! Charge wall difference
+      wcharge_max_diff = wcharge_max_now - wcharge_max_prev
     END IF
 
   END SUBROUTINE es_calc_charge_density_at_wall
@@ -789,18 +780,24 @@ end do
       x_max_boundary_open = .FALSE.
     END IF
 
-    wcharge_min = 0._num       ! charge density at x_min
-    wcharge_max = 0._num       ! charge density at x_max
-    dwcharge_min = 0._num      ! charge density difference between time steps
-    dwcharge_max = 0._num      ! charge density difference between time steps
-    convect_curr_min = 0._num  ! charge density due to particles
-    convect_curr_max = 0._num  ! charge density due to particles
-    Q_now = 0._num
-    Q_prev = Q_now             ! charge current due to the capacitor
-    wcharge_min_now = 0._num       ! charge density at x_min
-    wcharge_max_now = 0._num       ! charge density at x_min
-    wcharge_min_prev = 0._num       ! charge density at x_min
-    wcharge_max_prev = 0._num       ! charge density at x_min
+    wcharge_min_now = 0._num
+    wcharge_max_prev = 0._num
+    wcharge_min_now = 0._num
+    wcharge_max_prev = 0._num
+    wcharge_min_diff = 0._num
+    wcharge_max_diff = 0._num
+    convect_curr_min = 0._num
+    convect_curr_max = 0._num
+    Q_min_now = 0._num
+    Q_min_prev = 0._num
+    Q_max_now = 0._num
+    Q_max_prev = 0._num
+    Q_conv_min = 0._num
+    Q_conv_max = 0._num
+    wcharge_min_now = 0._num
+    wcharge_max_now = 0._num
+    wcharge_min_prev = 0._num
+    wcharge_max_prev = 0._num
 
     es_current = 0._num
 
@@ -856,12 +853,12 @@ end do
   SUBROUTINE es_wall_current_diagnostic
 
     IF (x_min_boundary_open) THEN
-      es_current(1) = (dwcharge_min - convect_curr_min) / dt
+      es_current(1) = (wcharge_min_diff - convect_curr_min) / dt
       convect_curr_min = 0._num
     END IF
 
     IF (x_max_boundary_open) THEN
-      es_current(nx) = (dwcharge_max - convect_curr_max) / dt
+      es_current(nx) = (wcharge_max_diff - convect_curr_max) / dt
       convect_curr_max = 0._num
     END IF
 
