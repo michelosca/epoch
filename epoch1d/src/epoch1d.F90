@@ -133,7 +133,9 @@ PROGRAM pic
   CALL manual_load
   CALL finish_injector_setup
 #ifdef ELECTROSTATIC
+#ifdef PETSC
   CALL setup_petsc_variables(nx)
+#endif
 #endif
 
 

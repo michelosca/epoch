@@ -215,31 +215,19 @@ CONTAINS
     REAL(num), ALLOCATABLE, DIMENSION(:) :: rho_all, pot_all
     REAL(dp), ALLOCATABLE, DIMENSION(:) :: b
     REAL(dp) :: w
-    REAL(num) :: fac, term0, term1, term2
+    REAL(num) :: fac
 
     ! Get charge density array ready for solver
     fac = -dx*dx/epsilon0
     solver_rho = rho * fac
     IF (x_min_boundary) THEN
       IF (capacitor_max) THEN
-        term0 = rho(nx_start) * 0.5_num
-        term1 = wcharge_min_prev / dx
-        term2 = Q_conv_min - Q_min_prev + pot_ext_min * capacitor
-        solver_rho(nx_start) = term0 + term1 + term2 / dx
-        solver_rho(nx_start) = solver_rho(nx_start) * fac
-      ELSE IF (.NOT.capacitor_flag) THEN
-          solver_rho(nx_start) = solver_rho(nx_start) - set_potential_x_min()
+        CALL set_poissonsolver_min_bc(rho(nx_start), solver_rho(nx_start))
       END IF
     END IF
     IF (x_max_boundary) THEN
       IF (capacitor_min) THEN
-        term0 = rho(nx_end) * 0.5_num
-        term1 = wcharge_max_prev / dx
-        term2 = Q_conv_max - Q_max_prev + pot_ext_max * capacitor
-        solver_rho(nx_end) = term0 + term1 + term2 / dx
-        solver_rho(nx_end) = solver_rho(nx_end) * fac
-      ELSE IF (.NOT.capacitor_flag) THEN
-        solver_rho(nx_end) = solver_rho(nx_end) - set_potential_x_max()
+        CALL set_poissonsolver_max_bc(rho(nx_end), solver_rho(nx_end))
       END IF
     END IF
 
