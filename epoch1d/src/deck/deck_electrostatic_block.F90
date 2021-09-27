@@ -188,6 +188,15 @@ CONTAINS
       current => current%next
     END DO
 
+    IF ((bc_field(c_bd_x_min)==c_bc_periodic .OR. &
+      bc_field(c_bd_x_max)==c_bc_periodic) .AND. &
+      ANY(add_potential_source)) THEN
+      IF (rank==0) THEN
+        WRITE(*,*) '*** WARNING ***'
+        WRITE(*,*) 'Potential sources will not work with periodic boundaries'
+      END IF
+    END IF
+
     IF (IAND(error, 1) /= 0) THEN
       IF (rank == 0) THEN
         WRITE(*,*) '*** ERROR ***'
