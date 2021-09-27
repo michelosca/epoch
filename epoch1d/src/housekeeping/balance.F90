@@ -448,6 +448,12 @@ CONTAINS
     DEALLOCATE(es_potential)
     ALLOCATE(es_potential(1-ng:nx_new+ng))
     es_potential = temp
+
+    CALL remap_field(es_current, temp)
+    DEALLOCATE(es_current)
+    ALLOCATE(es_current(1-ng:nx_new+ng))
+    es_current= temp
+    ALLOCATE(es_current(1-ng:nx+ng))
 #ifndef TRIDIAG
     CALL finalize_petsc
     CALL initialize_petsc(comm)

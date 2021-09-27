@@ -289,42 +289,64 @@ CONTAINS
     END IF
 
   END SUBROUTINE poisson_solver
-#else
 
+#else
 
   SUBROUTINE poisson_solver(rho)
 
     ! This subroutine solves Poisson's equation
     ! Input: charge_density array
     ! Output: electric potential array (data_array)
-    REAL(num), DIMENSION(1:nx_end), INTENT(IN) :: rho
-    REAL(num), DIMENSION(1:nx_end) :: b_array
-    REAL(num) :: constant
-    INTEGER :: i
+    REAL(num), DIMENSION(nx_start:nx_end), INTENT(IN) :: rho
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: solver_rho
+    REAL(num) :: fac
+    INTEGER :: i, i_start, i_end
     REAL(num), DIMENSION(:), POINTER :: vec_pointer
 
+    IF (capacitor_max .AND. x_min_boundary) THEN
+      i_start = nx_start + 1
+      i_end = nx_end + 1
+    ELSE
+      i_start = nx_start
+      i_end = nx_end
+    END IF
+    ALLOCATE(solver_rho(i_start:i_end))
+
     ! Get array ready for solver
-    constant = -dx*dx/epsilon0
-    b_array = rho * constant
-    b_array(1) = b_array(1) - set_potential_x_min()
-    b_array(nx_end) = b_array(nx_end) - set_potential_x_max()
+    fac = -dx*dx/epsilon0
+    solver_rho(i_start:i_end) = rho(nx_start:nx_end) * fac
+
+    ! Set up boundaries
+    IF (x_min_boundary) THEN
+      CALL set_poissonsolver_min_bc(rho(i_start), solver_rho(i_start))
+    END IF
+    IF (x_max_boundary) THEN
+      CALL set_poissonsolver_max_bc(rho(i_end), solver_rho(i_end))
+    END IF
 
     ! Get charge density data (data_array) into the Petsc vector
     CALL VecGetArrayF90(charge_dens_vec, vec_pointer, perr)
-    DO i = 1, nx_end
-      vec_pointer(i) = b_array(i)
+
+    DO i = i_start, i_end
+      vec_pointer(i) = solver_rho(i)
     END DO
     CALL VecRestoreArrayF90(charge_dens_vec, vec_pointer, perr)
+    DEALLOCATE(solver_rho)
 
     ! Solve linear system: transform_mtrx*es_potential_vec = charge_dens_vec
-    !                      A * x = b
     CALL KSPSolve(ksp, charge_dens_vec, es_potential_vec, perr)
 
     ! Pass electric potential data from PETSc to Fortran
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
-    DO i = 1, nx_end
-      es_potential(i) = vec_pointer(i)
-    END DO
+    IF (capacitor_max .AND. x_min_boundary) THEN
+      DO i = i_start, i_end
+        es_potential(i-1) = vec_pointer(i)
+      END DO
+    ELSE
+      DO i = i_start, i_end
+        es_potential(i) = vec_pointer(i)
+      END DO
+    END IF
     CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
 
   END SUBROUTINE poisson_solver
@@ -333,33 +355,42 @@ CONTAINS
 
   SUBROUTINE setup_petsc_vector
     
+    INTEGER :: n_local, n_global
+
+    n_local = nx_end - nx_start + 1
+    n_global = nx_all
+
     ! Charge density vector
-    CALL VecCreateMPI(comm, nx_end, nx_all, charge_dens_vec, perr)
+    CALL VecCreateMPI(comm, n_local, n_global, charge_dens_vec, perr)
     CALL VecSetFromOptions(charge_dens_vec, perr)
     ! Electric potential vector
     CALL VecDuplicate(charge_dens_vec, es_potential_vec, perr)
-    
+
   END SUBROUTINE setup_petsc_vector
 
 
 
   SUBROUTINE setup_petsc_matrix
     
-    INTEGER :: n_first, n_last
+    INTEGER :: n_first, n_last, n_local, n_global
     PetscInt :: zero
     PetscScalar :: values(3)
     PetscInt :: col(3), row
 
+    n_local = nx_end - nx_start + 1
+    n_global = nx_all
+
     ! Petsc subroutines setting up the Matrix
     CALL MatCreate(comm, transform_mtrx, perr)
-    CALL MatSetSizes(transform_mtrx, nx_end, nx_end, nx_all, nx_all, perr)
+    CALL MatSetSizes(transform_mtrx, n_local, n_local, n_global, n_global, perr)
     CALL MatSetFromOptions(transform_mtrx, perr)
     CALL MatSetUp(transform_mtrx, perr)
 
     ! Petsc matrix indexes (global). First index in Petsc is zero, hence
     ! Shift cell indexing so that it starts at 0
-    n_first = nx_global_min-1
-    n_last = nx_global_max-1
+    n_first = nx_global_min - 1
+    n_last = nx_global_max - 1
+    IF (capacitor_max) n_last = nx_global_max
 
     ! Matrix diagonal values
     values(1) = 1._num
@@ -373,28 +404,33 @@ CONTAINS
       row = n_first
       col(1) = row
       col(2) = row+1
+      IF (capacitor_max) values(2) = -1._num - dx*capacitor/epsilon0
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(2:3), &
               INSERT_VALUES, perr)
+      IF (capacitor_max) values(2) = -2._num
       ! Move to next row to be set
       n_first = n_first + 1
     END IF
 
     IF (x_max_boundary) THEN
-      n_last = n_last - 1
+      IF (.NOT.capacitor_min) THEN
+        n_last = n_last - 1
+      END IF
       ! Bottom matrix row
       row = n_last
       col(1) = row-1
       col(2) = row
+      IF (capacitor_min) values(2) = -1._num - dx*capacitor/epsilon0
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(1:2), &
               INSERT_VALUES, perr)
+      IF (capacitor_min) values(2) = -2._num
       ! Move to last row to be set
       n_last = n_last - 1
     END IF
-
 
     DO row = n_first, n_last
       col(1) = row-1
@@ -448,6 +484,48 @@ CONTAINS
 
   END SUBROUTINE destroy_petsc
 #endif
+
+
+  SUBROUTINE set_poissonsolver_min_bc(rho_min, solver_rho_min)
+
+    REAL(num), INTENT(IN) :: rho_min
+    REAL(num), INTENT(INOUT) :: solver_rho_min
+    REAL(num) :: term0, term1, term2
+    REAL(num) :: fac
+
+    IF (capacitor_max) THEN
+      fac = -dx*dx/epsilon0
+      term0 = rho_min * 0.5_num
+      term1 = wcharge_min_prev / dx
+      term2 = Q_conv_min - Q_min_prev + pot_ext_min * capacitor
+      solver_rho_min = term0 + term1 + term2 / dx
+      solver_rho_min = solver_rho_min * fac
+    ELSE IF (.NOT.capacitor_flag) THEN
+      solver_rho_min = solver_rho_min - set_potential_x_min()
+    END IF
+
+  END SUBROUTINE set_poissonsolver_min_bc
+
+
+  SUBROUTINE set_poissonsolver_max_bc(rho_max, solver_rho_max)
+
+    REAL(num), INTENT(IN) :: rho_max
+    REAL(num), INTENT(INOUT) :: solver_rho_max
+    REAL(num) :: term0, term1, term2
+    REAL(num) :: fac
+
+    IF (capacitor_min) THEN
+      fac = -dx*dx/epsilon0
+      term0 = rho_max * 0.5_num
+      term1 = wcharge_max_prev / dx
+      term2 = Q_conv_max - Q_max_prev + pot_ext_max * capacitor
+      solver_rho_max = term0 + term1 + term2 / dx
+      solver_rho_max = solver_rho_max * fac
+    ELSE IF (.NOT.capacitor_flag) THEN
+      solver_rho_max = solver_rho_max - set_potential_x_max()
+    END IF
+
+  END SUBROUTINE set_poissonsolver_max_bc
 
 
   SUBROUTINE es_calc_ex(rho_min, rho_max)
@@ -794,10 +872,8 @@ CONTAINS
     Q_max_prev = 0._num
     Q_conv_min = 0._num
     Q_conv_max = 0._num
-    wcharge_min_now = 0._num
-    wcharge_max_now = 0._num
-    wcharge_min_prev = 0._num
-    wcharge_max_prev = 0._num
+    pot_ext_max = 0._num
+    pot_ext_min = 0._num
 
     es_current = 0._num
 
@@ -840,7 +916,11 @@ CONTAINS
       IF (.NOT.capacitor_min) nx_end = nx_end - 1
     END IF
 
+#ifdef TRIDIAG
     IF (capacitor_min) THEN
+#else
+    IF (capacitor_flag) THEN
+#endif
       nx_all = nx_global
     ELSE
       nx_all = nx_global - 1

@@ -132,6 +132,10 @@ PROGRAM pic
   CALL custom_particle_load
   CALL manual_load
   CALL finish_injector_setup
+#ifdef ELECTROSTATIC
+  CALL setup_petsc_variables(nx)
+#endif
+
 
 #ifdef NEUTRAL_COLLISIONS
   IF (ANY(neutral_coll)) CALL final_nc_setup
