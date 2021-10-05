@@ -221,14 +221,10 @@ CONTAINS
     fac = -dx*dx/epsilon0
     solver_rho = rho * fac
     IF (x_min_boundary) THEN
-      IF (capacitor_max) THEN
         CALL set_poissonsolver_min_bc(rho(nx_start), solver_rho(nx_start))
-      END IF
     END IF
     IF (x_max_boundary) THEN
-      IF (capacitor_min) THEN
         CALL set_poissonsolver_max_bc(rho(nx_end), solver_rho(nx_end))
-      END IF
     END IF
 
     IF (rank==0) THEN
