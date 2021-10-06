@@ -182,7 +182,7 @@ CONTAINS
 
                 ! Nanbu-excitation has new_species_id when source_species_id
                 IF (coll_type%wnanbu) THEN
-                  IF (coll_type%new_species_id < 0 .OR. &
+                  IF (coll_type%new_species_id <= 0 .OR. &
                       coll_type%new_species_id > n_species) THEN
                     ncerr = 4
                     CYCLE
@@ -256,7 +256,7 @@ CONTAINS
         ELSE IF (ncerr ==3) THEN
           WRITE(*,*) 'Ionisation requires "new_species"'
         ELSE IF (ncerr ==4) THEN
-          WRITE(*,*) 'Excitation requires a valid ', &
+          WRITE(*,*) 'Nanbu excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
         ELSE IF (ncerr ==5) THEN
           WRITE(*,*) 'Split methods requires a valid "source_species"'

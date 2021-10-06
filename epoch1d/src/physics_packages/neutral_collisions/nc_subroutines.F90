@@ -680,7 +680,7 @@ CONTAINS
       m12 = collision%m12
 
       ! Incoming normalised velocity vector
-      v_inc = vector_normalisation(g)
+      v_inc = random_unit_vector()
 
       !Theta angle
       costheta = v_inc(1)
