@@ -181,17 +181,33 @@ CONTAINS
                   .AND. .NOT.is_background) THEN
 
                 ! Nanbu-excitation has new_species_id when source_species_id
-                IF (coll_type%new_species_id < 0 .OR. &
-                    coll_type%new_species_id > n_species) THEN
-                  ncerr = 4
-                  CYCLE
-                END IF
+                IF (coll_type%wnanbu) THEN
+                  IF (coll_type%new_species_id < 0 .OR. &
+                      coll_type%new_species_id > n_species) THEN
+                    ncerr = 4
+                    CYCLE
+                  END IF
 
-                ! Nanbu-excitation requires same mass for source and new species
-                m_source = species_list(coll_type%source_species_id)%mass
-                m_new = species_list(coll_type%new_species_id)%mass
-                IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
+                  ! Nanbu-excitation requires same mass for source and new species
+                  m_source = species_list(coll_type%source_species_id)%mass
+                  m_new = species_list(coll_type%new_species_id)%mass
+                  IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
+                END IF
+              ELSE
+                IF (coll_type%wvahedi .AND. .NOT.is_background) THEN
+                  ! Vahedi (without background) requires souce_species_id == neutrals_id
+                  ncerr = 20
+                END IF
               END IF
+            ELSE IF (coll_type%id == c_nc_elastic_electron) THEN
+              IF ((coll_type%source_species_id <= 0 .OR. &
+                 coll_type%source_species_id > n_species) .AND. &
+                 .NOT.is_background) ncerr = 21
+
+            ELSE IF (coll_type%id == c_nc_elastic_ion) THEN
+              IF ((coll_type%source_species_id <= 0 .OR. &
+                 coll_type%source_species_id > n_species) .AND. &
+                 .NOT.is_background) ncerr = 22
 
             END IF
           ELSE IF (coll_type%wnanbusplit .OR. coll_type%wvahedisplit) THEN
@@ -219,15 +235,14 @@ CONTAINS
               IF (coll_type%source_species_id <= 0 .OR. &
                   coll_type%source_species_id > n_species) ncerr = 5
 
-            END IF
-
-          END IF
+            END IF ! Collision type
+          END IF ! Collision method
           IF (ncerr /= 0) EXIT
-        END DO
+        END DO ! Loop over collision type list
         IF (ncerr /= 0) EXIT
-      END DO
+      END DO ! Loop over jspecies
       IF (ncerr /= 0) EXIT
-    END DO
+    END DO ! Loop over ispecies
 
     IF (ncerr /= 0) THEN
       IF (rank == 0) THEN
@@ -257,6 +272,15 @@ CONTAINS
             ' have the same mass'
         ELSE IF (ncerr ==13) THEN
           WRITE(*,*) 'Split methods does not support background collisions'
+        ELSE IF (ncerr ==20) THEN
+          WRITE(*,*) 'Vahedi excitation method (particle background) requires',&
+            ' source_species == <neutrals_name>'
+        ELSE IF (ncerr ==21) THEN
+          WRITE(*,*) 'Vahedi elastic-electron method (particle background)', &
+            ' requires source_species == <neutrals_name>'
+        ELSE IF (ncerr ==22) THEN
+          WRITE(*,*) 'Vahedi elastic-ion method (particle background) ', &
+            'requires source_species == <neutrals_name>'
         END IF
       CALL print_collision_type(ispecies, jspecies, nc_type)
       END IF

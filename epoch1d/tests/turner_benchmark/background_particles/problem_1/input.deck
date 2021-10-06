@@ -75,6 +75,8 @@ begin:species
   npart_per_cell = neutral_pcles_per_cell
   temp = temp_neutral
   density = dens_neutral
+  bc_x_min = reflect
+  bc_x_max = reflect
 end:species
 
 
