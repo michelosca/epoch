@@ -66,7 +66,7 @@ CONTAINS
     TYPE(current_collision_block), POINTER ,INTENT(IN) :: collision
     REAL(num), INTENT(IN) :: gsigma_total, g
 
-    INTEGER :: species1, species2, iu, io
+    INTEGER :: species1, species2
     CHARACTER(14) :: time_str, pos_str, gsigma_str, gsigma_max_str
     CHARACTER(14) :: g_str, boyd_factor_str
     CHARACTER(len=string_length) :: ispecies_str, jspecies_str
@@ -90,20 +90,17 @@ CONTAINS
       jspecies_str = species_list(species2)%name
     END IF
     
-    DO iu = 1, nio_units ! Print to stdout and to file
-      io = io_units(iu)
-      WRITE(io,*)
-      WRITE(io,*) '*** WARNING ***'
-      WRITE(io,*) 'MAX(g*sigma) of species ', TRIM(ADJUSTL(ispecies_str)), &
+      WRITE(*,*)
+      WRITE(*,*) '*** WARNING ***'
+      WRITE(*,*) 'MAX(g*sigma) of species ', TRIM(ADJUSTL(ispecies_str)), &
         ' and ', TRIM(ADJUSTL(jspecies_str)), ' is lower than expected.'
-      WRITE(io,*) 'Position [m]:         ', TRIM(ADJUSTL(pos_str))
-      WRITE(io,*) 'Time [s]:             ', TRIM(ADJUSTL(time_str))
-      WRITE(io,*) 'g*sigma [m^3/s]:      ', TRIM(ADJUSTL(gsigma_str))
-      WRITE(io,*) 'MAX(g*sigma) [m^3/s]: ', TRIM(ADJUSTL(gsigma_max_str))
-      WRITE(io,*) 'g [m/s]:              ', TRIM(ADJUSTL(g_str))
-      WRITE(io,*) 'Boyd factor []:       ', TRIM(ADJUSTL(boyd_factor_str))
-      WRITE(io,*)
-    END DO
+      WRITE(*,*) 'Position [m]:         ', TRIM(ADJUSTL(pos_str))
+      WRITE(*,*) 'Time [s]:             ', TRIM(ADJUSTL(time_str))
+      WRITE(*,*) 'g*sigma [m^3/s]:      ', TRIM(ADJUSTL(gsigma_str))
+      WRITE(*,*) 'MAX(g*sigma) [m^3/s]: ', TRIM(ADJUSTL(gsigma_max_str))
+      WRITE(*,*) 'g [m/s]:              ', TRIM(ADJUSTL(g_str))
+      WRITE(*,*) 'Boyd factor []:       ', TRIM(ADJUSTL(boyd_factor_str))
+      WRITE(*,*)
 
 987 FORMAT (ES14.6)
 
