@@ -10,3 +10,6 @@
     REAL(num), PARAMETER :: fac2 = 0.5_num * third
     REAL(num), PARAMETER :: fac3 = 7.1875_num * third
 #endif
+#ifdef ELECTROSTATIC
+    INTEGER :: j, minus_sf_min = -sf_min
+#endif
