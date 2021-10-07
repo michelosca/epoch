@@ -11,5 +11,8 @@
     REAL(num), PARAMETER :: fac3 = 7.1875_num * third
 #endif
 #ifdef ELECTROSTATIC
-    INTEGER :: j, minus_sf_min = -sf_min
+    INTEGER :: j
+#ifndef PARTICLE_SHAPE_TOPHAT
+    INTEGER :: minus_sf_min = -sf_min
+#endif
 #endif
