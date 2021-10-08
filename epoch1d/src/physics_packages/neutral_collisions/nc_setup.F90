@@ -44,7 +44,7 @@ CONTAINS
   SUBROUTINE load_neutral_collisions
 
     INTEGER :: ispecies, jspecies, n_coll_type, lines, l, species
-    INTEGER :: iu, io, errcode, iread, file_id, header_lines
+    INTEGER :: errcode, iread, file_id, header_lines
     LOGICAL :: ij_exists, ji_exists, header, is_background
     
     CHARACTER(string_length) :: element, value
@@ -106,15 +106,12 @@ CONTAINS
               IF (is_background) coll_block%background => background
             ELSE ! No table is found
               IF (rank == 0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'No energy-cross-section table is found for', &
-                    ' species pair ', TRIM(ADJUSTL(ij_filename))
-                  WRITE(io,*) 'Please add table and rerun code'
-                  WRITE(io,*) ''
-                END DO
+                WRITE(*,*)
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'No energy-cross-section table is found for', &
+                  ' species pair ', TRIM(ADJUSTL(ij_filename))
+                WRITE(*,*) 'Please add table and rerun code'
+                WRITE(*,*) ''
               END IF
               CALL MPI_BARRIER(comm, errcode)
               CALL abort_code(c_err_missing_elements)
@@ -164,13 +161,10 @@ CONTAINS
               OPEN(file_id,FILE=TRIM(full_path_file), STATUS='OLD', &
                 IOSTAT=errcode)
               IF (errcode /= 0 .AND. rank==0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'Error reading cross section files'
-                  WRITE(io,*)
-                END DO
+                WRITE(*,*)
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'Error reading cross section files'
+                WRITE(*,*)
                 CALL abort_code(c_err_bad_value)
               END IF
 
@@ -195,13 +189,10 @@ CONTAINS
               
               ! Check the number of lines read. Minimum is one line
               IF (rank==0 .AND. lines == 0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'Table in file ', TRIM(ij_type_k_filename), &
-                      ' is empty'
-                  WRITE(io,*)
-                END DO
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'Table in file ', TRIM(ij_type_k_filename), &
+                    ' is empty'
+                WRITE(*,*)
                 CALL abort_code(c_err_io_error)
               END IF
 
@@ -270,7 +261,6 @@ CONTAINS
     TYPE(neutrals_block), POINTER, INTENT(INOUT) :: coll_block
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     INTEGER, INTENT(IN) :: ispecies, jspecies
-    INTEGER :: io, iu
     REAL(num) :: mi, mj, mu
 
     ! Convert energy data into Joules
@@ -298,19 +288,16 @@ CONTAINS
     IF (coll_block%is_background) THEN
       IF (.NOT.coll_type%wnanbu .AND. .NOT.coll_type%wvahedi) THEN
         IF (rank == 0) THEN
-          DO iu = 1, nio_units ! Print to stdout and to file
-            io = io_units(iu)
-            WRITE(io,*)
-            WRITE(io,*) '*** WARNING ***'
-            WRITE(io,*) "Collisions with background gas are only possible", &
-              " with Nanbu's or Vahedi's method"
-            WRITE(io,*) 'Collision between ', &
-              TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
-              TRIM(ADJUSTL(coll_block%background%name))
-            WRITE(io,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
-              " switched to Nanbu's method"
-            WRITE(io,*) ''
-          END DO
+          WRITE(*,*)
+          WRITE(*,*) '*** WARNING ***'
+          WRITE(*,*) "Collisions with background gas are only possible", &
+            " with Nanbu's or Vahedi's method"
+          WRITE(*,*) 'Collision between ', &
+            TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
+            TRIM(ADJUSTL(coll_block%background%name))
+          WRITE(*,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
+            " switched to Nanbu's method"
+          WRITE(*,*) ''
         END IF
         coll_type%wnanbu = .TRUE.
         coll_type%wvahedi = .FALSE.
@@ -330,7 +317,6 @@ CONTAINS
 
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     LOGICAL, INTENT(IN) :: is_background
-    INTEGER :: io, iu
     LOGICAL :: linked, background_mismatch
     CHARACTER(len=20) :: method_str
 
@@ -387,15 +373,12 @@ CONTAINS
       END IF
 #else
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Collision split method is only possible with', &
-            ' per-particle weight set-up.'
-          WRITE(io,*) 'Please recompile, and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Collision split method is only possible with', &
+          ' per-particle weight set-up.'
+        WRITE(*,*) 'Please recompile, and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -453,15 +436,12 @@ CONTAINS
       END IF
 #else
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Collision split method is only possible with', &
-            ' per-particle weight set-up.'
-          WRITE(io,*) 'Please recompile, and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Collision split method is only possible with', &
+          ' per-particle weight set-up.'
+        WRITE(*,*) 'Please recompile, and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -474,14 +454,11 @@ CONTAINS
         IF (coll_type%wvahedi) method_str = 'Vahedi'
         IF (coll_type%wvahedisplit) method_str = 'Vahedi split'
         IF (coll_type%wnanbusplit) method_str = 'Nanbu split'
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) TRIM(coll_type%name), ' is not available for ', &
-            TRIM(ADJUSTL(method_str)), ' method'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) TRIM(coll_type%name), ' is not available for ', &
+          TRIM(ADJUSTL(method_str)), ' method'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -489,14 +466,10 @@ CONTAINS
 
     IF (background_mismatch) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) TRIM(coll_type%name), ' method is not available for ', &
-            'collisions with background gas'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) TRIM(coll_type%name), ' method is not available for ', &
+          'collisions with background gas'
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -745,7 +718,7 @@ CONTAINS
 
   SUBROUTINE allocate_table_header(element, value, coll_type, coll_block)
   
-    INTEGER :: errcode, io, iu, ibg
+    INTEGER :: errcode, ibg
     LOGICAL :: flag
     REAL(num) :: conversion_factor
     CHARACTER(*), INTENT(IN) :: element, value
@@ -865,15 +838,12 @@ CONTAINS
 
     IF (errcode /= c_err_none) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Neutral collision table value "species_source_name"', &
-            ' "species_target_name" has not been defined correctly'
-          WRITE(io,*) 'Please fix value(s) and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Neutral collision table value "species_source_name"', &
+          ' "species_target_name" has not been defined correctly'
+        WRITE(*,*) 'Please fix value(s) and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
