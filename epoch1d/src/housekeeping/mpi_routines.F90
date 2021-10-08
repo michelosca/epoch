@@ -257,7 +257,6 @@ CONTAINS
     es_potential = 0._num
 #ifndef TRIDIAG
     CALL initialize_petsc(comm)
-    CALL setup_petsc_variables(nx)
 #endif
 #endif
 

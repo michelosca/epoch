@@ -66,7 +66,7 @@ CONTAINS
     TYPE(current_collision_block), POINTER ,INTENT(IN) :: collision
     REAL(num), INTENT(IN) :: gsigma_total, g
 
-    INTEGER :: species1, species2, iu, io
+    INTEGER :: species1, species2
     CHARACTER(14) :: time_str, pos_str, gsigma_str, gsigma_max_str
     CHARACTER(14) :: g_str, boyd_factor_str
     CHARACTER(len=string_length) :: ispecies_str, jspecies_str
@@ -90,20 +90,17 @@ CONTAINS
       jspecies_str = species_list(species2)%name
     END IF
     
-    DO iu = 1, nio_units ! Print to stdout and to file
-      io = io_units(iu)
-      WRITE(io,*)
-      WRITE(io,*) '*** WARNING ***'
-      WRITE(io,*) 'MAX(g*sigma) of species ', TRIM(ADJUSTL(ispecies_str)), &
+      WRITE(*,*)
+      WRITE(*,*) '*** WARNING ***'
+      WRITE(*,*) 'MAX(g*sigma) of species ', TRIM(ADJUSTL(ispecies_str)), &
         ' and ', TRIM(ADJUSTL(jspecies_str)), ' is lower than expected.'
-      WRITE(io,*) 'Position [m]:         ', TRIM(ADJUSTL(pos_str))
-      WRITE(io,*) 'Time [s]:             ', TRIM(ADJUSTL(time_str))
-      WRITE(io,*) 'g*sigma [m^3/s]:      ', TRIM(ADJUSTL(gsigma_str))
-      WRITE(io,*) 'MAX(g*sigma) [m^3/s]: ', TRIM(ADJUSTL(gsigma_max_str))
-      WRITE(io,*) 'g [m/s]:              ', TRIM(ADJUSTL(g_str))
-      WRITE(io,*) 'Boyd factor []:       ', TRIM(ADJUSTL(boyd_factor_str))
-      WRITE(io,*)
-    END DO
+      WRITE(*,*) 'Position [m]:         ', TRIM(ADJUSTL(pos_str))
+      WRITE(*,*) 'Time [s]:             ', TRIM(ADJUSTL(time_str))
+      WRITE(*,*) 'g*sigma [m^3/s]:      ', TRIM(ADJUSTL(gsigma_str))
+      WRITE(*,*) 'MAX(g*sigma) [m^3/s]: ', TRIM(ADJUSTL(gsigma_max_str))
+      WRITE(*,*) 'g [m/s]:              ', TRIM(ADJUSTL(g_str))
+      WRITE(*,*) 'Boyd factor []:       ', TRIM(ADJUSTL(boyd_factor_str))
+      WRITE(*,*)
 
 987 FORMAT (ES14.6)
 
@@ -184,17 +181,33 @@ CONTAINS
                   .AND. .NOT.is_background) THEN
 
                 ! Nanbu-excitation has new_species_id when source_species_id
-                IF (coll_type%new_species_id < 0 .OR. &
-                    coll_type%new_species_id > n_species) THEN
-                  ncerr = 4
-                  CYCLE
-                END IF
+                IF (coll_type%wnanbu) THEN
+                  IF (coll_type%new_species_id <= 0 .OR. &
+                      coll_type%new_species_id > n_species) THEN
+                    ncerr = 4
+                    CYCLE
+                  END IF
 
-                ! Nanbu-excitation requires same mass for source and new species
-                m_source = species_list(coll_type%source_species_id)%mass
-                m_new = species_list(coll_type%new_species_id)%mass
-                IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
+                  ! Nanbu-excitation requires same mass for source and new species
+                  m_source = species_list(coll_type%source_species_id)%mass
+                  m_new = species_list(coll_type%new_species_id)%mass
+                  IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
+                END IF
+              ELSE
+                IF (coll_type%wvahedi .AND. .NOT.is_background) THEN
+                  ! Vahedi (without background) requires souce_species_id == neutrals_id
+                  ncerr = 20
+                END IF
               END IF
+            ELSE IF (coll_type%id == c_nc_elastic_electron) THEN
+              IF ((coll_type%source_species_id <= 0 .OR. &
+                 coll_type%source_species_id > n_species) .AND. &
+                 .NOT.is_background) ncerr = 21
+
+            ELSE IF (coll_type%id == c_nc_elastic_ion) THEN
+              IF ((coll_type%source_species_id <= 0 .OR. &
+                 coll_type%source_species_id > n_species) .AND. &
+                 .NOT.is_background) ncerr = 22
 
             END IF
           ELSE IF (coll_type%wnanbusplit .OR. coll_type%wvahedisplit) THEN
@@ -222,15 +235,14 @@ CONTAINS
               IF (coll_type%source_species_id <= 0 .OR. &
                   coll_type%source_species_id > n_species) ncerr = 5
 
-            END IF
-
-          END IF
+            END IF ! Collision type
+          END IF ! Collision method
           IF (ncerr /= 0) EXIT
-        END DO
+        END DO ! Loop over collision type list
         IF (ncerr /= 0) EXIT
-      END DO
+      END DO ! Loop over jspecies
       IF (ncerr /= 0) EXIT
-    END DO
+    END DO ! Loop over ispecies
 
     IF (ncerr /= 0) THEN
       IF (rank == 0) THEN
@@ -244,7 +256,7 @@ CONTAINS
         ELSE IF (ncerr ==3) THEN
           WRITE(*,*) 'Ionisation requires "new_species"'
         ELSE IF (ncerr ==4) THEN
-          WRITE(*,*) 'Excitation requires a valid ', &
+          WRITE(*,*) 'Nanbu excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
         ELSE IF (ncerr ==5) THEN
           WRITE(*,*) 'Split methods requires a valid "source_species"'
@@ -260,6 +272,15 @@ CONTAINS
             ' have the same mass'
         ELSE IF (ncerr ==13) THEN
           WRITE(*,*) 'Split methods does not support background collisions'
+        ELSE IF (ncerr ==20) THEN
+          WRITE(*,*) 'Vahedi excitation method (particle background) requires',&
+            ' source_species == <neutrals_name>'
+        ELSE IF (ncerr ==21) THEN
+          WRITE(*,*) 'Vahedi elastic-electron method (particle background)', &
+            ' requires source_species == <neutrals_name>'
+        ELSE IF (ncerr ==22) THEN
+          WRITE(*,*) 'Vahedi elastic-ion method (particle background) ', &
+            'requires source_species == <neutrals_name>'
         END IF
       CALL print_collision_type(ispecies, jspecies, nc_type)
       END IF
