@@ -86,6 +86,7 @@ begin:collisions
   use_collisions = T
   collide = none
   use_nanbu = T
+  cross_section_table_location = ./tests/turner_benchmark/background_field
 end:collisions
 
 
