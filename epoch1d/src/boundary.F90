@@ -900,7 +900,7 @@ CONTAINS
           CALL remove_particle_from_partlist(&
               species_list(ispecies)%attached_list, cur)
 #ifdef PART_PERP_POSITION
-          IF (track_ejected_particles .AND. .NOT.y_perp_ejection)
+          IF (track_ejected_particles .AND. .NOT.y_perp_ejection) THEN
 #else
           IF (track_ejected_particles) THEN
 #endif
