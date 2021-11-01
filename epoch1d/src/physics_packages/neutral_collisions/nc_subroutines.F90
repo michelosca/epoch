@@ -292,6 +292,9 @@ CONTAINS
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, random_direction
     REAL(num) :: m1, m2, im1, w1, w2, w_diff, w_min, reducedm
     REAL(num) :: ran_e, part2_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part2_pos_y
+#endif
     REAL(num) :: g_mag, e_threshold, e_excess, u_excess, u_excess_total
     INTEGER :: species1, ion_id
     LOGICAL :: merge_electrons
@@ -306,6 +309,9 @@ CONTAINS
     reducedm = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+    part2_pos_y = part2%part_pos_y
+#endif
 
     ! Excess energy distribution between the two electrons
     e_excess = 0.5_num*reducedm*g_mag*g_mag - e_threshold
@@ -361,6 +367,9 @@ CONTAINS
     u_e2 = u_excess*random_direction  ! cm frame of reference
     new_part%part_p = (u_cm + u_e2)*m1
     new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part2_pos_y
+#endif
     new_part%weight = w_min
     CALL add_particle_to_partlist( &
       species_list(species1)%attached_list, new_part)
@@ -377,6 +386,9 @@ CONTAINS
     CALL create_particle(new_part)
     new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
     new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part2_pos_y
+#endif
     new_part%weight = w_min
     CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
       new_part)
@@ -421,6 +433,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = u_cm * m1 - p_scat
       new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
       new_part%weight = w2
       CALL add_particle_to_partlist( &
         species_list(collision%species1)%attached_list, new_part)
@@ -449,6 +464,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = u_cm * m2 + p_scat
       new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part1%part_pos_y
+#endif
       new_part%weight = w1
       CALL add_particle_to_partlist( &
         species_list(collision%species2)%attached_list, new_part)
@@ -530,6 +548,9 @@ CONTAINS
       u_e2 = u_excess*random_direction  ! cm frame of reference
       new_part%part_p = (u_cm + u_e2)*m1
       new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = w2
 #endif
@@ -809,6 +830,9 @@ CONTAINS
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
     REAL(num) :: sinratio, m1, m2, part_pos, ran_e, ranw, w2rat
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
+#endif
     INTEGER :: species_id, species1
     TYPE(particle), POINTER :: part1, part2, new_part
 
@@ -824,6 +848,9 @@ CONTAINS
     IF (ranw <= w2rat) THEN
 
       part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      part_pos_y = part1%part_pos_y
+#endif
       g_mag = collision%g_mag
 
       e_inc = 0.5_num * m1 * g_mag * g_mag
@@ -873,6 +900,9 @@ CONTAINS
         CALL create_particle(new_part)
         new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
         new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+        new_part%part_pos_y = part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
         new_part%weight = w1 ! Electron's weight
 #endif
@@ -888,6 +918,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = part2%part_p
       new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = w1 ! Electron's weight
 #endif
@@ -915,6 +948,9 @@ CONTAINS
     !  u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
     !  new_part%part_p = (u_cm + u_e2)*m1
     !  new_part%part_pos = part2%part_pos
+    !#ifdef PART_PERP_POSITION
+    !  new_part%part_pos_y = part2%part_pos_y
+    !#endif
     !#ifndef PER_SPECIES_WEIGHT
     !  new_part%weight = w2 ! Electron's weight
     !#endif
@@ -954,6 +990,9 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, part2_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part2_pos_y
+#endif
     REAL(num) :: w1, w2, w_diff, w_min, w1max_rat, w2max_rat
     REAL(num) :: ran_e, phi
     REAL(num) :: g_mag, e_threshold
@@ -974,6 +1013,9 @@ CONTAINS
     mu = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+    part2_pos_y = part2%part_pos_y
+#endif
 
     ! Energy balance and post collision speed
     e_inc = 0.5_num * mu * g_mag * g_mag
@@ -1064,6 +1106,9 @@ CONTAINS
       u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
       new_part%part_p = u_e2 * m1
       new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2_pos_y
+#endif
       new_part%weight = w_min
       CALL add_particle_to_partlist( &
         species_list(species1)%attached_list, new_part)
@@ -1080,6 +1125,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = collision%u_2 * m2
       new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2_pos_y
+#endif
       new_part%weight = w_min
       CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
         new_part)
@@ -1188,6 +1236,9 @@ CONTAINS
     u_e2 = u_excess*random_direction  ! cm frame of reference
     new_part%part_p = (u_cm + u_e2)*m1
     new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part1%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
     new_part%weight = w1 ! Electron's weight
 #endif
@@ -1200,6 +1251,9 @@ CONTAINS
     CALL create_particle(new_part)
     new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
     new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part1%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
     new_part%weight = w1 ! Electron's weight
 #endif
@@ -1252,6 +1306,9 @@ CONTAINS
       ! Post-collision momentum
       CALL create_particle(new_part)
       new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part1%part_pos_y
+#endif
       new_part%part_p = u_cm*m2 - p_scat
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = collision%w1
@@ -1470,6 +1527,9 @@ CONTAINS
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
     REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
     REAL(num) :: sinratio, m1, part_pos, ran_e
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
+#endif
     INTEGER :: species_id
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
@@ -1479,6 +1539,9 @@ CONTAINS
 #endif
 
     part_pos = collision%part1%part_pos
+#ifdef PART_PERP_POSITION
+    part_pos_y = collision%part1%part_pos_y
+#endif
     m1 = collision%m1
     g_mag = collision%g_mag
 
@@ -1529,6 +1592,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
       new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = collision%w1 ! Electron's weight
 #endif
@@ -1543,6 +1609,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = collision%u_2 * collision%m2
       new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = collision%w1 ! Electron's weight
 #endif
