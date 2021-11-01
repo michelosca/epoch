@@ -576,6 +576,10 @@ CONTAINS
 
     new_particle%part_p = 0.0_num
     new_particle%part_pos = 0.0_num
+#ifdef PART_PERP_POSITION
+    new_particle%part_pos_y = 0._num
+#endif
+
 #if !defined(PER_SPECIES_WEIGHT) || defined(PHOTONS) || defined(BREMSSTRAHLUNG)
     new_particle%weight = 0.0_num
 #endif

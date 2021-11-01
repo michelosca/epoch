@@ -642,6 +642,7 @@ CONTAINS
     REAL(num) :: x_shift
 #ifdef PART_PERP_POSITION
     INTEGER :: y_min_count, y_max_count
+    LOGICAL :: y_perp_ejection
 #endif
 #ifdef ELECTROSTATIC
     REAL(num) :: part_weight, part_charge
@@ -878,15 +879,18 @@ CONTAINS
 
         ! Perpendicular particle position
 #ifdef PART_PERP_POSITION
+        y_perp_ejection = .FALSE.
         IF (y_perp_flag) THEN
           IF (cur%part_pos_y > y_max) THEN
             out_of_bounds = .TRUE.
             y_max_count = y_max_count + 1
+            y_perp_ejection = .TRUE.
           END IF
 
           IF (cur%part_pos_y < y_min) THEN
             out_of_bounds = .TRUE.
             y_min_count = y_min_count + 1
+            y_perp_ejection = .TRUE.
           END IF
         END IF
 #endif
@@ -895,7 +899,11 @@ CONTAINS
           ! Particle has gone forever
           CALL remove_particle_from_partlist(&
               species_list(ispecies)%attached_list, cur)
+#ifdef PART_PERP_POSITION
+          IF (track_ejected_particles .AND. .NOT.y_perp_ejection) THEN
+#else
           IF (track_ejected_particles) THEN
+#endif
             CALL add_particle_to_partlist(&
                 ejected_list(ispecies)%attached_list, cur)
           ELSE
