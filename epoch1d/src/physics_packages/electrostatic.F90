@@ -297,16 +297,17 @@ CONTAINS
     REAL(num), DIMENSION(nx_start:nx_end), INTENT(IN) :: rho
     REAL(num), ALLOCATABLE, DIMENSION(:) :: solver_rho
     REAL(num) :: fac
-    INTEGER :: i, i_start, i_end
+    INTEGER :: i, i_start, i_end, n0
     REAL(num), DIMENSION(:), POINTER :: vec_pointer
 
     IF (capacitor_max .AND. x_min_boundary) THEN
-      i_start = nx_start + 1
-      i_end = nx_end + 1
+      n0 = 1
     ELSE
-      i_start = nx_start
-      i_end = nx_end
+      n0 = 0
     END IF
+    i_start = nx_start + n0
+    i_end = nx_end + n0
+
     ALLOCATE(solver_rho(i_start:i_end))
 
     ! Get array ready for solver
@@ -335,15 +336,9 @@ CONTAINS
 
     ! Pass electric potential data from PETSc to Fortran
     CALL VecGetArrayReadF90(es_potential_vec, vec_pointer, perr)
-    IF (capacitor_max .AND. x_min_boundary) THEN
-      DO i = i_start, i_end
-        es_potential(i-1) = vec_pointer(i)
-      END DO
-    ELSE
-      DO i = i_start, i_end
-        es_potential(i) = vec_pointer(i)
-      END DO
-    END IF
+    DO i = i_start, i_end
+      es_potential(i-n0) = vec_pointer(i)
+    END DO
     CALL VecRestoreArrayReadF90(es_potential_vec, vec_pointer, perr)
 
   END SUBROUTINE poisson_solver
