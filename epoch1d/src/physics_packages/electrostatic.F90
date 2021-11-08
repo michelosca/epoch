@@ -315,10 +315,10 @@ CONTAINS
 
     ! Set up boundaries
     IF (x_min_boundary) THEN
-      CALL set_poissonsolver_min_bc(rho(i_start), solver_rho(i_start))
+      CALL set_poissonsolver_min_bc(rho(nx_start), solver_rho(i_start))
     END IF
     IF (x_max_boundary) THEN
-      CALL set_poissonsolver_max_bc(rho(i_end), solver_rho(i_end))
+      CALL set_poissonsolver_max_bc(rho(nx_end), solver_rho(i_end))
     END IF
 
     ! Get charge density data (data_array) into the Petsc vector
