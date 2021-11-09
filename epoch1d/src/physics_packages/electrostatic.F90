@@ -70,12 +70,21 @@ CONTAINS
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
 
-    ! This subroutine updates the charge surface density values at wall
-    CALL es_calc_charge_density_at_wall
+    IF (x_min_boundary_open) THEN
+      pot_ext_min = set_potential_x_min()
+      Q_conv_min = convect_curr_min
+    END IF
+    IF (x_max_boundary_open) THEN
+      pot_ext_max = set_potential_x_max()
+      Q_conv_max = convect_curr_max
+    END IF
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential(es_charge_density(nx_start:nx_end))
+
+    ! This subroutine updates the charge surface density values at wall
+    CALL es_calc_charge_density_at_wall
 
     ! Save charge density at dx/2 from boundary and deallocate
     IF (x_min_boundary_open) rho_min = SUM(es_charge_density(0:1)) * 0.5_num
@@ -488,8 +497,8 @@ CONTAINS
     IF (capacitor_max) THEN
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
-      term1 = wcharge_min_prev / dx
-      term2 = Q_conv_min - Q_min_prev + pot_ext_min * capacitor
+      term1 = wcharge_min_now / dx
+      term2 = Q_conv_min - Q_min_now + pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -509,8 +518,8 @@ CONTAINS
     IF (capacitor_min) THEN
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
-      term1 = wcharge_max_prev / dx
-      term2 = Q_conv_max - Q_max_prev + pot_ext_max * capacitor
+      term1 = wcharge_max_now / dx
+      term2 = Q_conv_max - Q_max_now + pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -518,6 +527,37 @@ CONTAINS
     END IF
 
   END SUBROUTINE set_poissonsolver_max_bc
+
+
+  SUBROUTINE es_calc_charge_density_at_wall
+
+    ! This subroutine only makes sense for open boundary conditions
+    IF (x_min_boundary_open) THEN
+      ! Buffer previous values
+      Q_min_prev = Q_min_now
+      wcharge_min_prev = wcharge_min_now
+
+      ! Calculate new surface charge density
+      Q_min_now = capacitor * (pot_ext_min - es_potential(0))
+
+      wcharge_min_diff = Q_conv_min + Q_min_now - Q_min_prev
+      wcharge_min_now = wcharge_min_prev + wcharge_min_diff 
+    END IF
+
+    IF (x_max_boundary_open) THEN
+      ! Buffer previous values
+      Q_max_prev = Q_max_now
+      wcharge_max_prev = wcharge_max_now
+
+      ! Calculate new surface charge density
+      Q_max_now = capacitor * (pot_ext_max + es_potential(nx))
+
+      wcharge_max_diff = Q_conv_max + Q_max_now - Q_max_prev
+      wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
+    END IF
+
+  END SUBROUTINE es_calc_charge_density_at_wall
+
 
 
   SUBROUTINE es_calc_ex(rho_min, rho_max)
@@ -554,43 +594,6 @@ CONTAINS
     END DO
 
   END SUBROUTINE es_calc_ex
-
-
-
-  SUBROUTINE es_calc_charge_density_at_wall
-
-    ! This subroutine only makes sense for open boundary conditions
-    IF (x_min_boundary_open) THEN
-      ! Buffer previous values
-      Q_min_prev = Q_min_now
-      wcharge_min_prev = wcharge_min_now
-
-      ! Calculate new surface charge density
-      pot_ext_min = set_potential_x_min()
-      Q_min_now = capacitor * (pot_ext_min - es_potential(0))
-      Q_conv_min = convect_curr_min
-      wcharge_min_now = wcharge_min_prev + Q_conv_min + Q_min_now - Q_min_prev
-
-      ! Charge wall difference
-      wcharge_min_diff = wcharge_min_now - wcharge_min_prev
-    END IF
-
-    IF (x_max_boundary_open) THEN
-      ! Buffer previous values
-      Q_max_prev = Q_max_now
-      wcharge_max_prev = wcharge_max_now
-
-      ! Calculate new surface charge density
-      pot_ext_max = set_potential_x_max()
-      Q_max_now = capacitor * (pot_ext_max + es_potential(nx_end))
-      Q_conv_max = convect_curr_max
-      wcharge_max_now = wcharge_max_prev + Q_conv_max + Q_max_now - Q_max_prev
-
-      ! Charge wall difference
-      wcharge_max_diff = wcharge_max_now - wcharge_max_prev
-    END IF
-
-  END SUBROUTINE es_calc_charge_density_at_wall
 
 
 
