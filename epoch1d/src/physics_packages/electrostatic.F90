@@ -55,7 +55,7 @@ MODULE electrostatic
   REAL(num) :: wcharge_min_diff, wcharge_max_diff
   REAL(num) :: Q_min_now, Q_min_prev
   REAL(num) :: Q_max_now, Q_max_prev
-  REAL(num) :: Q_conv_max, Q_conv_min
+  REAL(num) :: Q_conv
   REAL(num) :: pot_ext_max, pot_ext_min
 
 
@@ -64,20 +64,25 @@ CONTAINS
   SUBROUTINE es_update_e_field
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
-    REAL(num) :: rho_max, rho_min
+    REAL(num), DIMENSION(2) :: Q_array
+    REAL(num) :: rho_max, rho_min, Q_conv_local
 
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
 
+    Q_array = 0._num
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
-      Q_conv_min = convect_curr_min
+      Q_array(1) = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
       pot_ext_max = set_potential_x_max()
-      Q_conv_max = convect_curr_max
+      Q_array(2) = convect_curr_max
     END IF
+    Q_conv_local = SUM(Q_array)
+    CALL MPI_ALLREDUCE(Q_conv_local, Q_conv, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+      comm, errcode)
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
@@ -498,7 +503,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
       term1 = wcharge_min_now / dx
-      term2 = Q_conv_min - Q_min_now + pot_ext_min * capacitor
+      term2 = Q_conv - Q_min_now + pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -519,7 +524,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
       term1 = wcharge_max_now / dx
-      term2 = Q_conv_max - Q_max_now + pot_ext_max * capacitor
+      term2 = Q_conv - Q_max_now + pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -540,7 +545,7 @@ CONTAINS
       ! Calculate new surface charge density
       Q_min_now = capacitor * (pot_ext_min - es_potential(0))
 
-      wcharge_min_diff = Q_conv_min + Q_min_now - Q_min_prev
+      wcharge_min_diff = Q_conv + Q_min_now - Q_min_prev
       wcharge_min_now = wcharge_min_prev + wcharge_min_diff 
     END IF
 
@@ -552,7 +557,7 @@ CONTAINS
       ! Calculate new surface charge density
       Q_max_now = capacitor * (pot_ext_max + es_potential(nx))
 
-      wcharge_max_diff = Q_conv_max + Q_max_now - Q_max_prev
+      wcharge_max_diff = Q_conv + Q_max_now - Q_max_prev
       wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
     END IF
 
@@ -865,8 +870,7 @@ CONTAINS
     Q_min_prev = 0._num
     Q_max_now = 0._num
     Q_max_prev = 0._num
-    Q_conv_min = 0._num
-    Q_conv_max = 0._num
+    Q_conv = 0._num
     pot_ext_max = 0._num
     pot_ext_min = 0._num
 
