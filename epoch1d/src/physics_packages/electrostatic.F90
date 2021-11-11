@@ -210,14 +210,14 @@ CONTAINS
       IF (capacitor_min) THEN
         es_potential(0) = 0._num
       ELSE IF (.NOT.capacitor_flag) THEN
-        es_potential(0) = set_potential_x_min()
+        es_potential(0) = pot_ext_min 
       END IF
     END IF
     IF (x_max_boundary) THEN
       IF (capacitor_max) THEN
         es_potential(nx) = 0._num
       ELSE IF (.NOT.capacitor_flag) THEN
-        es_potential(nx) = set_potential_x_max()
+        es_potential(nx) = pot_ext_max 
       END IF
     END IF
 
@@ -502,7 +502,7 @@ CONTAINS
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
-      solver_rho_min = solver_rho_min - set_potential_x_min()
+      solver_rho_min = solver_rho_min - pot_ext_min
     END IF
 
   END SUBROUTINE set_poissonsolver_min_bc
@@ -523,7 +523,7 @@ CONTAINS
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
-      solver_rho_max = solver_rho_max - set_potential_x_max()
+      solver_rho_max = solver_rho_max - pot_ext_max
     END IF
 
   END SUBROUTINE set_poissonsolver_max_bc
@@ -904,7 +904,7 @@ CONTAINS
     ! Number of cells to be solved on each processors
     nx_start = 1
     nx_end = nx
-    IF (x_min_boundary) THEN
+    IF (x_min_boundary_open) THEN
       IF (capacitor_max) nx_start = 0
     END IF
     IF (x_max_boundary) THEN

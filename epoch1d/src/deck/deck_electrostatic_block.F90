@@ -33,6 +33,10 @@ MODULE deck_electrostatic_block
 CONTAINS
   
   SUBROUTINE electrostatic_deck_initialise
+
+    IF (deck_state == c_ds_first) THEN
+      capacitor = 0._num
+    END IF
     
     n_potential_source_x_min = 0
     n_potential_source_x_max = 0
