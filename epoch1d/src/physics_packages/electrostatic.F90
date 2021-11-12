@@ -33,10 +33,12 @@ MODULE electrostatic
   PRIVATE
 
   PUBLIC :: es_update_e_field, setup_electrostatic
+  PUBLIC :: es_initialize_e_field
   PUBLIC :: init_potential, es_wall_current_diagnostic
   PUBLIC :: attach_potential, update_cell_count
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: finalize_electrostatic_solver
+
 #ifndef TRIDIAG
   PUBLIC :: initialize_petsc, setup_petsc_variables, finalize_petsc
 
@@ -53,9 +55,8 @@ MODULE electrostatic
   REAL(num) :: wcharge_min_prev, wcharge_min_now
   REAL(num) :: wcharge_max_prev, wcharge_max_now
   REAL(num) :: wcharge_min_diff, wcharge_max_diff
-  REAL(num) :: Q_min_now, Q_min_prev
-  REAL(num) :: Q_max_now, Q_max_prev
-  REAL(num) :: Q_conv
+  REAL(num) :: Q_now, Q_prev
+  REAL(num) :: Q_conv_max, Q_conv_min
   REAL(num) :: pot_ext_max, pot_ext_min
 
 
@@ -64,25 +65,20 @@ CONTAINS
   SUBROUTINE es_update_e_field
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
-    REAL(num), DIMENSION(2) :: Q_array
-    REAL(num) :: rho_max, rho_min, Q_conv_local
+    REAL(num) :: rho_max, rho_min
 
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
 
-    Q_array = 0._num
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
-      Q_array(1) = convect_curr_min
+      Q_conv_min = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
       pot_ext_max = set_potential_x_max()
-      Q_array(2) = convect_curr_max
+      Q_conv_max = convect_curr_max
     END IF
-    Q_conv_local = SUM(Q_array)
-    CALL MPI_ALLREDUCE(Q_conv_local, Q_conv, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
-      comm, errcode)
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
@@ -503,7 +499,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
       term1 = wcharge_min_now / dx
-      term2 = Q_conv - Q_min_now + pot_ext_min * capacitor
+      term2 = Q_conv_min - Q_now + pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -524,7 +520,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
       term1 = wcharge_max_now / dx
-      term2 = Q_conv - Q_max_now + pot_ext_max * capacitor
+      term2 = Q_conv_max - Q_now + pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -538,27 +534,31 @@ CONTAINS
 
     ! This subroutine only makes sense for open boundary conditions
     IF (x_min_boundary_open) THEN
+      IF (capacitor_max) THEN
       ! Buffer previous values
-      Q_min_prev = Q_min_now
+        Q_prev = Q_now
       wcharge_min_prev = wcharge_min_now
 
       ! Calculate new surface charge density
-      Q_min_now = capacitor * (pot_ext_min - es_potential(0))
+        Q_now = capacitor * (pot_ext_min - es_potential(0))
 
-      wcharge_min_diff = Q_conv + Q_min_now - Q_min_prev
+        wcharge_min_diff = Q_conv_min + Q_now - Q_prev
       wcharge_min_now = wcharge_min_prev + wcharge_min_diff 
+    END IF
     END IF
 
     IF (x_max_boundary_open) THEN
+      IF (capacitor_min) THEN
       ! Buffer previous values
-      Q_max_prev = Q_max_now
+        Q_prev = Q_now
       wcharge_max_prev = wcharge_max_now
 
       ! Calculate new surface charge density
-      Q_max_now = capacitor * (pot_ext_max + es_potential(nx))
+        Q_now = capacitor * (pot_ext_max + es_potential(nx))
 
-      wcharge_max_diff = Q_conv + Q_max_now - Q_max_prev
+        wcharge_max_diff = Q_conv_max + Q_now - Q_prev
       wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
+    END IF
     END IF
 
   END SUBROUTINE es_calc_charge_density_at_wall
@@ -835,6 +835,7 @@ CONTAINS
   SUBROUTINE min_init_electrostatic
 
     es_dt_fact = 0.1_num
+    capacitor = 1.e100_num
     capacitor_flag = .FALSE.
     capacitor_min = .FALSE.
     capacitor_max = .FALSE.
@@ -866,11 +867,10 @@ CONTAINS
     wcharge_max_diff = 0._num
     convect_curr_min = 0._num
     convect_curr_max = 0._num
-    Q_min_now = 0._num
-    Q_min_prev = 0._num
-    Q_max_now = 0._num
-    Q_max_prev = 0._num
-    Q_conv = 0._num
+    Q_now = 0._num
+    Q_prev = 0._num
+    Q_conv_min = 0._num
+    Q_conv_max = 0._num
     pot_ext_max = 0._num
     pot_ext_min = 0._num
 
@@ -898,7 +898,6 @@ CONTAINS
     CALL update_cell_count(nx)
 
   END SUBROUTINE setup_electrostatic
-
 
 
   SUBROUTINE update_cell_count(nx)
@@ -1028,5 +1027,41 @@ CONTAINS
 
   END SUBROUTINE finalize_petsc
 #endif
+
+
+  SUBROUTINE es_initialize_e_field
+
+    REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
+    REAL(num) :: rho_max, rho_min
+
+    ! Charge weighting from particles to the grid, i.e. charge density
+    ALLOCATE(es_charge_density(1-ng:nx+ng))
+    CALL es_calc_charge_density(es_charge_density)
+
+    IF (x_min_boundary_open) THEN
+      pot_ext_min = set_potential_x_min()
+    END IF
+    IF (x_max_boundary_open) THEN
+      pot_ext_max = set_potential_x_max()
+    END IF
+
+    ! Charge density to electrostatic potential
+    !  - This subroutine calculates the electric potential on es_potential
+    CALL es_calc_potential(es_charge_density(nx_start:nx_end))
+
+    ! Save charge density at dx/2 from boundary and deallocate
+    IF (x_min_boundary_open) rho_min = SUM(es_charge_density(0:1)) * 0.5_num
+    IF (x_max_boundary_open) rho_max = SUM(es_charge_density(nx-1:nx)) * 0.5_num
+    DEALLOCATE(es_charge_density)
+
+    ! Calculate electric field in x-direction
+    CALL es_calc_ex(rho_min, rho_max)
+
+    ! - Update electric field in y- and z-direction
+    CALL set_ez
+    CALL set_ey
+
+  END SUBROUTINE es_initialize_e_field
+
 #endif
 END MODULE electrostatic

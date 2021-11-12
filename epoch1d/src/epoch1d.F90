@@ -173,7 +173,7 @@ PROGRAM pic
       CALL update_eb_fields_final
       CALL moving_window
 #else
-      CALL es_update_e_field
+      CALL es_initialize_e_field
 #endif
     END IF
   ELSE
@@ -185,7 +185,7 @@ PROGRAM pic
     dt = dt_store
 #else
     CALL bfield_final_bcs
-    CALL es_update_e_field
+    CALL es_initialize_e_field
     CALL es_particles_push_back
 #endif
   END IF
