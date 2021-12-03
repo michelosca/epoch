@@ -76,7 +76,7 @@ CONTAINS
       Q_conv_min = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
-      pot_ext_max = set_potential_x_max()
+      pot_ext_max = -set_potential_x_max()
       Q_conv_max = convect_curr_max
     END IF
 
@@ -406,7 +406,7 @@ CONTAINS
       row = n_first
       col(1) = row
       col(2) = row+1
-      IF (capacitor_max) values(2) = -1._num - dx*capacitor/epsilon0
+      IF (capacitor_max) values(2) = -1._num + dx*capacitor/epsilon0
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(2:3), &
@@ -499,7 +499,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
       term1 = wcharge_min_now / dx
-      term2 = Q_conv_min - Q_now + pot_ext_min * capacitor
+      term2 = Q_conv_min - Q_now - pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -520,7 +520,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
       term1 = wcharge_max_now / dx
-      term2 = Q_conv_max - Q_now + pot_ext_max * capacitor
+      term2 = Q_conv_max - Q_now - pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -532,6 +532,8 @@ CONTAINS
 
   SUBROUTINE es_calc_charge_density_at_wall
 
+    REAL(num) :: V_c, V_plasma, V_rf
+
     ! This subroutine only makes sense for open boundary conditions
     IF (x_min_boundary_open) THEN
       IF (capacitor_max) THEN
@@ -540,10 +542,19 @@ CONTAINS
       wcharge_min_prev = wcharge_min_now
 
       ! Calculate new surface charge density
-        Q_now = capacitor * (pot_ext_min - es_potential(0))
+        V_plasma = - es_potential(0)
+        V_rf = pot_ext_min
+        V_c = - V_plasma - V_rf
+        Q_now = capacitor * V_c
+        !print*, "External potential ", V_rf 
+        !print*, "Plasma potential ", V_plasma 
+        !print*, "Capactior potential ", V_c 
+        !print*, "Capacitor charge ", Q_now
+        !print*, "Convection charge ", Q_conv_min
+        !print*,""
 
         wcharge_min_diff = Q_conv_min + Q_now - Q_prev
-      wcharge_min_now = wcharge_min_prev + wcharge_min_diff 
+      wcharge_min_now = wcharge_min_prev + wcharge_min_diff
     END IF
     END IF
 
@@ -554,7 +565,16 @@ CONTAINS
       wcharge_max_prev = wcharge_max_now
 
       ! Calculate new surface charge density
-        Q_now = capacitor * (pot_ext_max + es_potential(nx))
+        V_plasma = es_potential(nx)
+        V_rf = pot_ext_max
+        V_c = - V_plasma - V_rf
+        Q_now = capacitor * V_c
+        !print*, "External potential ", V_rf 
+        !print*, "Plasma potential ", V_plasma 
+        !print*, "Capactior potential ", V_c 
+        !print*, "Capacitor charge ", Q_now
+        !print*, "Convection charge ", Q_conv_max
+        !print*,""
 
         wcharge_max_diff = Q_conv_max + Q_now - Q_prev
       wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
