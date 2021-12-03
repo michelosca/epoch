@@ -546,15 +546,15 @@ CONTAINS
         V_rf = pot_ext_min
         V_c = - V_plasma - V_rf
         Q_now = capacitor * V_c
-        print*, "External potential ", V_rf 
-        print*, "Plasma potential ", V_plasma 
-        print*, "Capactior potential ", V_c 
-        print*, "Capacitor charge ", Q_now
-        print*, "Convection charge ", Q_conv_min
-        print*,""
+        !print*, "External potential ", V_rf 
+        !print*, "Plasma potential ", V_plasma 
+        !print*, "Capactior potential ", V_c 
+        !print*, "Capacitor charge ", Q_now
+        !print*, "Convection charge ", Q_conv_min
+        !print*,""
 
         wcharge_min_diff = Q_conv_min + Q_now - Q_prev
-      wcharge_min_now = wcharge_min_prev + wcharge_min_diff 
+      wcharge_min_now = wcharge_min_prev + wcharge_min_diff
     END IF
     END IF
 
@@ -569,12 +569,12 @@ CONTAINS
         V_rf = pot_ext_max
         V_c = - V_plasma - V_rf
         Q_now = capacitor * V_c
-        print*, "External potential ", V_rf 
-        print*, "Plasma potential ", V_plasma 
-        print*, "Capactior potential ", V_c 
-        print*, "Capacitor charge ", Q_now
-        print*, "Convection charge ", Q_conv_max
-        print*,""
+        !print*, "External potential ", V_rf 
+        !print*, "Plasma potential ", V_plasma 
+        !print*, "Capactior potential ", V_c 
+        !print*, "Capacitor charge ", Q_now
+        !print*, "Convection charge ", Q_conv_max
+        !print*,""
 
         wcharge_max_diff = Q_conv_max + Q_now - Q_prev
       wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
@@ -1034,8 +1034,7 @@ CONTAINS
     INTEGER, INTENT(IN) :: communicator
 
     PETSC_COMM_WORLD = communicator
-    !CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
-    CALL PetscInitialize(PETSC_NULL_CHARACTER, perr)
+    CALL PetscInitialize('./src/housekeeping/petsc_runtime_options.opt', perr)
 
   END SUBROUTINE initialize_petsc
 

@@ -739,7 +739,7 @@ CONTAINS
 #ifndef PER_SPECIES_WEIGHT
                 part_weight = cur%weight
 #endif
-                convect_curr_min = convect_curr_min + part_weight * part_charge
+                convect_curr_min = convect_curr_min - part_weight * part_charge
 
                 IF (reinjection) THEN
                   n_injections = n_injections + 1
