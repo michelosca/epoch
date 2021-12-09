@@ -66,23 +66,29 @@ CONTAINS
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
     REAL(num) :: rho_max, rho_min
+    !INTEGER :: i
 
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
-
+!DO i = 0, nx
+!  PRINT*, 'rho', step, i * dx - x_min_local, es_charge_density(i)
+!END DO
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
       Q_conv_min = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
-      pot_ext_max = -set_potential_x_max()
+      pot_ext_max = set_potential_x_max()
       Q_conv_max = convect_curr_max
     END IF
 
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential(es_charge_density(nx_start:nx_end))
+!DO i = 0, nx
+!  PRINT*, 'pot', step, i * dx - x_min_local, es_potential(i)
+!END DO
 
     ! This subroutine updates the charge surface density values at wall
     CALL es_calc_charge_density_at_wall
@@ -94,6 +100,9 @@ CONTAINS
 
     ! Calculate electric field in x-direction
     CALL es_calc_ex(rho_min, rho_max)
+!DO i = 0, nx
+!  PRINT*, 'ex', step, i * dx - x_min_local, ex(i)
+!END DO
 
     ! - Update electric field in y- and z-direction
     CALL set_ez
@@ -406,7 +415,7 @@ CONTAINS
       row = n_first
       col(1) = row
       col(2) = row+1
-      IF (capacitor_max) values(2) = -1._num + dx*capacitor/epsilon0
+      IF (capacitor_max) values(2) = -1._num - dx*capacitor/epsilon0
       !MatSetValues(matrix, #rows,rows-global-indexes, 
       !  #columns, col-global-indexes, insertion_values, insert/add,err )
       CALL MatSetValues(transform_mtrx, 1, row, 2, col(1:2), values(2:3), &
@@ -496,10 +505,11 @@ CONTAINS
     REAL(num) :: fac
 
     IF (capacitor_max) THEN
+      ! eventhough labeled as "_now", wcharge and Q are from the previous step
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
       term1 = wcharge_min_now / dx
-      term2 = Q_conv_min - Q_now - pot_ext_min * capacitor
+      term2 = Q_conv_min - Q_now + pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -517,10 +527,11 @@ CONTAINS
     REAL(num) :: fac
 
     IF (capacitor_min) THEN
+      ! eventhough labeled as "_now", wcharge and Q are from the previous step
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
       term1 = wcharge_max_now / dx
-      term2 = Q_conv_max - Q_now - pot_ext_max * capacitor
+      term2 = Q_conv_max - Q_now + pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -542,15 +553,15 @@ CONTAINS
       wcharge_min_prev = wcharge_min_now
 
       ! Calculate new surface charge density
-        V_plasma = - es_potential(0)
+        V_plasma = -es_potential(0)
         V_rf = pot_ext_min
-        V_c = - V_plasma - V_rf
+        V_c = V_plasma + V_rf
         Q_now = capacitor * V_c
-        !print*, "External potential ", V_rf 
-        !print*, "Plasma potential ", V_plasma 
-        !print*, "Capactior potential ", V_c 
-        !print*, "Capacitor charge ", Q_now
-        !print*, "Convection charge ", Q_conv_min
+        !print*, "External potential ", step, V_rf 
+        !print*, "Plasma potential ", step, V_plasma 
+        !print*, "Capactior potential ", step, V_c 
+        !print*, "Capacitor charge ", step, Q_now
+        !print*, "Convection charge ", step, Q_conv_min
         !print*,""
 
         wcharge_min_diff = Q_conv_min + Q_now - Q_prev
@@ -565,15 +576,15 @@ CONTAINS
       wcharge_max_prev = wcharge_max_now
 
       ! Calculate new surface charge density
-        V_plasma = es_potential(nx)
+        V_plasma = -es_potential(nx)
         V_rf = pot_ext_max
-        V_c = - V_plasma - V_rf
+        V_c = V_plasma + V_rf
         Q_now = capacitor * V_c
-        !print*, "External potential ", V_rf 
-        !print*, "Plasma potential ", V_plasma 
-        !print*, "Capactior potential ", V_c 
-        !print*, "Capacitor charge ", Q_now
-        !print*, "Convection charge ", Q_conv_max
+        !print*, "External potential ", step, V_rf 
+        !print*, "Plasma potential ", step, V_plasma 
+        !print*, "Capactior potential ", step, V_c 
+        !print*, "Capacitor charge ", step, Q_now
+        !print*, "Convection charge ", step, Q_conv_max
         !print*,""
 
         wcharge_max_diff = Q_conv_max + Q_now - Q_prev
@@ -606,12 +617,22 @@ CONTAINS
 
     IF (x_min_boundary_open) THEN
       !Update E-field at wall
+      IF (capacitor_max) THEN
+        ex(0) = wcharge_min_now / epsilon0
+        !PRINT*, 'Ex_min', step, ex(0), ex(1) - rho_min * dx / epsilon0
+      ELSE
       ex(0) = ex(1) - rho_min * dx / epsilon0
+      END IF
     END IF
 
     IF (x_max_boundary_open) THEN
       !Update E-field at wall
+      IF (capacitor_min) THEN
+        ex(nx) = -wcharge_max_now / epsilon0
+        !PRINT*, 'Ex_max', step, ex(nx), ex(nx-1) + rho_max * dx / epsilon0 
+      ELSE
       ex(nx) = ex(nx-1) + rho_max * dx / epsilon0
+      END IF
     END IF
 
     DO ix = 1, 2*c_ndims
