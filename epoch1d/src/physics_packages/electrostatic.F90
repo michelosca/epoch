@@ -548,11 +548,11 @@ CONTAINS
     ! This subroutine only makes sense for open boundary conditions
     IF (x_min_boundary_open) THEN
       IF (capacitor_max) THEN
-      ! Buffer previous values
+        ! Buffer previous values
         Q_prev = Q_now
-      wcharge_min_prev = wcharge_min_now
+        wcharge_min_prev = wcharge_min_now
 
-      ! Calculate new surface charge density
+        ! Calculate new surface charge density
         V_plasma = -es_potential(0)
         V_rf = pot_ext_min
         V_c = V_plasma + V_rf
@@ -565,17 +565,17 @@ CONTAINS
         !print*,""
 
         wcharge_min_diff = Q_conv_min + Q_now - Q_prev
-      wcharge_min_now = wcharge_min_prev + wcharge_min_diff
-    END IF
+        wcharge_min_now = wcharge_min_prev + wcharge_min_diff
+      END IF
     END IF
 
     IF (x_max_boundary_open) THEN
       IF (capacitor_min) THEN
-      ! Buffer previous values
+        ! Buffer previous values
         Q_prev = Q_now
-      wcharge_max_prev = wcharge_max_now
+        wcharge_max_prev = wcharge_max_now
 
-      ! Calculate new surface charge density
+        ! Calculate new surface charge density
         V_plasma = -es_potential(nx)
         V_rf = pot_ext_max
         V_c = V_plasma + V_rf
@@ -588,8 +588,8 @@ CONTAINS
         !print*,""
 
         wcharge_max_diff = Q_conv_max + Q_now - Q_prev
-      wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
-    END IF
+        wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
+      END IF
     END IF
 
   END SUBROUTINE es_calc_charge_density_at_wall
