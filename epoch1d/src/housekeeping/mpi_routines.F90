@@ -190,6 +190,9 @@ CONTAINS
 
     ALLOCATE(npart_each_rank(nproc))
     ALLOCATE(x_grid_mins(0:nprocx-1), x_grid_maxs(0:nprocx-1))
+#ifdef PART_PERP_POSITION
+    ALLOCATE(x_length_ratio(0:nprocx-1))
+#endif
     ALLOCATE(cell_x_min(nprocx), cell_x_max(nprocx))
 
     nx_global = nx_global + 2 * cpml_thickness

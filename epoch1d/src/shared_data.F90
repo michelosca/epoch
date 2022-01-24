@@ -508,6 +508,9 @@ MODULE shared_data
 #endif
   REAL(num) :: x_grid_min_local, x_grid_max_local, x_min_local, x_max_local
   REAL(num), DIMENSION(:), ALLOCATABLE :: x_grid_mins, x_grid_maxs
+#ifdef PART_PERP_POSITION
+  REAL(num), DIMENSION(:), ALLOCATABLE :: x_length_ratio
+#endif
   REAL(num) :: dir_d(c_ndims), dir_min(c_ndims), dir_max(c_ndims)
   REAL(num) :: dir_grid_min(c_ndims), dir_grid_max(c_ndims)
   REAL(num) :: dir_min_local(c_ndims), dir_max_local(c_ndims)
