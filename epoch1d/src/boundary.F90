@@ -1279,10 +1279,11 @@ CONTAINS
     TYPE(particle_species), INTENT(INOUT) :: part_species
     REAL(num), OPTIONAL, INTENT(INOUT) :: total_weight
     INTEGER :: proc_x_min_boundary, proc_x_max_boundary
-    INTEGER :: injections_x_min, injections_x_max
-    INTEGER :: i, n_parts, remainder
-    REAL(num) :: inject_prob, local_length_x
+    INTEGER :: injections_x_min, injections_x_max, n_part
+    INTEGER :: i, remainder, n_total, r_sign, irank
+    INTEGER, DIMENSION(:), ALLOCATABLE :: n_parts
     REAL(num) :: weight_x_min, weight_x_max
+    REAL(num) :: ran, prob
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: per_part_weight
 #endif
@@ -1355,23 +1356,41 @@ CONTAINS
     IF (outflow_particles <= 0) RETURN
 
     IF (nproc > 1) THEN
-      local_length_x = x_max_local - x_min_local
-      inject_prob = local_length_x/length_x
-      n_parts = outflow_particles / nproc
-      remainder = outflow_particles - n_parts * nproc
-      DO i = 1, remainder
-        IF (random() < inject_prob) n_parts = n_parts + 1
-      END DO
+      IF (rank==0) THEN
+        ALLOCATE(n_parts(0:nproc-1))
+        n_parts = FLOOR(outflow_particles * x_length_ratio + 0.5_num)
+        n_total = SUM(n_parts)
+        remainder = outflow_particles - n_total
+        r_sign = SIGN(1, remainder)
+        remainder = ABS(remainder)
+        DO i = 1, remainder
+          prob = 0._num
+          DO irank = 0, nproc-1
+            prob = prob + x_length_ratio(irank)
+            ran = random()
+            IF (ran <= prob) THEN
+              n_parts(irank) = n_parts(irank) + r_sign
+              EXIT
+            END IF
+          END DO
+        END DO
+        print*,'nproc',nproc,'in root', n_parts
+        CALL MPI_SCATTER(n_parts(0), 1, MPI_INTEGER, n_part, 1, &
+          MPI_INTEGER, 0, comm, errcode)
+      ELSE
+        CALL MPI_SCATTER(0, 0, MPI_INTEGER, n_part, 1, &
+          MPI_INTEGER, 0, comm, errcode)
+      END IF
     ELSE
-      n_parts = outflow_particles
+      n_part = outflow_particles
     END IF
 
 #ifndef PER_SPECIES_WEIGHT
     per_part_weight = total_weight / REAL(outflow_particles,num)
-    CALL place_injected_particles(n_parts, part_species, &
+    CALL place_injected_particles(n_part, part_species, &
       injection_flag, per_part_weight)
 #else
-    CALL place_injected_particles(n_parts, part_species, injection_flag)
+    CALL place_injected_particles(n_part, part_species, injection_flag)
 #endif
 
   END SUBROUTINE reinject_particles
