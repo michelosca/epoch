@@ -293,10 +293,8 @@ CONTAINS
         DEALLOCATE(x_grid_mins, x_grid_maxs)
         ALLOCATE(x_grid_mins(0:nprocx-1))
         ALLOCATE(x_grid_maxs(0:nprocx-1))
-#ifdef PART_PERP_POSITION
         DEALLOCATE(x_length_ratio)
         ALLOCATE(x_length_ratio(0:nprocx-1))
-#endif
       ELSE
         old_comm = comm
         old_coordinates(:) = coordinates(:)

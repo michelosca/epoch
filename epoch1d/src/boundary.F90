@@ -1280,7 +1280,7 @@ CONTAINS
     REAL(num), OPTIONAL, INTENT(INOUT) :: total_weight
     INTEGER :: proc_x_min_boundary, proc_x_max_boundary
     INTEGER :: injections_x_min, injections_x_max, n_part
-    INTEGER :: i, remainder, n_total, r_sign, irank
+    INTEGER :: i, remainder, n_total, irank
     INTEGER, DIMENSION(:), ALLOCATABLE :: n_parts
     REAL(num) :: weight_x_min, weight_x_max
     REAL(num) :: ran, prob
@@ -1358,23 +1358,20 @@ CONTAINS
     IF (nproc > 1) THEN
       IF (rank==0) THEN
         ALLOCATE(n_parts(0:nproc-1))
-        n_parts = FLOOR(outflow_particles * x_length_ratio + 0.5_num)
+        n_parts = FLOOR(outflow_particles * x_length_ratio)
         n_total = SUM(n_parts)
         remainder = outflow_particles - n_total
-        r_sign = SIGN(1, remainder)
-        remainder = ABS(remainder)
         DO i = 1, remainder
           prob = 0._num
           DO irank = 0, nproc-1
             prob = prob + x_length_ratio(irank)
             ran = random()
             IF (ran <= prob) THEN
-              n_parts(irank) = n_parts(irank) + r_sign
+              n_parts(irank) = n_parts(irank) + 1 
               EXIT
             END IF
           END DO
         END DO
-        print*,'nproc',nproc,'in root', n_parts
         CALL MPI_SCATTER(n_parts(0), 1, MPI_INTEGER, n_part, 1, &
           MPI_INTEGER, 0, comm, errcode)
       ELSE
@@ -1467,7 +1464,7 @@ CONTAINS
 
           CALL add_particle_to_partlist(current_species%attached_list,new_part)
 
-          NULLIFY(new_part)
+          NULLIFY(new_part, current_species)
 
         END DO ! species loop
       END DO ! pairs loop
