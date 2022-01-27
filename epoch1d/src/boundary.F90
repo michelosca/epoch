@@ -1362,10 +1362,10 @@ CONTAINS
         n_total = SUM(n_parts)
         remainder = outflow_particles - n_total
         DO i = 1, remainder
+          ran = random()
           prob = 0._num
           DO irank = 0, nproc-1
             prob = prob + x_length_ratio(irank)
-            ran = random()
             IF (ran <= prob) THEN
               n_parts(irank) = n_parts(irank) + 1 
               EXIT
