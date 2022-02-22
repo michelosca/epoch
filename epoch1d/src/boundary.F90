@@ -1480,17 +1480,27 @@ CONTAINS
     INTEGER :: injection_flag
     REAL(num), DIMENSION(3) :: random_momentum
     REAL(num) :: mass
+    REAL(num) :: rand1
     REAL(num), DIMENSION(3) :: var, temp
+    REAL(num), PARAMETER :: c_tiny = TINY(1.0_num)
 
     var = SQRT(kb*temp*mass)
 
     random_momentum(1) = random_box_muller(var(1))
     IF (injection_flag == 1) THEN
+      DO
+        rand1 = random()
+        IF (rand1 > c_tiny) EXIT
+      END DO
       ! Injection to y-min
-      random_momentum(2) = var(2) * SQRT(-2._num * LOG(random()))
+      random_momentum(2) = var(2) * SQRT(-2._num * LOG(rand1))
     ELSE IF (injection_flag == 2) THEN
+      DO
+        rand1 = random()
+        IF (rand1 > c_tiny) EXIT
+      END DO
       ! Injection to y-max
-      random_momentum(2) = -var(2) * SQRT(-2._num * LOG(random()))
+      random_momentum(2) = -var(2) * SQRT(-2._num * LOG(rand1))
     ELSE
       ! Isotropic momentum distribution
       random_momentum(2) = random_box_muller(var(2))
