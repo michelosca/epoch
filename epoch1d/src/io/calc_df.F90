@@ -1252,12 +1252,10 @@ CONTAINS
     INTEGER, INTENT(IN), OPTIONAL :: direction
 
     INTEGER :: ispecies, jspecies, nc_type, coll_index
-    REAL(num) :: idx
     TYPE(neutrals_block), POINTER :: collision_block
     TYPE(collision_type_block), POINTER :: coll_type_block
 
     data_array = 0._num
-    idx = 1._num/dx
 
     IF (current_species == 0) THEN ! Adds all collisions together
       DO ispecies = 1, n_species
@@ -1269,9 +1267,9 @@ CONTAINS
             data_array(1:nx) = data_array(1:nx) &
 #ifdef PER_SPECIES_WEIGHT
               + REAL(coll_type_block%coll_counter,num) * &
-              collision_block%min_weight * idx
+              collision_block%min_weight
 #else
-              + REAL(coll_type_block%coll_counter,num) * idx
+              + REAL(coll_type_block%coll_counter,num)
 #endif
           END DO
         END DO
@@ -1291,7 +1289,7 @@ CONTAINS
               data_array(1:nx) = REAL(coll_type_block%coll_counter,num)
 #ifdef PER_SPECIES_WEIGHT
               data_array(1:nx) = data_array(1:nx) * &
-                collision_block%min_weight * idx
+                collision_block%min_weight
 #endif
               RETURN
             END IF
@@ -1312,7 +1310,7 @@ CONTAINS
             data_array(1:nx) = REAL(coll_type_block%coll_counter,num)
 #ifdef PER_SPECIES_WEIGHT
             data_array(1:nx) = data_array(1:nx) * &
-              collision_block%min_weight * idx
+              collision_block%min_weight
 #endif
             RETURN
           END IF
