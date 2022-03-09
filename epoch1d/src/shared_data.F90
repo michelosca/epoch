@@ -829,9 +829,10 @@ MODULE shared_data
   TYPE neutrals_block
 
     REAL(num) :: gsigma_max_total, igsigma_max_total
-    REAL(num) :: max_weight
+    REAL(num) :: min_weight, max_weight
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: max_w1, max_w2
+    REAL(num) :: min_w1, min_w2
 #endif
 
     INTEGER :: ncolltypes
@@ -859,7 +860,11 @@ MODULE shared_data
     PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
 
     ! Collision diagnostics
+#ifdef PER_SPECIES_WEIGHT
     INTEGER, ALLOCATABLE, DIMENSION(:) :: coll_counter
+#else
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: coll_counter
+#endif
 
   END TYPE collision_type_block
 

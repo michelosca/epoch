@@ -51,9 +51,6 @@ MODULE diagnostics
   INTEGER(i8), ALLOCATABLE :: species_offset(:)
   INTEGER(i8), ALLOCATABLE :: ejected_offset(:)
   LOGICAL :: reset_ejected, done_species_offset_init, done_subset_init
-#ifdef NEUTRAL_COLLISIONS
-  LOGICAL :: reset_collisions, nc_average
-#endif
   LOGICAL :: restart_flag, dump_source_code, dump_input_decks
   LOGICAL :: dump_field_grid, skipped_any_set
   LOGICAL :: got_request_dump_name = .FALSE.
@@ -313,9 +310,6 @@ CONTAINS
 
     dims = (/nx_global/)
 
-#ifdef NEUTRAL_COLLISIONS
-    reset_collisions = .FALSE.
-#endif
     reset_ejected = .FALSE.
     any_written = .FALSE.
 
@@ -964,10 +958,6 @@ CONTAINS
       END DO
     END IF
 
-#ifdef NEUTRAL_COLLISIONS
-    IF (reset_collisions) CALL collision_counter_set_zero
-#endif
-
     IF (timer_collect) CALL timer_stop(c_timer_io)
 
   END SUBROUTINE output_routines
@@ -1592,12 +1582,12 @@ CONTAINS
         nd = 1
         IF (avg%species_sum == 1) THEN
           CALL calc_neutral_collisions(array, 0)
-          avg%r4array(:,nd) = REAL(array * dt, r4)
+          avg%r4array(:,nd) = avg%r4array(:,nd) + REAL(array * dt, r4)
           nd = nd + 1
         END IF
         DO ispecies = 1, avg%n_species
           CALL calc_neutral_collisions(array, ispecies)
-          avg%r4array(:,nd) = REAL(array * dt, r4)
+          avg%r4array(:,nd) = avg%r4array(:,nd) + REAL(array * dt, r4)
           nd = nd + 1
         END DO
         DEALLOCATE(array)
@@ -1745,12 +1735,12 @@ CONTAINS
         nd = 1
         IF (avg%species_sum == 1) THEN
           CALL calc_neutral_collisions(array, 0)
-          avg%array(:,nd) = array * dt
+          avg%array(:,nd) = avg%array(:,nd) + array * dt
           nd = nd + 1
         END IF
         DO ispecies = 1, avg%n_species
           CALL calc_neutral_collisions(array, ispecies)
-          avg%array(:,nd) = array * dt
+          avg%array(:,nd) = avg%array(:,nd) + array * dt
           nd = nd + 1
         END DO
         DEALLOCATE(array)
@@ -2045,19 +2035,8 @@ CONTAINS
       ndirs = SIZE(fluxdir)
 #ifdef NEUTRAL_COLLISIONS
     ELSEIF (id == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
-      nc_average = .FALSE.
       nc_flag = .TRUE.
       ndirs = 1
-      ! Flag checking whether neutral collisions are being averaged
-      DO io = 1, n_io_blocks
-        iob => io_block_list(io)
-        IF (.NOT.iob%dump) CYCLE
-        mask = iob%dumpmask(id)
-        IF (IAND(mask, c_io_averaged) == 0) CYCLE
-        avg => iob%averaged_data(id)
-        IF (.NOT.avg%started) CYCLE
-        nc_average = .TRUE.
-      END DO
 #endif
     ELSE
       ndirs = 1
@@ -2679,19 +2658,9 @@ CONTAINS
         avg%array = 0.0_num
       END IF
 
-#ifdef NEUTRAL_COLLISIONS
-      IF (nc_flag) reset_collisions = .TRUE.
-#endif
       avg%real_time = 0.0_num
       avg%started = .FALSE.
     END DO
-
-#ifdef NEUTRAL_COLLISIONS
-    IF (nc_flag .AND. &
-      IAND(mask, c_io_never) == 0 .AND. IAND(mask, code) /= 0) THEN
-      reset_collisions = .TRUE.
-    END IF
-#endif
 
   END SUBROUTINE write_nspecies_field
 
@@ -3732,28 +3701,5 @@ CONTAINS
     !CALL write_input_decks(h)
 
   END SUBROUTINE write_source_info
-
-
-
-#ifdef NEUTRAL_COLLISIONS
-  SUBROUTINE collision_counter_set_zero
-
-    INTEGER :: ispecies, jspecies, nc_type
-    TYPE(neutrals_block), POINTER :: collision_block
-    TYPE(collision_type_block), POINTER :: coll_type_block
-
-    DO ispecies = 1, n_species
-      DO jspecies = ispecies, n_species_bg
-        IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
-        collision_block => species_list(ispecies)%neutrals(jspecies)
-        DO nc_type = 1, collision_block%ncolltypes
-          coll_type_block => collision_block%collision_set(nc_type)
-          coll_type_block%coll_counter = 0
-        END DO
-      END DO
-    END DO
-
-  END SUBROUTINE collision_counter_set_zero
-#endif
 
 END MODULE diagnostics

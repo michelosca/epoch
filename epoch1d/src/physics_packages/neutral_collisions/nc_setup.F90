@@ -485,26 +485,33 @@ CONTAINS
     TYPE(neutrals_block), POINTER, INTENT(INOUT) :: coll_block
 #ifndef PER_SPECIES_WEIGHT
     INTEGER(8) :: npart, ipart
-    REAL(num) :: all_max_weight
+    REAL(num) :: all_max_weight, all_min_weight
     REAL(num) :: max_w1, max_w2
+    REAL(num) :: min_w1, min_w2
     TYPE(particle), POINTER :: current
 #endif
-    REAL(num) :: max_weight, wi, wj
+    REAL(num) :: max_weight, min_weight, wi, wj
     
-    max_weight = 1._num
+    max_weight = -1._num
+    min_weight = 1.e100_num
 #ifndef PER_SPECIES_WEIGHT
     current => species_list(ispecies)%attached_list%head
     npart = species_list(ispecies)%attached_list%count
-    max_w1 = 1._num
+    max_w1 = max_weight
+    min_w1 = min_weight
     DO ipart = 1, npart
       wi = current%weight
       max_w1 = MAX(wi, max_w1)
+      min_w1 = MIN(wi, min_w1)
       current => current%next
     END DO
     CALL MPI_ALLREDUCE(max_w1,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
     coll_block%max_w1 = all_max_weight
+    CALL MPI_ALLREDUCE(min_w1,all_min_weight,1,MPIREAL,MPI_MIN,comm,errcode)
+    coll_block%min_w1 = all_min_weight
     
-    max_w2 = 1._num
+    max_w2 = max_weight
+    min_w2 = min_weight
     IF (ispecies /= jspecies) THEN
       IF (jspecies <= n_species) THEN
         current => species_list(jspecies)%attached_list%head
@@ -512,14 +519,18 @@ CONTAINS
         DO ipart = 1, npart
           wj = current%weight
           max_w2 = MAX(wj, max_w2)
+          min_w2 = MIN(wj, min_w2)
           current => current%next
         END DO
       END IF
     END IF
     CALL MPI_ALLREDUCE(max_w2,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
     coll_block%max_w2 = all_max_weight
+    CALL MPI_ALLREDUCE(min_w2,all_min_weight,1,MPIREAL,MPI_MIN,comm,errcode)
+    coll_block%min_w2 = all_min_weight
 
     max_weight = MAX(coll_block%max_w1, coll_block%max_w2)
+    min_weight = MIN(coll_block%min_w1, coll_block%min_w2)
 #else
     wi = species_list(ispecies)%weight
     IF (jspecies > n_species) THEN
@@ -528,8 +539,16 @@ CONTAINS
       wj = species_list(jspecies)%weight
     END IF
     max_weight = MAX(wi, wj)
+
+    IF (jspecies > n_species) THEN
+      wj = 1.e100_num
+    ELSE
+      wj = species_list(jspecies)%weight
+    END IF
+    min_weight = MIN(wi, wj)
 #endif
     coll_block%max_weight = max_weight
+    coll_block%min_weight = min_weight
     
   END SUBROUTINE get_max_weight
 
@@ -879,7 +898,11 @@ CONTAINS
 
     IF (neutral_collision_counter) THEN
       ALLOCATE(coll_type%coll_counter(nx))
+#ifdef PER_SPECIES_WEIGHT
       coll_type%coll_counter = 0
+#else
+      coll_type%coll_counter = 0._num
+#endif
     END IF
 
   END SUBROUTINE init_collision_type_block
