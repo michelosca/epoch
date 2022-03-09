@@ -43,6 +43,8 @@ CONTAINS
     TYPE(current_collision_block), POINTER :: collision => NULL()
     TYPE(particle_list), POINTER :: p_list1
 
+    CALL collision_counter_set_zero
+
     ! Update background gas spatial & temporal profile
     DO ix = 1, n_backgrounds
       ! Update density profile
@@ -403,6 +405,9 @@ CONTAINS
     REAL(num) :: p_total, p_low, p_top, igsigma_max
     REAL(num) :: ran1
     REAL(num) :: g_mag
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: min_weight
+#endif
     REAL(num), DIMENSION(3) :: u_1, u_2, g
     REAL(num), ALLOCATABLE, DIMENSION(:) :: gsigma_arr, prob_arr
     TYPE(neutrals_block), POINTER :: collision_block
@@ -464,7 +469,17 @@ CONTAINS
       ! IO collision data
       IF (neutral_collision_counter) THEN
         ix = collision%ix
+#ifdef PER_SPECIES_WEIGHT
         coll_type_block%coll_counter(ix) = coll_type_block%coll_counter(ix)+1
+#else
+        IF (collision_block%is_background) THEN
+          min_weight = collision%part1%weight
+        ELSE
+          min_weight = MIN(collision%part1%weight, collision%part2%weight)
+        END IF
+        coll_type_block%coll_counter(ix) = coll_type_block%coll_counter(ix) + &
+          min_weight
+#endif
       END IF
 
       ! Store velocity values (used later in coll_subroutine)
@@ -627,5 +642,28 @@ CONTAINS
 
   END SUBROUTINE end_current_collision_block
 
+
+  SUBROUTINE collision_counter_set_zero
+
+    INTEGER :: ispecies, jspecies, nc_type
+    TYPE(neutrals_block), POINTER :: collision_block
+    TYPE(collision_type_block), POINTER :: coll_type_block
+
+    DO ispecies = 1, n_species
+      DO jspecies = ispecies, n_species_bg
+        IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
+        collision_block => species_list(ispecies)%neutrals(jspecies)
+        DO nc_type = 1, collision_block%ncolltypes
+          coll_type_block => collision_block%collision_set(nc_type)
+#ifdef PER_SPECIES_WEIGHT
+          coll_type_block%coll_counter = 0
+#else
+          coll_type_block%coll_counter = 0._num
+#endif
+        END DO
+      END DO
+    END DO
+
+  END SUBROUTINE collision_counter_set_zero
 #endif
 END MODULE neutral_collisions

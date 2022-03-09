@@ -320,6 +320,7 @@ CONTAINS
           WRITE(*,666) 'User max. g-sigma:', coll_block%user_gsigma_max
           WRITE(*,777) 'Collision types:', coll_block%ncolltypes
           WRITE(*,888) 'Max. Weight:', coll_block%max_weight
+          WRITE(*,888) 'Min. Weight:', coll_block%min_weight
 
           IF (coll_block%is_background) THEN
             background => coll_block%background
