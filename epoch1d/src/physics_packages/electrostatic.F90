@@ -80,7 +80,7 @@ CONTAINS
     END IF
     IF (x_max_boundary_open) THEN
       pot_ext_max = set_potential_x_max()
-      Q_conv_max = convect_curr_max
+      Q_conv_max = -convect_curr_max
     END IF
 
     ! Charge density to electrostatic potential
@@ -578,7 +578,7 @@ CONTAINS
         ! Calculate new surface charge density
         V_plasma = -es_potential(nx)
         V_rf = pot_ext_max
-        V_c = V_plasma + V_rf
+        V_c = -(V_plasma + V_rf)
         Q_now = capacitor * V_c
         !print*, "External potential ", step, V_rf 
         !print*, "Plasma potential ", step, V_plasma 
@@ -628,7 +628,7 @@ CONTAINS
     IF (x_max_boundary_open) THEN
       !Update E-field at wall
       IF (capacitor_min) THEN
-        ex(nx) = -wcharge_max_now / epsilon0
+        ex(nx) = wcharge_max_now / epsilon0
         !PRINT*, 'Ex_max', step, ex(nx), ex(nx-1) + rho_max * dx / epsilon0 
       ELSE
       ex(nx) = ex(nx-1) + rho_max * dx / epsilon0

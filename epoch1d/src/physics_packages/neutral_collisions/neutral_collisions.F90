@@ -43,7 +43,7 @@ CONTAINS
     TYPE(current_collision_block), POINTER :: collision => NULL()
     TYPE(particle_list), POINTER :: p_list1
 
-    CALL collision_counter_set_zero
+    IF (neutral_collision_counter) CALL collision_counter_set_zero
 
     ! Update background gas spatial & temporal profile
     DO ix = 1, n_backgrounds
