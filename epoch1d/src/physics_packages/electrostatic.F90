@@ -79,7 +79,7 @@ CONTAINS
       Q_conv_min = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
-      pot_ext_max = set_potential_x_max()
+      pot_ext_max = -set_potential_x_max()
       Q_conv_max = -convect_curr_max
     END IF
 
