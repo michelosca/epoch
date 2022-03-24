@@ -80,7 +80,7 @@ CONTAINS
     END IF
     IF (x_max_boundary_open) THEN
       pot_ext_max = -set_potential_x_max()
-      Q_conv_max = -convect_curr_max
+      Q_conv_max = convect_curr_max
     END IF
 
     ! Charge density to electrostatic potential
