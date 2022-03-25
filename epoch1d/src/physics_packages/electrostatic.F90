@@ -77,11 +77,11 @@ CONTAINS
 !END DO
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
-      Q_conv_min = -convect_curr_min
+      Q_conv_min = convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
       pot_ext_max = set_potential_x_max()
-      Q_conv_max = -convect_curr_max
+      Q_conv_max = convect_curr_max
     END IF
 
     ! Charge density to electrostatic potential
@@ -556,8 +556,8 @@ CONTAINS
         ! Calculate new surface charge density
         V_plasma = -es_potential(0)
         V_rf = pot_ext_min
-        V_c = -(V_plasma + V_rf)
-        Q_now_min = -capacitor * V_c
+        V_c = V_plasma + V_rf
+        Q_now_min = capacitor * V_c
 
         wcharge_min_diff = Q_conv_min + Q_now_min - Q_prev_min
         wcharge_min_now = wcharge_min_prev + wcharge_min_diff
@@ -573,8 +573,8 @@ CONTAINS
         ! Calculate new surface charge density
         V_plasma = -es_potential(nx)
         V_rf = pot_ext_max
-        V_c = -(V_plasma + V_rf)
-        Q_now_max = -capacitor * V_c
+        V_c = V_plasma + V_rf
+        Q_now_max = capacitor * V_c
 
         wcharge_max_diff = Q_conv_max + Q_now_max - Q_prev_max
         wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
