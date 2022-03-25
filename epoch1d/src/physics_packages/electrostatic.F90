@@ -55,7 +55,8 @@ MODULE electrostatic
   REAL(num) :: wcharge_min_prev, wcharge_min_now
   REAL(num) :: wcharge_max_prev, wcharge_max_now
   REAL(num) :: wcharge_min_diff, wcharge_max_diff
-  REAL(num) :: Q_now, Q_prev
+  REAL(num) :: Q_now_min, Q_prev_min
+  REAL(num) :: Q_now_max, Q_prev_max
   REAL(num) :: Q_conv_max, Q_conv_min
   REAL(num) :: pot_ext_max, pot_ext_min
 
@@ -76,11 +77,11 @@ CONTAINS
 !END DO
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
-      Q_conv_min = convect_curr_min
+      Q_conv_min = -convect_curr_min
     END IF
     IF (x_max_boundary_open) THEN
-      pot_ext_max = -set_potential_x_max()
-      Q_conv_max = convect_curr_max
+      pot_ext_max = set_potential_x_max()
+      Q_conv_max = -convect_curr_max
     END IF
 
     ! Charge density to electrostatic potential
@@ -509,7 +510,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_min * 0.5_num
       term1 = wcharge_min_now / dx
-      term2 = Q_conv_min - Q_now + pot_ext_min * capacitor
+      term2 = Q_conv_min - Q_now_min + pot_ext_min * capacitor
       solver_rho_min = term0 + term1 + term2 / dx
       solver_rho_min = solver_rho_min * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -531,7 +532,7 @@ CONTAINS
       fac = -dx*dx/epsilon0
       term0 = rho_max * 0.5_num
       term1 = wcharge_max_now / dx
-      term2 = Q_conv_max - Q_now + pot_ext_max * capacitor
+      term2 = Q_conv_max - Q_now_max + pot_ext_max * capacitor
       solver_rho_max = term0 + term1 + term2 / dx
       solver_rho_max = solver_rho_max * fac
     ELSE IF (.NOT.capacitor_flag) THEN
@@ -549,22 +550,16 @@ CONTAINS
     IF (x_min_boundary_open) THEN
       IF (capacitor_max) THEN
         ! Buffer previous values
-        Q_prev = Q_now
+        Q_prev_min = Q_now_min
         wcharge_min_prev = wcharge_min_now
 
         ! Calculate new surface charge density
         V_plasma = -es_potential(0)
         V_rf = pot_ext_min
-        V_c = V_plasma + V_rf
-        Q_now = capacitor * V_c
-        !print*, "External potential ", step, V_rf 
-        !print*, "Plasma potential ", step, V_plasma 
-        !print*, "Capactior potential ", step, V_c 
-        !print*, "Capacitor charge ", step, Q_now
-        !print*, "Convection charge ", step, Q_conv_min
-        !print*,""
+        V_c = -(V_plasma + V_rf)
+        Q_now_min = -capacitor * V_c
 
-        wcharge_min_diff = Q_conv_min + Q_now - Q_prev
+        wcharge_min_diff = Q_conv_min + Q_now_min - Q_prev_min
         wcharge_min_now = wcharge_min_prev + wcharge_min_diff
       END IF
     END IF
@@ -572,22 +567,16 @@ CONTAINS
     IF (x_max_boundary_open) THEN
       IF (capacitor_min) THEN
         ! Buffer previous values
-        Q_prev = Q_now
+        Q_prev_max = Q_now_max
         wcharge_max_prev = wcharge_max_now
 
         ! Calculate new surface charge density
         V_plasma = -es_potential(nx)
         V_rf = pot_ext_max
         V_c = -(V_plasma + V_rf)
-        Q_now = capacitor * V_c
-        !print*, "External potential ", step, V_rf 
-        !print*, "Plasma potential ", step, V_plasma 
-        !print*, "Capactior potential ", step, V_c 
-        !print*, "Capacitor charge ", step, Q_now
-        !print*, "Convection charge ", step, Q_conv_max
-        !print*,""
+        Q_now_max = -capacitor * V_c
 
-        wcharge_max_diff = Q_conv_max + Q_now - Q_prev
+        wcharge_max_diff = Q_conv_max + Q_now_max - Q_prev_max
         wcharge_max_now = wcharge_max_prev + wcharge_max_diff 
       END IF
     END IF
@@ -628,7 +617,7 @@ CONTAINS
     IF (x_max_boundary_open) THEN
       !Update E-field at wall
       IF (capacitor_min) THEN
-        ex(nx) = wcharge_max_now / epsilon0
+        ex(nx) = -wcharge_max_now / epsilon0
         !PRINT*, 'Ex_max', step, ex(nx), ex(nx-1) + rho_max * dx / epsilon0 
       ELSE
       ex(nx) = ex(nx-1) + rho_max * dx / epsilon0
@@ -908,8 +897,10 @@ CONTAINS
     wcharge_max_diff = 0._num
     convect_curr_min = 0._num
     convect_curr_max = 0._num
-    Q_now = 0._num
-    Q_prev = 0._num
+    Q_now_min = 0._num
+    Q_prev_min = 0._num
+    Q_now_max = 0._num
+    Q_prev_max = 0._num
     Q_conv_min = 0._num
     Q_conv_max = 0._num
     pot_ext_max = 0._num
