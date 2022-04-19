@@ -1446,6 +1446,7 @@ CONTAINS
         CALL read_injector_depths(sdf_handle, injector_x_max, &
             block_id, ndims, 'injector_x_max_depths', c_dir_x, x_max_boundary)
 
+
       CASE(c_blocktype_constant)
         IF (str_cmp(block_id, 'dt_plasma_frequency')) THEN
           CALL sdf_read_srl(sdf_handle, dt_plasma_frequency)
@@ -1487,6 +1488,24 @@ CONTAINS
           END DO
         ELSE IF (str_cmp(block_id, 'elapsed_time')) THEN
           CALL sdf_read_srl(sdf_handle, old_elapsed_time)
+#ifdef ELECTROSTATIC
+        ELSE IF (str_cmp(block_id, 'Q_capacitor_min')) THEN
+          IF (x_min_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, Q_now_min)
+          END IF
+        ELSE IF (str_cmp(block_id, 'Q_capacitor_max')) THEN
+          IF (x_max_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, Q_now_max)
+          END IF
+        ELSE IF (str_cmp(block_id, 'wall_charge_min')) THEN
+          IF (x_min_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, wcharge_min_now)
+          END IF
+        ELSE IF (str_cmp(block_id, 'wall_charge_max')) THEN
+          IF (x_max_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, wcharge_max_now)
+          END IF
+#endif
         END IF
       CASE(c_blocktype_plain_mesh)
         IF (str_cmp(block_id, 'grid') .OR. str_cmp(block_id, 'grid_full')) THEN

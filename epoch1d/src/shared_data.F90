@@ -820,6 +820,9 @@ MODULE shared_data
   LOGICAL :: capacitor_flag, capacitor_min, capacitor_max
   REAL(num) :: capacitor
 
+  REAL(num) :: Q_now_min, Q_now_max
+  REAL(num) :: wcharge_min_now, wcharge_max_now
+
 #ifdef NEUTRAL_COLLISIONS
 !------------------------------------------------------------------------------
 ! Charged-neutral collisions - Written by M. Osca Engelbrecht
