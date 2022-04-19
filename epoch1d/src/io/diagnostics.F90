@@ -428,6 +428,10 @@ CONTAINS
         CALL write_injector_depths(sdf_handle, injector_x_max, &
             'injector_x_max_depths', c_dir_x, x_max_boundary)
 
+#ifdef ELECTROSTATIC
+        CALL write_electrostatic_bc
+#endif
+
         DO io = 1, n_io_blocks
           CALL sdf_write_srl(sdf_handle, &
               'time_prev/'//TRIM(io_block_list(io)%name), &
@@ -3702,4 +3706,42 @@ CONTAINS
 
   END SUBROUTINE write_source_info
 
+
+#ifdef ELECTROSTATIC
+  SUBROUTINE write_electrostatic_bc
+    REAL(num) :: Q_buffer, wcharge_buffer
+        ! Send x-min boundary data to all processors 
+        IF (x_min_boundary) THEN
+          Q_buffer = Q_now_min
+          wcharge_buffer = wcharge_min_now 
+        ELSE
+          Q_buffer = 0._num 
+          wcharge_buffer = 0._num 
+        END IF
+        CALL MPI_BCAST(Q_buffer, 1, MPI_DOUBLE_PRECISION, 0, comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'Q_capacitor_min', &
+            'Capacitor charge at x-min', Q_buffer)
+        CALL MPI_BCAST(wcharge_buffer, 1, MPI_DOUBLE_PRECISION, 0, comm, &
+          errcode) 
+        CALL sdf_write_srl(sdf_handle, 'wall_charge_min', &
+            'Surface charge density at x-min', wcharge_buffer)
+        
+        ! Send x-max boundary data to all processors 
+        IF (x_max_boundary) THEN
+          Q_buffer = Q_now_max
+          wcharge_buffer = wcharge_max_now 
+        ELSE
+          Q_buffer = 0._num 
+          wcharge_buffer = 0._num 
+        END IF
+        CALL MPI_BCAST(Q_buffer, 1, MPI_DOUBLE_PRECISION, nproc-1, &
+          comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'Q_capacitor_max', &
+            'Capacitor charge at x-max', Q_buffer)
+        CALL MPI_BCAST(wcharge_buffer, 1, MPI_DOUBLE_PRECISION, nproc-1, &
+          comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'wall_charge_max', &
+            'Surface charge density at x-max', wcharge_buffer)
+  END SUBROUTINE
+#endif
 END MODULE diagnostics

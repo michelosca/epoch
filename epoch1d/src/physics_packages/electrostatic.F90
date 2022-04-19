@@ -52,11 +52,9 @@ MODULE electrostatic
 #endif
   INTEGER :: nx_start, nx_end, nx_all
   ! Wall charge surface density
-  REAL(num) :: wcharge_min_prev, wcharge_min_now
-  REAL(num) :: wcharge_max_prev, wcharge_max_now
+  REAL(num) :: Q_prev_min, Q_prev_max
+  REAL(num) :: wcharge_min_prev, wcharge_max_prev
   REAL(num) :: wcharge_min_diff, wcharge_max_diff
-  REAL(num) :: Q_now_min, Q_prev_min
-  REAL(num) :: Q_now_max, Q_prev_max
   REAL(num) :: Q_conv_max, Q_conv_min
   REAL(num) :: pot_ext_max, pot_ext_min
 
