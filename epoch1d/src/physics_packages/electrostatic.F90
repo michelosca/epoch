@@ -604,22 +604,12 @@ CONTAINS
 
     IF (x_min_boundary_open) THEN
       !Update E-field at wall
-      IF (capacitor_max) THEN
-        ex(0) = wcharge_min_now / epsilon0
-        !PRINT*, 'Ex_min', step, ex(0), ex(1) - rho_min * dx / epsilon0
-      ELSE
       ex(0) = ex(1) - rho_min * dx / epsilon0
-      END IF
     END IF
 
     IF (x_max_boundary_open) THEN
       !Update E-field at wall
-      IF (capacitor_min) THEN
-        ex(nx) = -wcharge_max_now / epsilon0
-        !PRINT*, 'Ex_max', step, ex(nx), ex(nx-1) + rho_max * dx / epsilon0 
-      ELSE
       ex(nx) = ex(nx-1) + rho_max * dx / epsilon0
-      END IF
     END IF
 
     DO ix = 1, 2*c_ndims
@@ -895,9 +885,9 @@ CONTAINS
     wcharge_max_diff = 0._num
     convect_curr_min = 0._num
     convect_curr_max = 0._num
-    Q_now_min = 0._num
+    Q_now_min = epsilon0 * length_x * set_potential_x_min()
     Q_prev_min = 0._num
-    Q_now_max = 0._num
+    Q_now_max = epsilon0 * length_x * set_potential_x_max()
     Q_prev_max = 0._num
     Q_conv_min = 0._num
     Q_conv_max = 0._num
