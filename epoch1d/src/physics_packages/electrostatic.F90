@@ -866,6 +866,8 @@ CONTAINS
 
   SUBROUTINE setup_electrostatic
 
+    REAL(num) :: C_vacuum
+
     IF (x_min_boundary .AND. bc_field(c_bd_x_min) /= c_bc_periodic ) THEN
       x_min_boundary_open = .TRUE.
     ELSE
@@ -877,17 +879,12 @@ CONTAINS
       x_max_boundary_open = .FALSE.
     END IF
 
-    wcharge_min_now = 0._num
-    wcharge_max_prev = 0._num
-    wcharge_min_now = 0._num
-    wcharge_max_prev = 0._num
-    wcharge_min_diff = 0._num
-    wcharge_max_diff = 0._num
-    convect_curr_min = 0._num
-    convect_curr_max = 0._num
-    Q_now_min = epsilon0 * length_x * set_potential_x_min()
+    C_vacuum = epsilon0 / length_x
+    Q_now_min = set_potential_x_min()/(1._num/C_vacuum + &
+      1._num/MAX(capacitor, 1.e-100_num))
     Q_prev_min = 0._num
-    Q_now_max = epsilon0 * length_x * set_potential_x_max()
+    Q_now_max = set_potential_x_max()/(1._num/C_vacuum + &
+      1._num/MAX(capacitor, 1.e-100_num))
     Q_prev_max = 0._num
     Q_conv_min = 0._num
     Q_conv_max = 0._num
@@ -895,6 +892,15 @@ CONTAINS
     pot_ext_min = 0._num
 
     es_current = 0._num
+
+    wcharge_min_prev = 0._num
+    wcharge_min_now = Q_now_min 
+    wcharge_max_prev = 0._num
+    wcharge_max_now = Q_now_max 
+    wcharge_min_diff = 0._num
+    wcharge_max_diff = 0._num
+    convect_curr_min = 0._num
+    convect_curr_max = 0._num
 
 #ifdef TRIDIAG
     ALLOCATE(nx_each_rank(nproc), cell_start_each_rank(nproc))
