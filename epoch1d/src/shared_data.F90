@@ -419,6 +419,7 @@ MODULE shared_data
     TYPE(particle_list) :: sampled_particles
     TYPE(particle_probe), POINTER :: next
     INTEGER :: dumpmask
+    REAL(num) :: t_start, t_end
   END TYPE particle_probe
 #endif
 
