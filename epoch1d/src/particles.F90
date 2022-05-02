@@ -556,6 +556,16 @@ CONTAINS
     REAL(num), PARAMETER :: fac = (0.5_num)**c_ndims
 #endif
 
+    ! Used for particle probes (to see of probe conditions are satisfied)
+#ifndef NO_PARTICLE_PROBES
+    REAL(num) :: init_part_x, final_part_x
+    TYPE(particle_probe), POINTER :: current_probe
+    TYPE(particle), POINTER :: particle_copy
+    REAL(num) :: d_init, d_final
+    REAL(num) :: probe_energy
+    LOGICAL :: probes_for_species
+#endif
+
     TYPE(particle), POINTER :: current
 #ifdef PREFETCH
     TYPE(particle), POINTER :: next
@@ -577,6 +587,10 @@ CONTAINS
 #endif
         CYCLE
       END IF
+#ifndef NO_PARTICLE_PROBES
+      current_probe => species_list(ispecies)%attached_probes
+      probes_for_species = ASSOCIATED(current_probe)
+#endif
 
 #ifndef PER_PARTICLE_CHARGE_MASS
       part_q   = species_list(ispecies)%charge
@@ -614,6 +628,9 @@ CONTAINS
 
         ! Copy the particle properties out for speed
         part_x  = current%part_pos - x_grid_min_local
+#ifndef NO_PARTICLE_PROBES
+        init_part_x = current%part_pos
+#endif
         part_u(1) = current%part_p(1) * ipart_m
 
         ! Lorentz force only affects charged particles
@@ -717,6 +734,50 @@ CONTAINS
         END IF
 #endif
 
+#if !defined(NO_PARTICLE_PROBES) && !defined(NO_IO)
+        IF (probes_for_species) THEN
+          ! Compare the current particle with the parameters of any probes in
+          ! the system. These particles are copied into a separate part of the
+          ! output file.
+          
+          current_probe => species_list(ispecies)%attached_probes
+
+          ! Cycle through probes
+          DO WHILE(ASSOCIATED(current_probe))
+
+            IF (time >= current_probe%t_start .AND. &
+              time <= current_probe%t_end) THEN
+          
+              ! Note that this is the energy of a single REAL particle in the
+              ! pseudoparticle, NOT the energy of the pseudoparticle
+              probe_energy = 0.5_num * part_m * DOT_PRODUCT(part_u, part_u)
+              final_part_x = current%part_pos
+
+              ! Unidirectional probe
+              IF (probe_energy > current_probe%ek_min) THEN
+                IF (probe_energy < current_probe%ek_max) THEN
+
+                  d_init  = current_probe%normal &
+                      * (current_probe%point - init_part_x)
+                  d_final = current_probe%normal &
+                      * (current_probe%point - final_part_x)
+                  IF (d_final < 0.0_num .AND. d_init >= 0.0_num) THEN
+                    ! this particle is wanted so copy it to the list associated
+                    ! with this probe
+                    ALLOCATE(particle_copy)
+                    particle_copy = current
+                    CALL add_particle_to_partlist(&
+                        current_probe%sampled_particles, particle_copy)
+                    NULLIFY(particle_copy)
+                  END IF
+
+                END IF
+              END IF
+            END IF
+            current_probe => current_probe%next
+          END DO
+        END IF
+#endif
         current => current%next
       END DO
 

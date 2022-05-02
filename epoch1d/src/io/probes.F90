@@ -44,6 +44,8 @@ CONTAINS
     probe%ek_max =  HUGE(1.0_num)
     probe%name = blank
     probe%dumpmask = c_io_always
+    probe%t_start = -HUGE(1.0_num)
+    probe%t_end = HUGE(1.0_num)
     NULLIFY(probe%next)
     ALLOCATE(probe%use_species(n_species))
     probe%use_species = .FALSE.
@@ -180,7 +182,7 @@ CONTAINS
               TRIM(probe_name), it_probe_real, c_dump_part_weight, &
               part_probe_offset, convert)
 #else
-          CALL sdf_write_srl(sdf_handle, TRIM(temp_name), TRIM(probe_name), &
+          CALL sdf_write_srl(sdf_handle, TRIM(temp_name), TRIM(temp_name), &
               species_list(ispecies)%weight)
 #endif
 
