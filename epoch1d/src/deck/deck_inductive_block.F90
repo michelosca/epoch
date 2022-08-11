@@ -38,7 +38,7 @@ CONTAINS
 
     INTEGER :: ispecies
     REAL(num) :: x_min, x_max, L_source, electron_weight
-    CHARACTER(*) :: e_name, species_name
+    CHARACTER(LEN=string_length) :: e_name, species_name
 
     IF (deck_state /= c_ds_first .AND. inductive_heating_flag) THEN 
         ! Set electron species parameters
@@ -47,7 +47,7 @@ CONTAINS
           species_name = TRIM(ADJUSTL(species_list(ispecies)%name)) 
           IF (str_cmp(species_name, e_name)) THEN
             electron_weight = species_list(ispecies)%weight
-            inductive_source%electron_id = ispecies
+            inductive_source%id_electrons = ispecies
           END IF
         END DO
         
@@ -58,7 +58,7 @@ CONTAINS
         ! Set conduction current factor
         L_source = x_max - x_min
 
-        inductive_source_block%j_cond_fac = q0 * electron_weight / L_source 
+        inductive_source%j_cond_fac = q0 * electron_weight / L_source 
     END IF
   
   END SUBROUTINE inductive_deck_finalise
@@ -93,8 +93,8 @@ CONTAINS
     IF (deck_state == c_ds_first) RETURN
     IF (element == blank .OR. value == blank) RETURN
     
-    F (str_cmp(element, 'amp')) THEN
-      inductive_source%amp = as_real_print(value, element, errcode)
+    IF (str_cmp(element, 'amp')) THEN
+      inductive_source%j0_amp = as_real_print(value, element, errcode)
       RETURN
     END IF
     
@@ -121,7 +121,6 @@ CONTAINS
     IF (str_cmp(element, 't_profile')) THEN
       CALL initialise_stack(inductive_source%time_function)
       CALL tokenize(value, inductive_source%time_function, errcode)
-      inductive_source%use_time_function = .TRUE.
       ! evaluate it once to check that it's a valid block
       dummy = evaluate(inductive_source%time_function, errcode)
       RETURN
@@ -139,18 +138,16 @@ CONTAINS
   FUNCTION inductive_block_check() RESULT(errcode)
   
     INTEGER :: errcode
-    TYPE(potential_block), POINTER :: current
-    INTEGER :: error
 
     errcode = c_err_none
-    IF (inductive_source%L_source <= 0._num) THEN
+    IF (inductive_source%x_min >= inductive_source%x_max) THEN
       errcode = c_err_missing_elements
       IF (rank == 0) THEN
         WRITE(*,*) '*** ERROR ***'
         WRITE(*,*) 'Source boundaries must be x_max > x_min'
       END IF
     END IF
-    IF (inductive_source%electron_id <= 0) THEN
+    IF (inductive_source%id_electrons <= 0) THEN
       errcode = c_err_missing_elements
       IF (rank == 0) THEN
         WRITE(*,*) '*** ERROR ***'

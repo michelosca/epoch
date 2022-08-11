@@ -496,7 +496,7 @@ deck.o: deck.F90 bremsstrahlung.o custom_deck.o deck_boundaries_block.o \
   deck_qed_block.o deck_species_block.o deck_stencil_block.o \
   deck_subset_block.o deck_window_block.o photons.o strings.o utilities.o \
   version_data.o deck_electrostatic_block.o deck_background_block.o \
-  deck_see_block.o deck_inductive_block.F90 $(SDFMOD)
+  deck_see_block.o deck_inductive_block.o $(SDFMOD)
 
 deck_background_block.o: deck_background_block.F90 background.o constants.o \
   strings_advanced.o
