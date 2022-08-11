@@ -35,32 +35,7 @@ CONTAINS
   
   
   SUBROUTINE inductive_deck_finalise
-
-    INTEGER :: ispecies
-    REAL(num) :: x_min, x_max, L_source, electron_weight
-    CHARACTER(LEN=string_length) :: e_name, species_name
-
-    IF (deck_state /= c_ds_first .AND. inductive_heating_flag) THEN 
-        ! Set electron species parameters
-        e_name = inductive_source%e_name
-        DO ispecies = 1, n_species
-          species_name = TRIM(ADJUSTL(species_list(ispecies)%name)) 
-          IF (str_cmp(species_name, e_name)) THEN
-            electron_weight = species_list(ispecies)%weight
-            inductive_source%id_electrons = ispecies
-          END IF
-        END DO
-        
-        ! Set source length
-        x_max = inductive_source%x_max
-        x_min = inductive_source%x_min
-
-        ! Set conduction current factor
-        L_source = x_max - x_min
-
-        inductive_source%j_cond_fac = q0 * electron_weight / L_source 
-    END IF
-  
+    
   END SUBROUTINE inductive_deck_finalise
   
   
@@ -68,7 +43,6 @@ CONTAINS
   SUBROUTINE inductive_block_start
   
     IF (deck_state == c_ds_first) RETURN
-    ALLOCATE(inductive_source)
     CALL init_inductive_source_block(inductive_source)
     inductive_heating_flag = .TRUE.
   
@@ -140,18 +114,13 @@ CONTAINS
     INTEGER :: errcode
 
     errcode = c_err_none
-    IF (inductive_source%x_min >= inductive_source%x_max) THEN
-      errcode = c_err_missing_elements
-      IF (rank == 0) THEN
-        WRITE(*,*) '*** ERROR ***'
-        WRITE(*,*) 'Source boundaries must be x_max > x_min'
-      END IF
-    END IF
-    IF (inductive_source%id_electrons <= 0) THEN
-      errcode = c_err_missing_elements
-      IF (rank == 0) THEN
-        WRITE(*,*) '*** ERROR ***'
-        WRITE(*,*) 'Electron species was not identified'
+    IF (inductive_heating_flag) THEN
+      IF (inductive_source%x_min >= inductive_source%x_max) THEN
+        errcode = c_err_missing_elements
+        IF (rank == 0) THEN
+          WRITE(*,*) '*** ERROR ***'
+          WRITE(*,*) 'Source boundaries must be x_max > x_min'
+        END IF
       END IF
     END IF
 

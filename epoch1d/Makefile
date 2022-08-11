@@ -280,8 +280,8 @@ DEFINES += $(D)NEUTRAL_COLLISIONS
 
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
-  DEFINES += $(D)PETSC
-  #DEFINES += $(D)TRIDIAG
+  #DEFINES += $(D)PETSC
+  DEFINES += $(D)TRIDIAG
 
   # Secondary electron emission
   DEFINES += $(D)SEE
@@ -544,7 +544,7 @@ epoch1d.o: epoch1d.F90 balance.o bremsstrahlung.o calc_df.o collisions.o \
   current_smooth.o deck.o diagnostics.o fields.o finish.o helper.o ic_module.o \
   injectors.o ionise.o mpi_routines.o particle_migration.o particles.o \
   photons.o setup.o split_particle.o welcome.o window.o electrostatic.o \
-  nc_setup.o neutral_collisions.o
+  nc_setup.o neutral_collisions.o  inductive_heating.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 evaluate.o: evaluate.F90 shunt.o stack.o
 evaluator_blocks.o: evaluator_blocks.F90 custom_parser.o stack.o strings.o
@@ -555,7 +555,8 @@ finish.o: finish.F90 collisions.o constants.o deck.o diagnostics.o dist_fn.o \
   nc_setup.o
 helper.o: helper.F90 balance.o boundary.o deltaf_loader.o partlist.o simple_io.o
 ic_module.o: ic_module.f90 helper.o shared_data.o
-inductive_heating.o: inductive_heating.F90 shared_data.o evaluate.o
+inductive_heating.o: inductive_heating.F90 shared_data.o evaluate.o \
+  strings_advanced.o
 injectors.o: injectors.F90 evaluate.o particle_temperature.o partlist.o \
   random_generator.o utilities.o
 ionise.o: ionise.F90 boundary.o numerics.o partlist.o random_generator.o \

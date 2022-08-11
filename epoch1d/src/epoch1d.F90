@@ -62,6 +62,7 @@ PROGRAM pic
 #ifdef NEUTRAL_COLLISIONS
   USE neutral_collisions
 #endif
+  USE inductive_heating
 
   IMPLICIT NONE
 
@@ -142,7 +143,8 @@ PROGRAM pic
 #ifdef NEUTRAL_COLLISIONS
   IF (ANY(neutral_coll)) CALL final_nc_setup
 #endif
-
+  IF (inductive_heating_flag) CALL setup_inductive_heating
+  
   CALL initialise_window ! window.f90
   CALL set_dt
   CALL set_maxwell_solver

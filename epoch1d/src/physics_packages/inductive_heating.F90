@@ -23,6 +23,7 @@ MODULE inductive_heating
 #ifdef ELECTROSTATIC
   USE shared_data
   USE evaluator
+  USE strings_advanced
   
   IMPLICIT NONE
 
@@ -38,6 +39,7 @@ MODULE inductive_heating
     ! Simulation paramters
     REAL(num) :: j_total, j_cond_fac
     REAL(num) :: dEy_dt, sum_vy_e
+    INTEGER :: ix_min, ix_max
 
     LOGICAL :: source_on
 
@@ -52,6 +54,7 @@ MODULE inductive_heating
   PUBLIC :: inductive_heating_y, inductive_heating_prepare_source
   PUBLIC :: inductive_heating_flag, inductive_source
   PUBLIC :: init_inductive_source_block
+  PUBLIC :: setup_inductive_heating
 
 CONTAINS
 
@@ -59,6 +62,7 @@ CONTAINS
     CALL update_total_current(inductive_source)
     CALL update_sum_vy_e(inductive_source)
     CALL update_dEy_dt(inductive_source)
+    CALL update_ey(inductive_source)
   END SUBROUTINE inductive_heating_y
 
 
@@ -67,8 +71,12 @@ CONTAINS
 
     TYPE(inductive_block), POINTER :: inductive_source_block
     
+    ALLOCATE(inductive_source_block)
+
     inductive_source_block%x_min = 0._num
     inductive_source_block%x_max = 0._num 
+    inductive_source_block%ix_min = -1
+    inductive_source_block%ix_max = -1 
     inductive_source_block%t_start = 0._num
     inductive_source_block%t_end = HUGE(0._num) 
     
@@ -103,6 +111,8 @@ CONTAINS
     ELSE
       inductive_source_block%j_total = 0._num
     END IF
+    print*, rank,time,step, &
+      'current_amplitude', inductive_source_block%j_total
 
   END SUBROUTINE update_total_current 
 
@@ -118,6 +128,8 @@ CONTAINS
     CALL MPI_ALLREDUCE(sendbuf, recvbuf, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
       comm, ierror) 
     inductive_source_block%sum_vy_e = recvbuf
+    print*, rank, time, step, &
+      'vy_sum', inductive_source_block%sum_vy_e
     
   END SUBROUTINE update_sum_vy_e
 
@@ -132,9 +144,30 @@ CONTAINS
     j_cond_fac = inductive_source_block%j_cond_fac  ! = electron_weight * e / L_source
     sum_vy_e = inductive_source_block%sum_vy_e
     inductive_source_block%dEy_dt = (j_total - j_cond_fac*sum_vy_e) / epsilon0
+    print*, rank, time, step, &
+      ' dEydt ', inductive_source_block%dEy_dt
 
 
   END SUBROUTINE update_dEy_dt
+
+
+
+  SUBROUTINE update_ey(inductive_source_block)
+
+    TYPE(inductive_block), POINTER :: inductive_source_block
+    REAL(num) :: dEy_dt
+    INTEGER :: i, ix_min, ix_max
+
+    dEy_dt = inductive_source_block%dEy_dt
+    ix_min = inductive_source%ix_min
+    ix_max = inductive_source%ix_max
+    DO i = ix_min, ix_max 
+      ey(i) = ey(i) + dEy_dt * dt
+      print*, rank, time, step, 'ey', i*dx + x_min_local, ey(i)
+    END DO
+
+
+  END SUBROUTINE update_ey
 
   
 
@@ -148,5 +181,75 @@ CONTAINS
     inductive_source%sum_vy_e = 0._num
   END SUBROUTINE inductive_heating_prepare_source
 
+  SUBROUTINE setup_inductive_heating
+
+    INTEGER :: ispecies, i
+    REAL(num) :: x_min, x_max, L_source, electron_weight
+    REAL(num) :: x_cell_left
+    CHARACTER(LEN=string_length) :: e_name, species_name
+
+    IF (deck_state /= c_ds_first .AND. inductive_heating_flag) THEN 
+        ! Set electron species parameters
+        e_name = TRIM(ADJUSTL(inductive_source%e_name))
+        DO ispecies = 1, n_species
+          species_name = TRIM(ADJUSTL(species_list(ispecies)%name)) 
+          IF (str_cmp(species_name, e_name)) THEN
+            inductive_source%id_electrons = ispecies
+            electron_weight = species_list(inductive_source%id_electrons)%weight
+            EXIT 
+          END IF
+        END DO
+        
+        ! Set conduction current factor
+        x_max = inductive_source%x_max
+        x_min = inductive_source%x_min
+        L_source = x_max - x_min
+        inductive_source%j_cond_fac = q0 / L_source * electron_weight 
+
+        ! Set source start cell
+        IF (x_min > x_max_local) THEN
+          inductive_source%ix_min = nx+ng+1
+        ELSE
+          DO i = 1-ng, nx+ng
+            x_cell_left = i * dx + x_min_local
+            IF (x_cell_left >= x_min) THEN
+              inductive_source%ix_min = i
+              EXIT
+            END IF
+          END DO
+        END IF
+
+        ! Set source end cell
+        IF (x_max < x_min_local) THEN
+          inductive_source%ix_max = 1-ng-1
+        ELSE
+          DO i = nx+ng,1-ng,-1
+            x_cell_left = i *dx + x_min_local
+            IF (x_cell_left <= x_max) THEN
+              inductive_source%ix_max = i
+              EXIT
+            END IF
+          END DO
+        END IF
+
+  print*,'Input data'
+  print*,rank, ' - current amplitude', inductive_source%j0_amp
+  print*,rank, ' - t start and end', inductive_source%t_start,&
+   inductive_source%t_end
+  print*,rank, ' - x min and max', inductive_source%x_min, &
+  inductive_source%x_max
+  print*,rank, ' - cell min and max', inductive_source%ix_min, &
+  inductive_source%ix_max
+  print*,rank, ' - j_total ', inductive_source%j_total
+  print*,rank, ' - j_cond_fac ', inductive_source%j_cond_fac
+  print*,rank, ' - dEy/dt', inductive_source%dEy_dt
+  print*,rank, ' - sum(v_y_e) ', inductive_source%sum_vy_e
+  print*,rank, ' - source on/off', inductive_source%source_on
+  print*,rank, ' - electron name', inductive_source%e_name
+  print*,rank, ' - electron species', inductive_source%id_electrons
+
+    END IF
+  
+  END SUBROUTINE setup_inductive_heating
 #endif
 END MODULE inductive_heating
