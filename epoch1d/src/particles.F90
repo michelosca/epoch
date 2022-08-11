@@ -738,10 +738,11 @@ CONTAINS
         END IF
 #endif
         IF (inductive_heating_flag) THEN
-          IF (inductive_source%source_on .AND. inductive_source%electron_id == ispecies) THEN
-            IF ( (current%part_pos >= inductive_source_x_min) .AND. &
+          IF (inductive_source%source_on .AND. &
+            inductive_source%id_electrons == ispecies) THEN
+            IF ( (current%part_pos >= inductive_source%x_min) .AND. &
               (current%part_pos <= inductive_source%x_max) ) THEN
-              inductive_source%sum_vy_e = indutive_source%sum_vy_e + part_u(2)
+              inductive_source%sum_vy_e = inductive_source%sum_vy_e + part_u(2)
             END IF
           END IF
         END IF

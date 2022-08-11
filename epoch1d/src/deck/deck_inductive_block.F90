@@ -16,7 +16,6 @@
 MODULE deck_inductive_block
 #ifdef ELECTROSTATIC
   USE strings_advanced
-  USE shared_data
   USE inductive_heating
   
   IMPLICIT NONE

@@ -515,7 +515,7 @@ deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
 deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
 deck_inductive_block.o: deck_inductive_block.F90 strings_advanced.o \
-  inductive_heating.o shard_data.o 
+  inductive_heating.o
 deck_injector_block.o: deck_injector_block.f90 injectors.o shunt.o \
   strings_advanced.o utilities.o
 deck_io_block.o: deck_io_block.F90 strings_advanced.o utilities.o
