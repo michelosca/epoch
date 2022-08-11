@@ -22,6 +22,7 @@ MODULE particles
 #endif
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
 #endif
   IMPLICIT NONE
 
@@ -604,6 +605,9 @@ CONTAINS
         is_neutral = .FALSE.
       END IF
 #endif
+      IF (inductive_heating_flag) THEN
+        CALL inductive_heating_prepare_source
+      END IF
 
       current => species_list(ispecies)%attached_list%head
       DO ipart = 1, species_list(ispecies)%attached_list%count
@@ -733,6 +737,14 @@ CONTAINS
           current%part_pos_y = current%part_pos_y + part_u(2) * dt
         END IF
 #endif
+        IF (inductive_heating_flag) THEN
+          IF (inductive_source%source_on .AND. inductive_source%electron_id == ispecies) THEN
+            IF ( (current%part_pos >= inductive_source_x_min) .AND. &
+              (current%part_pos <= inductive_source%x_max) ) THEN
+              inductive_source%sum_vy_e = indutive_source%sum_vy_e + part_u(2)
+            END IF
+          END IF
+        END IF
 
 #if !defined(NO_PARTICLE_PROBES) && !defined(NO_IO)
         IF (probes_for_species) THEN
