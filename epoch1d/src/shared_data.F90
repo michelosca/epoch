@@ -955,6 +955,9 @@ MODULE shared_data
   LOGICAL :: neutral_collision_counter
 #endif
 
+!------------------------------------------------------------------------------
+! Secondary Electron Emission (SEE) - Written by M. Osca Engelbrecht
+!------------------------------------------------------------------------------
 #ifdef SEE
   TYPE see_type
     INTEGER :: species_impact, species_electron
