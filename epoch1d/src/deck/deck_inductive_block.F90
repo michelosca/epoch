@@ -22,6 +22,10 @@ MODULE deck_inductive_block
   SAVE
   
   PRIVATE
+
+  TYPE(inductive_heating_block), POINTER :: inductive_source
+  INTEGER :: inductive_block_counter
+
   PUBLIC :: inductive_deck_initialise, inductive_deck_finalise
   PUBLIC :: inductive_block_start, inductive_block_end
   PUBLIC :: inductive_block_handle_element, inductive_block_check
@@ -30,6 +34,9 @@ CONTAINS
   
   SUBROUTINE inductive_deck_initialise
     
+    IF (deck_state /= c_ds_first) THEN 
+      CALL inductive_heating_allocate_sources_list(inductive_block_counter)
+    END IF
   END SUBROUTINE inductive_deck_initialise
   
   
@@ -42,15 +49,23 @@ CONTAINS
   
   SUBROUTINE inductive_block_start
   
-    IF (deck_state == c_ds_first) RETURN
-    CALL init_inductive_source_block(inductive_source)
-    inductive_heating_flag = .TRUE.
+    IF (deck_state == c_ds_first) THEN 
+      inductive_block_counter = inductive_block_counter + 1
+    ELSE
+      ALLOCATE(inductive_source)
+      CALL inductive_heating_init_inductive_block(inductive_source)
+      inductive_heating_flag = .TRUE.
+    END IF
   
   END SUBROUTINE inductive_block_start
   
   
   
   SUBROUTINE inductive_block_end
+
+    IF (deck_state == c_ds_first) RETURN
+    CALL inductive_heating_add_source_to_list(inductive_source)
+    NULLIFY(inductive_source)
   
   END SUBROUTINE inductive_block_end
   
@@ -114,16 +129,6 @@ CONTAINS
     INTEGER :: errcode
 
     errcode = c_err_none
-    IF (inductive_heating_flag) THEN
-      IF (inductive_source%x_min >= inductive_source%x_max) THEN
-        errcode = c_err_missing_elements
-        IF (rank == 0) THEN
-          WRITE(*,*) '*** ERROR ***'
-          WRITE(*,*) 'Source boundaries must be x_max > x_min'
-        END IF
-      END IF
-    END IF
-
 
   END FUNCTION inductive_block_check
 #endif

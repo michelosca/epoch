@@ -29,9 +29,10 @@ MODULE inductive_heating
 
   PRIVATE
 
-  TYPE inductive_block 
+  TYPE inductive_heating_block 
 
     ! Input parameters
+    INTEGER :: id
     TYPE(primitive_stack) :: time_function
     REAL(num) :: j0_amp, t_start, t_end
     REAL(num) :: x_min, x_max
@@ -46,37 +47,130 @@ MODULE inductive_heating
     CHARACTER(LEN=string_length) :: e_name
     INTEGER :: id_electrons
 
-  END TYPE inductive_block 
+  END TYPE inductive_heating_block 
 
-  TYPE(inductive_block), POINTER :: inductive_source 
+  TYPE(inductive_heating_block), DIMENSION(:), POINTER :: inductive_sources 
+  INTEGER, SAVE :: n_heating_sources = 0
   LOGICAL :: inductive_heating_flag = .FALSE.
 
-  PUBLIC :: inductive_heating_y, inductive_heating_prepare_source
-  PUBLIC :: inductive_heating_flag, inductive_source
-  PUBLIC :: init_inductive_source_block
-  PUBLIC :: setup_inductive_heating
+  PUBLIC :: inductive_heating_y, inductive_heating_prepare_sources
+  PUBLIC :: inductive_heating_init_inductive_block
+  PUBLIC :: inductive_heating_allocate_sources_list
+  PUBLIC :: inductive_heating_setup, inductive_heating_add_source_to_list
+  PUBLIC :: inductive_heating_add_particle_velocity
+  PUBLIC :: inductive_heating_flag, inductive_heating_block 
 
 CONTAINS
 
   SUBROUTINE inductive_heating_y
-    CALL update_total_current(inductive_source)
-    CALL update_sum_vy_e(inductive_source)
-    CALL update_dEy_dt(inductive_source)
-    CALL update_ey(inductive_source)
+
+    INTEGER :: i
+    TYPE(inductive_heating_block), POINTER :: inductive_source
+
+    IF (inductive_heating_flag) THEN
+      DO i = 1, n_heating_sources
+        inductive_source => inductive_sources(i)
+        CALL update_total_current(inductive_source)
+        CALL update_sum_vy_e(inductive_source)
+        CALL update_dEy_dt(inductive_source)
+      END DO
+      CALL update_ey
+    END IF
+  
   END SUBROUTINE inductive_heating_y
 
 
 
-  SUBROUTINE init_inductive_source_block(inductive_source_block)
+  SUBROUTINE update_total_current(inductive_source_block)
 
-    TYPE(inductive_block), POINTER :: inductive_source_block
+    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    REAL(num) :: j0_amp
+    INTEGER :: err
+    TYPE(parameter_pack) :: parameters
+
+    err = 0
+    IF (inductive_source_block%source_on) THEN
+      j0_amp = inductive_source_block%j0_amp
+      inductive_source_block%j_total = j0_amp * evaluate_with_parameters( &
+        inductive_source_block%time_function, parameters, err)
+    ELSE
+      inductive_source_block%j_total = 0._num
+    END IF
+
+  END SUBROUTINE update_total_current 
+
+
+
+  SUBROUTINE update_sum_vy_e(inductive_source_block)
+
+    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    REAL(num) :: sendbuf, recvbuf
+    INTEGER :: ierror
+
+    sendbuf = inductive_source_block%sum_vy_e
+    CALL MPI_ALLREDUCE(sendbuf, recvbuf, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+      comm, ierror) 
+    inductive_source_block%sum_vy_e = recvbuf
     
-    ALLOCATE(inductive_source_block)
+  END SUBROUTINE update_sum_vy_e
 
+  
+
+  SUBROUTINE update_dEy_dt(inductive_source_block)
+
+    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    REAL(num) :: j_total, j_cond_fac, sum_vy_e
+
+    j_total = inductive_source_block%j_total
+    j_cond_fac = inductive_source_block%j_cond_fac  ! = electron_weight * e / L_source
+    sum_vy_e = inductive_source_block%sum_vy_e
+    inductive_source_block%dEy_dt = (j_total - j_cond_fac*sum_vy_e) / epsilon0
+
+  END SUBROUTINE update_dEy_dt
+
+
+
+  SUBROUTINE update_ey
+
+    TYPE(inductive_heating_block), POINTER :: inductive_source
+    REAL(num) :: dEy_dt
+    INTEGER :: i, j, ix_min, ix_max
+
+
+    DO j = 1, n_heating_sources
+      inductive_source => inductive_sources(j)
+      dEy_dt = inductive_source%dEy_dt
+      ix_min = inductive_source%ix_min
+      ix_max = inductive_source%ix_max
+      DO i = ix_min, ix_max 
+        ey(i) = ey(i) + dEy_dt * dt
+      END DO
+    END DO
+
+  END SUBROUTINE update_ey
+
+  
+
+  SUBROUTINE inductive_heating_allocate_sources_list(count)
+    INTEGER, INTENT(IN) :: count
+
+    ALLOCATE(inductive_sources(count))
+
+  END SUBROUTINE inductive_heating_allocate_sources_list
+
+
+
+  SUBROUTINE inductive_heating_init_inductive_block(inductive_source_block)
+
+    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    
+    n_heating_sources = n_heating_sources + 1
+
+    inductive_source_block%id = n_heating_sources
     inductive_source_block%x_min = 0._num
     inductive_source_block%x_max = 0._num 
-    inductive_source_block%ix_min = -1
-    inductive_source_block%ix_max = -1 
+    inductive_source_block%ix_min = -100000000
+    inductive_source_block%ix_max = -100000000 
     inductive_source_block%t_start = 0._num
     inductive_source_block%t_end = HUGE(0._num) 
     
@@ -92,164 +186,120 @@ CONTAINS
     inductive_source_block%e_name = "None"
     inductive_source_block%id_electrons = -1
       
-  END SUBROUTINE init_inductive_source_block
+  END SUBROUTINE inductive_heating_init_inductive_block 
 
 
 
-  SUBROUTINE update_total_current(inductive_source_block)
+  SUBROUTINE inductive_heating_add_source_to_list(inductive_source_block)
 
-    TYPE(inductive_block), POINTER :: inductive_source_block
-    REAL(num) :: j0_amp
-    INTEGER :: err
-    TYPE(parameter_pack) :: parameters
+    TYPE(inductive_heating_block),POINTER,INTENT(IN) :: inductive_source_block
+    INTEGER :: id
 
-    err = 0
-    IF (inductive_source_block%source_on) THEN
-      j0_amp = inductive_source_block%j0_amp
-      inductive_source_block%j_total = j0_amp * evaluate_with_parameters( &
-        inductive_source_block%time_function, parameters, err)
-    ELSE
-      inductive_source_block%j_total = 0._num
-    END IF
-    print*, rank,time,step, &
-      'current_amplitude', inductive_source_block%j_total
+    id = inductive_source_block%id
+    inductive_sources(id) = inductive_source_block
 
-  END SUBROUTINE update_total_current 
+  END SUBROUTINE inductive_heating_add_source_to_list
 
 
 
-  SUBROUTINE update_sum_vy_e(inductive_source_block)
+  SUBROUTINE inductive_heating_prepare_sources
 
-    TYPE(inductive_block), POINTER :: inductive_source_block
-    REAL(num) :: sendbuf, recvbuf
-    INTEGER :: ierror
+    INTEGER :: i
+    TYPE(inductive_heating_block), POINTER :: inductive_source
 
-    sendbuf = inductive_source_block%sum_vy_e
-    CALL MPI_ALLREDUCE(sendbuf, recvbuf, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
-      comm, ierror) 
-    inductive_source_block%sum_vy_e = recvbuf
-    print*, rank, time, step, &
-      'vy_sum', inductive_source_block%sum_vy_e
-    
-  END SUBROUTINE update_sum_vy_e
-
-  
-
-  SUBROUTINE update_dEy_dt(inductive_source_block)
-
-    TYPE(inductive_block), POINTER :: inductive_source_block
-    REAL(num) :: j_total, j_cond_fac, sum_vy_e
-
-    j_total = inductive_source_block%j_total
-    j_cond_fac = inductive_source_block%j_cond_fac  ! = electron_weight * e / L_source
-    sum_vy_e = inductive_source_block%sum_vy_e
-    inductive_source_block%dEy_dt = (j_total - j_cond_fac*sum_vy_e) / epsilon0
-    print*, rank, time, step, &
-      ' dEydt ', inductive_source_block%dEy_dt
-
-
-  END SUBROUTINE update_dEy_dt
-
-
-
-  SUBROUTINE update_ey(inductive_source_block)
-
-    TYPE(inductive_block), POINTER :: inductive_source_block
-    REAL(num) :: dEy_dt
-    INTEGER :: i, ix_min, ix_max
-
-    dEy_dt = inductive_source_block%dEy_dt
-    ix_min = inductive_source%ix_min
-    ix_max = inductive_source%ix_max
-    DO i = ix_min, ix_max 
-      ey(i) = ey(i) + dEy_dt * dt
-      print*, rank, time, step, 'ey', i*dx + x_min_local, ey(i)
+    DO i = 1, n_heating_sources
+      inductive_source => inductive_sources(i)
+      IF ((time >= inductive_source%t_start) .AND. &
+          (time <= inductive_source%t_end)) THEN
+        inductive_source%source_on = .TRUE.
+      ELSE
+        inductive_source%source_on = .FALSE.
+      END IF
+      inductive_source%sum_vy_e = 0._num
     END DO
 
+  END SUBROUTINE inductive_heating_prepare_sources
 
-  END SUBROUTINE update_ey
 
-  
 
-  SUBROUTINE inductive_heating_prepare_source
-    IF ((time >= inductive_source%t_start) .AND. &
-        (time <= inductive_source%t_end)) THEN
-      inductive_source%source_on = .TRUE.
-    ELSE
-      inductive_source%source_on = .TRUE.
-    END IF
-    inductive_source%sum_vy_e = 0._num
-  END SUBROUTINE inductive_heating_prepare_source
+  SUBROUTINE inductive_heating_add_particle_velocity(ispecies, part_pos, vy)
 
-  SUBROUTINE setup_inductive_heating
+    INTEGER, INTENT(IN) :: ispecies
+    REAL(num), INTENT(IN) :: vy, part_pos
+    INTEGER :: i
+    TYPE(inductive_heating_block), POINTER :: inductive_source
+    
+    DO i = 1, n_heating_sources
+      inductive_source => inductive_sources(i)
+      IF (inductive_source%source_on .AND. &
+        inductive_source%id_electrons == ispecies) THEN
+        IF ( (part_pos >= inductive_source%x_min) .AND. &
+          (part_pos <= inductive_source%x_max) ) THEN
+          inductive_source%sum_vy_e = inductive_source%sum_vy_e + vy
+        END IF
+      END IF
+    END DO
 
-    INTEGER :: ispecies, i
+  END SUBROUTINE inductive_heating_add_particle_velocity
+
+
+
+  SUBROUTINE inductive_heating_setup 
+
+    INTEGER :: ispecies, i, j
     REAL(num) :: x_min, x_max, L_source, electron_weight
     REAL(num) :: x_cell_left
     CHARACTER(LEN=string_length) :: e_name, species_name
+    TYPE(inductive_heating_block), POINTER :: inductive_source
 
-    IF (deck_state /= c_ds_first .AND. inductive_heating_flag) THEN 
-        ! Set electron species parameters
-        e_name = TRIM(ADJUSTL(inductive_source%e_name))
-        DO ispecies = 1, n_species
-          species_name = TRIM(ADJUSTL(species_list(ispecies)%name)) 
-          IF (str_cmp(species_name, e_name)) THEN
-            inductive_source%id_electrons = ispecies
-            electron_weight = species_list(inductive_source%id_electrons)%weight
-            EXIT 
+    DO j = 1, n_heating_sources
+      inductive_source => inductive_sources(j)
+      IF (inductive_heating_flag) THEN 
+          ! Set electron species parameters
+          e_name = TRIM(ADJUSTL(inductive_source%e_name))
+          DO ispecies = 1, n_species
+            species_name = TRIM(ADJUSTL(species_list(ispecies)%name)) 
+            IF (str_cmp(species_name, e_name)) THEN
+              inductive_source%id_electrons = ispecies
+              electron_weight = species_list(ispecies)%weight
+              EXIT 
+            END IF
+          END DO
+          
+          ! Set conduction current factor
+          x_max = inductive_source%x_max
+          x_min = inductive_source%x_min
+          L_source = x_max - x_min
+          inductive_source%j_cond_fac = q0 / L_source * electron_weight 
+
+          ! Set source start cell
+          IF (x_min > x_max_local) THEN
+            inductive_source%ix_min = nx+ng+1
+          ELSE
+            DO i = 1-ng, nx+ng
+              x_cell_left = i * dx + x_min_local
+              IF (x_cell_left >= x_min) THEN
+                inductive_source%ix_min = i
+                EXIT
+              END IF
+            END DO
           END IF
-        END DO
-        
-        ! Set conduction current factor
-        x_max = inductive_source%x_max
-        x_min = inductive_source%x_min
-        L_source = x_max - x_min
-        inductive_source%j_cond_fac = q0 / L_source * electron_weight 
 
-        ! Set source start cell
-        IF (x_min > x_max_local) THEN
-          inductive_source%ix_min = nx+ng+1
-        ELSE
-          DO i = 1-ng, nx+ng
-            x_cell_left = i * dx + x_min_local
-            IF (x_cell_left >= x_min) THEN
-              inductive_source%ix_min = i
-              EXIT
-            END IF
-          END DO
-        END IF
-
-        ! Set source end cell
-        IF (x_max < x_min_local) THEN
-          inductive_source%ix_max = 1-ng-1
-        ELSE
-          DO i = nx+ng,1-ng,-1
-            x_cell_left = i *dx + x_min_local
-            IF (x_cell_left <= x_max) THEN
-              inductive_source%ix_max = i
-              EXIT
-            END IF
-          END DO
-        END IF
-
-  print*,'Input data'
-  print*,rank, ' - current amplitude', inductive_source%j0_amp
-  print*,rank, ' - t start and end', inductive_source%t_start,&
-   inductive_source%t_end
-  print*,rank, ' - x min and max', inductive_source%x_min, &
-  inductive_source%x_max
-  print*,rank, ' - cell min and max', inductive_source%ix_min, &
-  inductive_source%ix_max
-  print*,rank, ' - j_total ', inductive_source%j_total
-  print*,rank, ' - j_cond_fac ', inductive_source%j_cond_fac
-  print*,rank, ' - dEy/dt', inductive_source%dEy_dt
-  print*,rank, ' - sum(v_y_e) ', inductive_source%sum_vy_e
-  print*,rank, ' - source on/off', inductive_source%source_on
-  print*,rank, ' - electron name', inductive_source%e_name
-  print*,rank, ' - electron species', inductive_source%id_electrons
-
-    END IF
+          ! Set source end cell
+          IF (x_max < x_min_local) THEN
+            inductive_source%ix_max = 1-ng-1
+          ELSE
+            DO i = nx+ng,1-ng,-1
+              x_cell_left = i *dx + x_min_local
+              IF (x_cell_left <= x_max) THEN
+                inductive_source%ix_max = i
+                EXIT
+              END IF
+            END DO
+          END IF
+      END IF
+    END DO
   
-  END SUBROUTINE setup_inductive_heating
+  END SUBROUTINE inductive_heating_setup 
 #endif
 END MODULE inductive_heating

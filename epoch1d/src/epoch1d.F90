@@ -58,11 +58,11 @@ PROGRAM pic
 #endif
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
 #endif
 #ifdef NEUTRAL_COLLISIONS
   USE neutral_collisions
 #endif
-  USE inductive_heating
 
   IMPLICIT NONE
 
@@ -143,7 +143,7 @@ PROGRAM pic
 #ifdef NEUTRAL_COLLISIONS
   IF (ANY(neutral_coll)) CALL final_nc_setup
 #endif
-  IF (inductive_heating_flag) CALL setup_inductive_heating
+  IF (inductive_heating_flag) CALL inductive_heating_setup
   
   CALL initialise_window ! window.f90
   CALL set_dt

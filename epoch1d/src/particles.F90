@@ -580,6 +580,10 @@ CONTAINS
     dto2 = dt * 0.5_num
     dtfac = dto2 * fac
 
+    IF (inductive_heating_flag) THEN
+      CALL inductive_heating_prepare_sources
+    END IF
+
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%immobile) CYCLE
       IF (species_list(ispecies)%species_type == c_species_id_photon) THEN
@@ -605,10 +609,6 @@ CONTAINS
         is_neutral = .FALSE.
       END IF
 #endif
-      IF (inductive_heating_flag) THEN
-        CALL inductive_heating_prepare_source
-      END IF
-
       current => species_list(ispecies)%attached_list%head
       DO ipart = 1, species_list(ispecies)%attached_list%count
 
@@ -738,13 +738,8 @@ CONTAINS
         END IF
 #endif
         IF (inductive_heating_flag) THEN
-          IF (inductive_source%source_on .AND. &
-            inductive_source%id_electrons == ispecies) THEN
-            IF ( (current%part_pos >= inductive_source%x_min) .AND. &
-              (current%part_pos <= inductive_source%x_max) ) THEN
-              inductive_source%sum_vy_e = inductive_source%sum_vy_e + part_u(2)
-            END IF
-          END IF
+          CALL inductive_heating_add_particle_velocity(ispecies, &
+            current%part_pos, part_u(2))
         END IF
 
 #if !defined(NO_PARTICLE_PROBES) && !defined(NO_IO)
@@ -855,6 +850,10 @@ CONTAINS
     idx = 1.0_num / dx
     dto2 = dt * (-0.5_num)
     dtfac = dto2 * fac
+
+    IF (inductive_heating_flag) THEN
+      CALL inductive_heating_prepare_sources
+    END IF
 
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%immobile) CYCLE
@@ -982,6 +981,11 @@ CONTAINS
 
           ! Update particle MOMENTUM
           current%part_p   = part_u * part_m
+
+          IF (inductive_heating_flag) THEN
+            CALL inductive_heating_add_particle_velocity(ispecies, &
+              current%part_pos, part_u(2))
+          END IF
         END IF
 
         current => current%next
