@@ -280,8 +280,8 @@ DEFINES += $(D)NEUTRAL_COLLISIONS
 
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
-  #DEFINES += $(D)PETSC
-  DEFINES += $(D)TRIDIAG
+  DEFINES += $(D)PETSC
+  #DEFINES += $(D)TRIDIAG
 
   # Secondary electron emission
   DEFINES += $(D)SEE
