@@ -83,7 +83,7 @@ CONTAINS
 
   SUBROUTINE update_total_current(inductive_source_block)
 
-    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    TYPE(inductive_heating_block),POINTER,INTENT(INOUT)::inductive_source_block
     REAL(num) :: j0_amp
     INTEGER :: err
     TYPE(parameter_pack) :: parameters
@@ -103,7 +103,7 @@ CONTAINS
 
   SUBROUTINE update_sum_vy_e(inductive_source_block)
 
-    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    TYPE(inductive_heating_block),POINTER,INTENT(INOUT)::inductive_source_block
     REAL(num) :: sendbuf, recvbuf
     INTEGER :: ierror
 
@@ -118,7 +118,7 @@ CONTAINS
 
   SUBROUTINE update_dEy_dt(inductive_source_block)
 
-    TYPE(inductive_heating_block), POINTER :: inductive_source_block
+    TYPE(inductive_heating_block),POINTER,INTENT(INOUT)::inductive_source_block
     REAL(num) :: j_total, j_cond_fac, sum_vy_e
 
     j_total = inductive_source_block%j_total
@@ -270,7 +270,7 @@ CONTAINS
           x_max = inductive_source%x_max
           x_min = inductive_source%x_min
           L_source = x_max - x_min
-          inductive_source%j_cond_fac = q0 / L_source * electron_weight 
+          inductive_source%j_cond_fac = -q0 / L_source * electron_weight 
 
           ! Set source start cell
           IF (x_min > x_max_local) THEN
