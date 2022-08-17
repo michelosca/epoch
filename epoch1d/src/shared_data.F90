@@ -779,8 +779,8 @@ MODULE shared_data
 !------------------------------------------------------------------------------
 
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_potential
-  REAL(num) :: es_dt_fact, max_speed, norm_z_factor, max_perturbation_freq
-  REAL(num) :: user_max_speed
+  REAL(num) :: es_dt_fact, max_speed, max_perturbation_freq
+  REAL(num) :: user_max_energy_eV
   REAL(num) :: user_dt
   LOGICAL :: force_user_dt, x_min_boundary_open, x_max_boundary_open
 

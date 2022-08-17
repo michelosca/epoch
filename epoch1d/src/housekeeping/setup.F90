@@ -31,6 +31,9 @@ MODULE setup
   USE sdf
   USE boundary
   USE nc_setup
+#ifdef ELECTROSTATIC
+  USE inductive_heating
+#endif
 
   IMPLICIT NONE
 
@@ -667,11 +670,8 @@ CONTAINS
   SUBROUTINE set_max_speed
 
     INTEGER :: ispecies
-    INTEGER(8) :: n_part, ipart
-    REAL(num) :: mass, temp, thermal_speed, flow_speed
-    REAL(num) :: speed_local, max_speed_local, max_speed_global
-    REAL(num), DIMENSION(3) :: part_v, sum_flow_speed
-    TYPE(particle), POINTER :: current
+    REAL(num) :: mass, temp, thermal_speed
+    REAL(num) :: speed_local, max_speed_local
 
     max_speed_local = 0._num
 
@@ -680,34 +680,22 @@ CONTAINS
       IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
       IF (species_list(ispecies)%count == 0 ) CYCLE
 
+      ! Get initial thermal speed (get a max. speed based on v_thermal, x4)
       CALL setup_ic_temp(ispecies)
       mass = species_list(ispecies)%mass
       temp = MAXVAL(species_temp)
-      thermal_speed = sqrt(kb*temp/mass)
+      thermal_speed = sqrt(kb*temp/mass) * 4.0_num
 
-      current => species_list(ispecies)%attached_list%head
-      n_part = species_list(ispecies)%attached_list%count
-      sum_flow_speed = 0._num
-      DO ipart = 1, n_part
-        part_v = current%part_p
-        sum_flow_speed = part_v + sum_flow_speed
-        current => current%next
-      END DO
-      sum_flow_speed = sum_flow_speed/mass/REAL(n_part,num)
-      flow_speed = DOT_PRODUCT(sum_flow_speed,sum_flow_speed)
-      flow_speed = SQRT(flow_speed)
+      max_speed_local = MAX(max_speed_local, thermal_speed)
 
-      speed_local = norm_z_factor*thermal_speed + flow_speed
-
+      ! Get hypothetical max speed from a predefined max. energy
+      speed_local = SQRT(2._num * q0 * user_max_energy_eV / mass)
       max_speed_local = MAX(max_speed_local, speed_local)
 
     END DO
 
-    CALL MPI_ALLREDUCE(max_speed_local, max_speed_global, 1, MPIREAL, &
+    CALL MPI_ALLREDUCE(max_speed_local, max_speed, 1, MPIREAL, &
       MPI_MAX, comm, errcode)
-
-    ! 'max_speed' variable can be defined in the input deck
-    max_speed = MAX(user_max_speed, max_speed_global)
 
   END SUBROUTINE set_max_speed
 
@@ -715,7 +703,7 @@ CONTAINS
 
   SUBROUTINE set_dt        ! sets CFL limited step
 
-    REAL(num) :: dt_courant, dt_freq, dt_inputdeck
+    REAL(num) :: dt_courant, dt_freq, dt_inputdeck, dt_inductive
     REAL(num) :: dt_gyrfreq, dt_upperhybrid, dt_uppercutofffreq
     REAL(num) :: gyrofreq, plasmafreq, upperhybridfreq, uppercutofffreq
     INTEGER :: io
@@ -759,6 +747,12 @@ CONTAINS
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
 #endif
+    
+    ! Time restrictiction due to inductive heating
+    IF (inductive_heating_flag) THEN
+      dt_inductive = inductive_heating_get_dt_min()
+      dt = MIN(dt, dt_inductive)
+    END IF
 
     ! Force user time step
     IF (force_user_dt) dt = user_dt
@@ -773,6 +767,9 @@ CONTAINS
       WRITE(*, 987) 'Laser time-step: ', dt_laser, ' s'
       WRITE(*, 987) 'CFL time-step: ', dt_courant, ' s'
       WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck, ' s'
+      IF (inductive_heating_flag) THEN
+        WRITE(*, 987) 'Inductive heating: ', dt_inductive, ' s'
+      END IF
       IF (force_user_dt) THEN
         WRITE(*, 987) 'User predefined dt: ', user_dt, ' s'
       END IF
@@ -957,14 +954,12 @@ CONTAINS
   SUBROUTINE set_dt_acceleration
 
     INTEGER :: ix, ispecies
-    REAL(num) :: e_mod_max, b_mod_max, e_mod, b_mod
+    REAL(num) :: e_mod_max, e_mod
     REAL(num) :: mass, charge
-    REAL(num) :: dt_local, e_dt, ie_dt, b_dt, ib_dt
-    REAL(num) :: mean_speed, temp
-    REAL(num), DIMENSION(3) :: e_field, b_field
+    REAL(num) :: e_dt, ie_dt
+    REAL(num), DIMENSION(3) :: e_field
 
     e_mod_max = 0._num
-    b_mod_max = 0._num
 
     !Calculate the strongest E and B-field
     DO ix = 0, nx
@@ -974,21 +969,12 @@ CONTAINS
       e_mod = DOT_PRODUCT(e_field, e_field)
       e_mod = SQRT(e_mod)
       e_mod_max = MAX(e_mod_max, e_mod)
-
-      b_field(1) = bx(ix)
-      b_field(2) = by(ix)
-      b_field(3) = bz(ix)
-      b_mod = DOT_PRODUCT(b_field, b_field)
-      b_mod = SQRT(b_mod)
-      b_mod_max = MAX(b_mod_max, b_mod)
     END DO
 
     ! Check user-defined max. fields
-    b_mod_max = MAX(b_mod_max, user_max_b_field)
     e_mod_max = MAX(e_mod_max, user_max_e_field)
 
     e_dt = 1.e50_num
-    b_dt = 1.e50_num
 
     DO ispecies = 1, n_species
 
@@ -998,24 +984,14 @@ CONTAINS
       charge = ABS(species_list(ispecies)%charge)
       IF (charge < TINY(0._num)) CYCLE
 
-      CALL setup_ic_temp(ispecies)
-      temp = MINVAL(species_temp)
-      mean_speed = SQRT(3._num*kb*temp/mass)
-
       IF ( .NOT.(e_mod_max < TINY(0._num)) ) THEN
-        ie_dt = mean_speed * mass / charge / e_mod_max
+        ie_dt = dx / SQRT(2._num * q0 * dx * e_mod_max / mass) 
         e_dt = MIN(ie_dt, e_dt)
-      END IF
-      IF ( .NOT.(b_mod_max < TINY(0._num)) ) THEN
-        ib_dt = mean_speed * mass / charge / b_mod_max
-        b_dt = MIN(ib_dt, b_dt)
       END IF
 
     END DO
 
-    dt_local = MIN(e_dt, b_dt)
-
-    CALL MPI_ALLREDUCE(dt_local, dt_accel, 1, MPIREAL, &
+    CALL MPI_ALLREDUCE(e_dt, dt_accel, 1, MPIREAL, &
       MPI_MIN, comm, errcode)
 
   END SUBROUTINE set_dt_acceleration

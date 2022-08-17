@@ -570,7 +570,7 @@ neutral_collisions.o: neutral_collisions.F90 shared_data.o background.o\
   nc_subroutines.o nc_auxiliary.o random_generator.o collisions.o
 nc_auxiliary.o: nc_auxiliary.F90 shared_data.o utilities.o
 nc_setup.o: nc_setup.F90 strings_advanced.o shared_data.o nc_subroutines.o \
-  background.o nc_auxiliary.o
+  background.o nc_auxiliary.o inductive_heating.o
 nc_subroutines.o: nc_subroutines.F90 shared_data.o partlist.o nc_auxiliary.o \
   random_generator.o
 numerics.o: numerics.f90 constants.o
