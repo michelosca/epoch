@@ -32,8 +32,7 @@ begin:control
   max_perturbation_frequency = freq              # [Hz]
   neutral_coll_frequency_factor = 0.01
   max_e_field = 1.e4                             # [V/m]
-  max_speed = 1.e6                               # [m/s]
-  norm_z_factor = 5
+  max_energy_ev = 50                             # [eV]
   stdout_frequency = 100000
   user_dt = 1/800/f                              # [s]
 end:control

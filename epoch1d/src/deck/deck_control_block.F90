@@ -74,8 +74,7 @@ CONTAINS
     maxwell_solver = c_maxwell_solver_yee
     got_grid(:) = .FALSE.
     got_time = .FALSE.
-    user_max_speed = 0._num
-    norm_z_factor = 5._num
+    user_max_energy_eV= 0._num
     max_perturbation_freq = 1.e-50_num
     user_dt = 0._num
     force_user_dt= .FALSE.
@@ -461,10 +460,8 @@ CONTAINS
       es_dt_fact = as_real_print(value, element, errcode) 
     ELSE IF (str_cmp(element, 'max_perturbation_frequency')) THEN
       max_perturbation_freq = as_real_print(value, element, errcode) 
-    ELSE IF (str_cmp(element, 'max_speed')) THEN
-      user_max_speed = as_real_print(value, element, errcode)
-    ELSE IF (str_cmp(element, 'norm_z_factor')) THEN
-      norm_z_factor = as_real_print(value, element, errcode) 
+    ELSE IF (str_cmp(element, 'max_energy_ev')) THEN
+      user_max_energy_eV = as_real_print(value, element, errcode)
     ELSE IF (str_cmp(element, 'user_dt')) THEN
       user_dt = as_real_print(value, element, errcode)
       force_user_dt= .TRUE.

@@ -50,6 +50,7 @@ MODULE deck
   ! Electrostatic solver block
 #ifdef ELECTROSTATIC
   USE deck_electrostatic_block
+  USE deck_inductive_block
 #endif
 #ifdef NEUTRAL_COLLISIONS
   ! Neutral background block
@@ -119,6 +120,7 @@ CONTAINS
     CALL part_from_file_deck_initialise
 #ifdef ELECTROSTATIC
     CALL electrostatic_deck_initialise
+    CALL inductive_deck_initialise
 #endif
 #ifdef NEUTRAL_COLLISIONS
     CALL background_deck_initialise
@@ -162,6 +164,7 @@ CONTAINS
     CALL window_deck_finalise
 #ifdef ELECTROSTATIC
     CALL electrostatic_deck_finalise
+    CALL inductive_deck_finalise
 #endif
 #ifdef SEE
     CALL see_deck_finalise
@@ -221,6 +224,8 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_start
+    ELSE IF (str_cmp(block_name, 'inductive')) THEN
+      CALL inductive_block_start
 #endif
 #ifdef SEE
     ELSE IF (str_cmp(block_name, 'see')) THEN
@@ -284,6 +289,8 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ELSE IF (str_cmp(block_name, 'electrostatic')) THEN
       CALL electrostatic_block_end
+    ELSE IF (str_cmp(block_name, 'inductive')) THEN
+      CALL inductive_block_end
 #endif
 #ifdef SEE
     ELSE IF (str_cmp(block_name, 'see')) THEN
@@ -391,6 +398,10 @@ CONTAINS
       handle_block = &
           electrostatic_block_handle_element(block_element, block_value)
       RETURN
+    ELSE IF (str_cmp(block_name, 'inductive')) THEN
+      handle_block = &
+          inductive_block_handle_element(block_element, block_value)
+      RETURN
 #endif
 #ifdef SEE
     ELSE IF (str_cmp(block_name, 'see')) THEN
@@ -455,6 +466,7 @@ CONTAINS
 
 #ifdef ELECTROSTATIC
     errcode_deck = IOR(errcode_deck, electrostatic_block_check())
+    errcode_deck = IOR(errcode_deck, inductive_block_check())
 #endif
 #ifdef SEE
     errcode_deck = IOR(errcode_deck, see_block_check())

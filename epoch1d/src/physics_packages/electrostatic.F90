@@ -27,6 +27,7 @@ MODULE electrostatic
   USE custom_electrostatic
   USE evaluator
   USE boundary
+  USE inductive_heating
   
   IMPLICIT NONE
 
@@ -65,14 +66,11 @@ CONTAINS
     
     REAL(num), DIMENSION(:), ALLOCATABLE :: es_charge_density
     REAL(num) :: rho_max, rho_min
-    !INTEGER :: i
 
     ! Charge weighting from particles to the grid, i.e. charge density
     ALLOCATE(es_charge_density(1-ng:nx+ng))
     CALL es_calc_charge_density(es_charge_density)
-!DO i = 0, nx
-!  PRINT*, 'rho', step, i * dx - x_min_local, es_charge_density(i)
-!END DO
+    
     IF (x_min_boundary_open) THEN
       pot_ext_min = set_potential_x_min()
       Q_conv_min = convect_curr_min
@@ -85,9 +83,6 @@ CONTAINS
     ! Charge density to electrostatic potential
     !  - This subroutine calculates the electric potential on es_potential
     CALL es_calc_potential(es_charge_density(nx_start:nx_end))
-!DO i = 0, nx
-!  PRINT*, 'pot', step, i * dx - x_min_local, es_potential(i)
-!END DO
 
     ! This subroutine updates the charge surface density values at wall
     CALL es_calc_charge_density_at_wall
@@ -99,9 +94,6 @@ CONTAINS
 
     ! Calculate electric field in x-direction
     CALL es_calc_ex(rho_min, rho_max)
-!DO i = 0, nx
-!  PRINT*, 'ex', step, i * dx - x_min_local, ex(i)
-!END DO
 
     ! - Update electric field in y- and z-direction
     CALL set_ez
@@ -974,6 +966,8 @@ CONTAINS
   
     IF (ey_profile%use_profile_function) THEN
       CALL efield_update_profile(ey_profile, ey)
+    ELSEIF (inductive_heating_flag) THEN
+      CALL inductive_heating_y
     END IF
 
   END SUBROUTINE set_ey
@@ -1088,6 +1082,5 @@ CONTAINS
     CALL set_ey
 
   END SUBROUTINE es_initialize_e_field
-
 #endif
 END MODULE electrostatic

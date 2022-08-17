@@ -341,7 +341,8 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   tokenizer_blocks.f90 utilities.F90 version_data.F90 welcome.F90 window.F90 \
   electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
   neutral_collisions.F90 background.F90 deck_background_block.F90 \
-  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.F90 deck_see_block.F90
+  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.F90 deck_see_block.F90 \
+  deck_inductive_block.F90 inductive_heating.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
 OBJFILES := $(OBJFILES:.F90=.o)
@@ -495,7 +496,7 @@ deck.o: deck.F90 bremsstrahlung.o custom_deck.o deck_boundaries_block.o \
   deck_qed_block.o deck_species_block.o deck_stencil_block.o \
   deck_subset_block.o deck_window_block.o photons.o strings.o utilities.o \
   version_data.o deck_electrostatic_block.o deck_background_block.o \
-  deck_see_block.o $(SDFMOD)
+  deck_see_block.o deck_inductive_block.o $(SDFMOD)
 
 deck_background_block.o: deck_background_block.F90 background.o constants.o \
   strings_advanced.o
@@ -513,6 +514,8 @@ deck_dist_fn_block.o: deck_dist_fn_block.f90 dist_fn.o strings_advanced.o \
 deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
 deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
+deck_inductive_block.o: deck_inductive_block.F90 strings_advanced.o \
+  inductive_heating.o
 deck_injector_block.o: deck_injector_block.f90 injectors.o shunt.o \
   strings_advanced.o utilities.o
 deck_io_block.o: deck_io_block.F90 strings_advanced.o utilities.o
@@ -536,12 +539,12 @@ diagnostics.o: diagnostics.F90 calc_df.o constants.o deck.o deck_io_block.o \
   strings.o timer.o version_data.o window.o $(SDFMOD) $(ENCODED_SOURCE)
 dist_fn.o: dist_fn.F90 mpi_subtype_control.o particles.o $(SDFMOD)
 electrostatic.o: electrostatic.F90 shared_data.o custom_electrostatic.o \
-  evaluate.o boundary.o
+  evaluate.o boundary.o inductive_heating.o
 epoch1d.o: epoch1d.F90 balance.o bremsstrahlung.o calc_df.o collisions.o \
   current_smooth.o deck.o diagnostics.o fields.o finish.o helper.o ic_module.o \
   injectors.o ionise.o mpi_routines.o particle_migration.o particles.o \
   photons.o setup.o split_particle.o welcome.o window.o electrostatic.o \
-  nc_setup.o neutral_collisions.o
+  nc_setup.o neutral_collisions.o  inductive_heating.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 evaluate.o: evaluate.F90 shunt.o stack.o
 evaluator_blocks.o: evaluator_blocks.F90 custom_parser.o stack.o strings.o
@@ -552,6 +555,8 @@ finish.o: finish.F90 collisions.o constants.o deck.o diagnostics.o dist_fn.o \
   nc_setup.o
 helper.o: helper.F90 balance.o boundary.o deltaf_loader.o partlist.o simple_io.o
 ic_module.o: ic_module.f90 helper.o shared_data.o
+inductive_heating.o: inductive_heating.F90 shared_data.o evaluate.o \
+  strings_advanced.o
 injectors.o: injectors.F90 evaluate.o particle_temperature.o partlist.o \
   random_generator.o utilities.o
 ionise.o: ionise.F90 boundary.o numerics.o partlist.o random_generator.o \
@@ -565,7 +570,7 @@ neutral_collisions.o: neutral_collisions.F90 shared_data.o background.o\
   nc_subroutines.o nc_auxiliary.o random_generator.o collisions.o
 nc_auxiliary.o: nc_auxiliary.F90 shared_data.o utilities.o
 nc_setup.o: nc_setup.F90 strings_advanced.o shared_data.o nc_subroutines.o \
-  background.o nc_auxiliary.o
+  background.o nc_auxiliary.o inductive_heating.o
 nc_subroutines.o: nc_subroutines.F90 shared_data.o partlist.o nc_auxiliary.o \
   random_generator.o
 numerics.o: numerics.f90 constants.o
