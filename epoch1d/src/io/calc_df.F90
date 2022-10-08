@@ -919,7 +919,11 @@ CONTAINS
       IF (spec_sum .AND. io_list(ispecies)%zero_current) CYCLE
 #endif
       current => io_list(ispecies)%attached_list%head
+#ifdef ELECTROSTATIC
+      part_mc = io_list(ispecies)%mass
+#else
       part_mc = c * io_list(ispecies)%mass
+#endif
       part_q  = io_list(ispecies)%charge
       fac = io_list(ispecies)%weight
       wdata = part_q * fac
@@ -927,7 +931,11 @@ CONTAINS
       DO WHILE (ASSOCIATED(current))
         ! Copy the particle properties out for speed
 #ifdef PER_PARTICLE_CHARGE_MASS
+#ifdef ELECTROSTATIC
+        part_mc = current%mass
+#else
         part_mc = c * current%mass
+#endif
         part_q  = current%charge
 #ifndef PER_SPECIES_WEIGHT
         fac = current%weight
@@ -944,7 +952,11 @@ CONTAINS
         part_px = current%part_p(1)
         part_py = current%part_p(2)
         part_pz = current%part_p(3)
+#ifdef ELECTROSTATIC
+        root = 1.0_num / part_mc
+#else
         root = 1.0_num / SQRT(part_mc**2 + part_px**2 + part_py**2 + part_pz**2)
+#endif
         SELECT CASE (direction)
           CASE(c_dir_x)
             wdata = wdata * part_px * root
