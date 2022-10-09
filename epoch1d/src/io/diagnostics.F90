@@ -487,13 +487,14 @@ CONTAINS
       CALL write_field(c_dump_bz, code, 'bz', 'Magnetic Field/Bz', 'T', &
           c_stagger_bz, bz)
 
+#ifndef ELECTROSTATIC
       CALL write_field(c_dump_jx, code, 'jx', 'Current/Jx', 'A/m^2', &
           c_stagger_jx, jx)
       CALL write_field(c_dump_jy, code, 'jy', 'Current/Jy', 'A/m^2', &
           c_stagger_jy, jy)
       CALL write_field(c_dump_jz, code, 'jz', 'Current/Jz', 'A/m^2', &
           c_stagger_jz, jz)
-#ifdef ELECTROSTATIC
+#else
       CALL write_field(c_dump_es_potential, code, 'es_potential', &
           'Electric Potential/Vx', 'V', c_stagger_electrostatic, es_potential)
       CALL write_field(c_dump_es_current, code, 'es_current', &
@@ -1442,13 +1443,35 @@ CONTAINS
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(by * dt, r4)
       CASE(c_dump_bz)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(bz * dt, r4)
+#ifndef ELECTROSTATIC
       CASE(c_dump_jx)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jx(1-ng:nx+ng) * dt, r4)
       CASE(c_dump_jy)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jy(1-ng:nx+ng) * dt, r4)
       CASE(c_dump_jz)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jz(1-ng:nx+ng) * dt, r4)
-#ifdef ELECTROSTATIC
+#else
+      CASE(c_dump_jx)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jy)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jz)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
       CASE(c_dump_es_potential)
         avg%r4array(:,1) = avg%r4array(:,1) &
           + REAL(es_potential(1-ng:nx+ng) * dt, r4)
@@ -1612,13 +1635,35 @@ CONTAINS
         avg%array(:,1) = avg%array(:,1) + by * dt
       CASE(c_dump_bz)
         avg%array(:,1) = avg%array(:,1) + bz * dt
+#ifndef ELECTROSTATIC
       CASE(c_dump_jx)
         avg%array(:,1) = avg%array(:,1) + jx(1-ng:nx+ng) * dt
       CASE(c_dump_jy)
         avg%array(:,1) = avg%array(:,1) + jy(1-ng:nx+ng) * dt
       CASE(c_dump_jz)
         avg%array(:,1) = avg%array(:,1) + jz(1-ng:nx+ng) * dt
-#ifdef ELECTROSTATIC
+#else
+      CASE(c_dump_jx)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jy)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jz)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
       CASE(c_dump_es_potential)
         avg%array(:,1) = avg%array(:,1) + es_potential(1-ng:nx+ng) * dt
       CASE(c_dump_es_current)
@@ -2021,7 +2066,6 @@ CONTAINS
     ! The variable is either averaged or has snapshot specified
     unaveraged_id = IAND(mask, c_io_averaged) == 0 &
         .OR. IAND(mask, c_io_snapshot) /= 0
-
     convert = IAND(mask, c_io_dump_single) /= 0 .AND. .NOT.restart_id
 
     IF (convert) THEN

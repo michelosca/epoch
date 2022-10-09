@@ -880,10 +880,15 @@ CONTAINS
     INTEGER, INTENT(IN), OPTIONAL :: direction
     ! Properties of the current particle. Copy out of particle arrays for speed
     REAL(num) :: part_q, part_mc
+#ifndef ELECTROSTATIC
     REAL(num) :: part_px, part_py, part_pz
+    REAL(num) :: root
+#else
+    REAL(num) :: part_p
+#endif
     ! The data to be weighted onto the grid
-    REAL(num) :: wdata
-    REAL(num) :: fac, idx, root
+    REAL(num) :: wdata, part_w
+    REAL(num) :: fac, idx
     INTEGER :: ispecies, ix, spec_start, spec_end
     TYPE(particle), POINTER :: current
     LOGICAL :: spec_sum
@@ -919,52 +924,89 @@ CONTAINS
       IF (spec_sum .AND. io_list(ispecies)%zero_current) CYCLE
 #endif
       current => io_list(ispecies)%attached_list%head
+      part_q  = io_list(ispecies)%charge
+      part_w = io_list(ispecies)%weight
 #ifdef ELECTROSTATIC
       part_mc = io_list(ispecies)%mass
+      fac = part_w * part_q / part_mc
 #else
       part_mc = c * io_list(ispecies)%mass
+      fac = part_w * part_q
 #endif
-      part_q  = io_list(ispecies)%charge
-      fac = io_list(ispecies)%weight
-      wdata = part_q * fac
 
       DO WHILE (ASSOCIATED(current))
         ! Copy the particle properties out for speed
 #ifdef PER_PARTICLE_CHARGE_MASS
+!>
+!>>
 #ifdef ELECTROSTATIC
         part_mc = current%mass
 #else
         part_mc = c * current%mass
 #endif
+!<<
         part_q  = current%charge
+
+!>>
 #ifndef PER_SPECIES_WEIGHT
-        fac = current%weight
+        part_w = current%weight
 #endif
-        wdata = part_q * fac
+!<<
+
+!>>
+#ifdef ELECTROSTATIC
+        fac = part_w * part_q / part_mc
 #else
+        fac = part_w * part_q
+#endif
+!<<
+
+!> in case not PER_PARTICLE_CHARGE_MASS
+#else
+
+!>>
 #ifndef PER_SPECIES_WEIGHT
-        fac = current%weight
-        wdata = part_q * fac
+        part_w = current%weight
+!>>>
+#ifdef ELECTROSTATIC
+        fac = part_w * part_q / part_mc
+#else
+        fac = part_w * part_q
 #endif
+!<<<
 #endif
+!<<
+#endif
+!<
 
         ! Copy the particle properties out for speed
+#ifndef ELECTROSTATIC
         part_px = current%part_p(1)
         part_py = current%part_p(2)
         part_pz = current%part_p(3)
-#ifdef ELECTROSTATIC
-        root = 1.0_num / part_mc
-#else
         root = 1.0_num / SQRT(part_mc**2 + part_px**2 + part_py**2 + part_pz**2)
-#endif
         SELECT CASE (direction)
           CASE(c_dir_x)
-            wdata = wdata * part_px * root
+            wdata = fac * part_px * root
           CASE(c_dir_y)
-            wdata = wdata * part_py * root
+            wdata = fac * part_py * root
           CASE(c_dir_z)
-            wdata = wdata * part_pz * root
+            wdata = fac * part_pz * root
         END SELECT
+#else
+! Electrostatic case
+        SELECT CASE (direction)
+          CASE(c_dir_x)
+            part_p = current%part_p(1)
+            wdata = fac * part_p
+          CASE(c_dir_y)
+            part_p = current%part_p(2)
+            wdata = fac * part_p
+          CASE(c_dir_z)
+            part_p = current%part_p(3)
+            wdata = fac * part_p
+        END SELECT
+#endif
 
 #include "particle_to_grid.inc"
 
@@ -979,7 +1021,11 @@ CONTAINS
 
     CALL calc_boundary(data_array)
 
+#ifndef ELECTROSTATIC
     idx = c * idx
+#else
+    idx = idx
+#endif
     data_array = data_array * idx
     DO ix = 1, 2*c_ndims
       CALL field_zero_gradient(data_array, c_stagger_centre, ix)
