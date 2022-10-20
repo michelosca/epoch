@@ -114,7 +114,7 @@ begin:output
   ex = always + average
 
   potential = always + average
-  wall_current = always + average
   number_density = always + species + average
   neutral_collisions = always + species + average
+  jx = always + species + average
 end:output
