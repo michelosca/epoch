@@ -621,7 +621,10 @@ MODULE constants
   INTEGER, PARAMETER :: c_dump_es_potential      = 72
   INTEGER, PARAMETER :: c_dump_es_current        = 73
   INTEGER, PARAMETER :: c_dump_neutral_collision = 74
-  INTEGER, PARAMETER :: num_vars_to_dump         = 74
+  INTEGER, PARAMETER :: c_dump_power_absorption_x= 75
+  INTEGER, PARAMETER :: c_dump_power_absorption_y= 76
+  INTEGER, PARAMETER :: c_dump_power_absorption_z= 77
+  INTEGER, PARAMETER :: num_vars_to_dump         = 77
 
   INTEGER, PARAMETER :: c_subset_random     = 1
   INTEGER, PARAMETER :: c_subset_gamma_min  = 2

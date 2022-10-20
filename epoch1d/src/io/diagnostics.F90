@@ -762,6 +762,18 @@ CONTAINS
             'Number of collisions', c_stagger_cell_centre, &
             calc_neutral_collisions, array)
 #endif
+        CALL write_nspecies_field(c_dump_power_absorption_x, code, &
+            'power_abs_x', 'Power_Absorption_x', 'W/m^3', &
+            c_stagger_ex, calc_per_species_current, array, (/c_dir_x/))
+
+        CALL write_nspecies_field(c_dump_power_absorption_y, code, &
+            'power_abs_y', 'Power_Absorption_y', 'W/m^3', &
+            c_stagger_ey, calc_per_species_current, array, (/c_dir_y/))
+
+        CALL write_nspecies_field(c_dump_power_absorption_z, code, &
+            'power_abs_z', 'Power_Absorption_z', 'W/m^3', &
+            c_stagger_ez, calc_per_species_current, array, (/c_dir_z/))
+
         IF (isubset /= 1) THEN
           DO i = 1, n_species
             CALL append_partlist(species_list(i)%attached_list, &
@@ -1619,6 +1631,30 @@ CONTAINS
         END DO
         DEALLOCATE(array)
 #endif
+      CASE(c_dump_power_absorption_x)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ex*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_y)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ey*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_z)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ez*dt, r4)
+        END DO
+        DEALLOCATE(array)
       END SELECT
 
     ELSE
@@ -1794,6 +1830,27 @@ CONTAINS
         END DO
         DEALLOCATE(array)
 #endif
+      CASE(c_dump_power_absorption_x)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_x)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ex * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_y)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_y)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ey * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_z)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_z)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ez * dt
+        END DO
+        DEALLOCATE(array)
       END SELECT
     END IF
 
@@ -2158,6 +2215,14 @@ CONTAINS
           CALL func(array, 0)
         END IF
 
+        IF (id == c_dump_power_absorption_x) THEN
+          array = array * ex
+        ELSEIF (id == c_dump_power_absorption_y) THEN
+          array = array * ey
+        ELSEIF (id == c_dump_power_absorption_z) THEN
+          array = array * ez
+        END IF
+
         IF (dump_skipped) THEN
           rnx = sub%n_local(1)
 
@@ -2259,6 +2324,14 @@ CONTAINS
 
               CALL func(array, ispecies, idir)
 
+              IF (id == c_dump_power_absorption_x) THEN
+                array = array * ex
+              ELSEIF (id == c_dump_power_absorption_y) THEN
+                array = array * ey
+              ELSEIF (id == c_dump_power_absorption_z) THEN
+                array = array * ez
+              END IF
+
               IF (dump_part) THEN
                 ! First subset is main dump so there wont be any restrictions
                 temp_grid_id = 'grid/' // TRIM(sub%name)
@@ -2319,6 +2392,14 @@ CONTAINS
             CALL func(array, ispecies)
           END IF
 
+          IF (id == c_dump_power_absorption_x) THEN
+            array = array * ex
+          ELSEIF (id == c_dump_power_absorption_y) THEN
+            array = array * ey
+          ELSEIF (id == c_dump_power_absorption_z) THEN
+            array = array * ez
+          END IF
+
           ii = sub%n_start(1) + 1
           DO i = 1, rnx
             reduced(i) = array(ii)
@@ -2369,6 +2450,14 @@ CONTAINS
                 // '/' // TRIM(collpair_str)
 
               CALL func(array, ispecies, idir)
+        
+              IF (id == c_dump_power_absorption_x) THEN
+                array = array * ex
+              ELSEIF (id == c_dump_power_absorption_y) THEN
+                array = array * ey
+              ELSEIF (id == c_dump_power_absorption_z) THEN
+                array = array * ez
+              END IF
 
               IF (dump_part) THEN
                 ! First subset is main dump so there wont be any restrictions
@@ -2422,6 +2511,14 @@ CONTAINS
             CALL func(array, ispecies, fluxdir(idir))
           ELSE
             CALL func(array, ispecies)
+          END IF
+
+          IF (id == c_dump_power_absorption_x) THEN
+            array = array * ex
+          ELSEIF (id == c_dump_power_absorption_y) THEN
+            array = array * ey
+          ELSEIF (id == c_dump_power_absorption_z) THEN
+            array = array * ez
           END IF
 
           IF (dump_part) THEN
