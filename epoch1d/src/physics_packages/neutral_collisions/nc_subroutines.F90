@@ -540,7 +540,8 @@ CONTAINS
     END IF
 
     ! Impact particle: neutral -> ion + electron
-    IF (ran_w <= w1rat) THEN
+    ion_id = collision%type_block%new_species_id ! ions
+    IF (ion_id > 0) THEN
       ! The new electron
       CALL create_particle(new_part)
       random_direction = random_unit_vector()
@@ -558,22 +559,21 @@ CONTAINS
         species_list(species1)%attached_list, new_part)
       NULLIFY(new_part)
 
-      ! New ion: move neutral particle to ion species list
-      new_part => part2
+      ! Create a new ion
+      CALL create_particle(new_part)
+      new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
       new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
-      IF (.NOT.ASSOCIATED(p_list2%head, TARGET=part2)) THEN
-        ! If particle is not the head of the list
-        part2 => part2%prev
-      ELSE
-        ! If particle is the head of the list then one particle is skipped
-        p_list2%coll_counter = p_list2%coll_counter + 1
-        part2 => part2%next
-      END IF
-      CALL remove_particle_from_partlist(p_list2, new_part)
-      ion_id = collision%type_block%new_species_id ! ions
       CALL add_particle_to_partlist( species_list(ion_id)%attached_list, &
         new_part)
       NULLIFY(new_part)
+
+      ! Remove neutral particle
+      IF (ran_w <= w1rat) THEN
+        CALL remove_particle_from_partlist(p_list2, part2)
+      END IF
     END IF
 
     CALL link_particle_pointers(collision, part1, part2)
