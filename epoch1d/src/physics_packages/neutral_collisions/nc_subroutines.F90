@@ -670,9 +670,6 @@ CONTAINS
       ! Post-collision momentum
       part1%part_p = v_scat * g_scat_m1
     END IF
-    !IF (ran1 <= collision%w1_ratio) THEN
-    !  collision%part2%part_p =
-    !END IF
 
   END SUBROUTINE vahedi_electron_elastic_scattering
 
@@ -731,9 +728,6 @@ CONTAINS
       ! Post-collision momentum
       part1%part_p = v_scat * g_scat_m1
     END IF
-    !IF (ranw <= collision%w1_ratio) THEN
-    !  collision%part2%part_p =
-    !END IF
 
   END SUBROUTINE vahedi_ion_elastic_scattering
 
@@ -791,28 +785,6 @@ CONTAINS
       ! Post-collision momentum
       part1%part_p = v_scat * g_scat_m1
     END IF
-
-    !IF (ran_w <= w1rat) THEN
-    !  ! Post-collision momentum
-    !  p_2 = u_cm*m2 - p_scat
-    !  excited_id = collision%type_block%new_species_id
-    !  IF (excited_id>0) THEN !Move particle to excited particle list
-    !    new_part => part2
-    !    ! Link part1 pointer to next colliding particle
-    !    IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
-    !      part2 => part2%prev
-    !    ELSE
-    !      part2 => part2%next
-    !    END IF
-    !    new_part%part_p = p_2
-    !    CALL remove_particle_from_partlist(p_list, new_part)
-    !    CALL add_particle_to_partlist( &
-    !      species_list(excited_id)%attached_list, new_part)
-    !    NULLIFY(new_part)
-    !  ELSE ! Just carry on with the same particle
-    !    part2%part_p = p_2
-    !  END IF
-    !END IF
 
   END SUBROUTINE vahedi_excitation
 
@@ -910,70 +882,23 @@ CONTAINS
           species_list(species1)%attached_list, &
           new_part)
         NULLIFY(new_part)
-      END IF
 
-
-      ! Ion
-      ! Create a new ion particle and assign neutral particle's momentum
-      CALL create_particle(new_part)
-      new_part%part_p = part2%part_p
-      new_part%part_pos = part_pos
+        ! Ion
+        ! Create a new ion particle and assign neutral particle's momentum
+        CALL create_particle(new_part)
+        new_part%part_p = part2%part_p
+        new_part%part_pos = part_pos
 #ifdef PART_PERP_POSITION
-      new_part%part_pos_y = part_pos_y
+        new_part%part_pos_y = part_pos_y
 #endif
 #ifndef PER_SPECIES_WEIGHT
-      new_part%weight = w1 ! Electron's weight
+        new_part%weight = w1 ! Electron's weight
 #endif
-      CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
-        new_part)
-      NULLIFY(new_part)
+        CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+          new_part)
+        NULLIFY(new_part)
+      END IF
     END IF
-
-    ! Impact particle: neutral -> ion + electron
-    !IF (ran_w <= w1rat) THEN
-    !  ! The new electron
-    !  ! Chi angle
-    !  coschi = 1._num - 2._num * random()
-    !  sinchi = SQRT(1._num - coschi*coschi)
-    !  ! Phi angle
-    !  phi = 2._num * pi * random()
-    !  cosphi = COS(phi)
-    !  sinphi = SIN(phi)
-    !  ! Scattered normalised vector
-    !  sinratio = sinchi / sintheta
-    !  v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-    !    crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-    !  ! The new electron
-    !  CALL create_particle(new_part)
-    !  u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
-    !  new_part%part_p = (u_cm + u_e2)*m1
-    !  new_part%part_pos = part2%part_pos
-    !#ifdef PART_PERP_POSITION
-    !  new_part%part_pos_y = part2%part_pos_y
-    !#endif
-    !#ifndef PER_SPECIES_WEIGHT
-    !  new_part%weight = w2 ! Electron's weight
-    !#endif
-    !  CALL add_particle_to_partlist( &
-    !    species_list(species1)%attached_list, new_part)
-    !  NULLIFY(new_part)
-    !  ! New ion: move neutral particle to ion species list
-    !  new_part => part2
-    !  new_part%part_p = collision%u_2 * m2
-    !  IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
-    !    ! If particle is not the head of the list
-    !    part2 => part2%prev
-    !  ELSE
-    !    ! If particle is the head of the list then one particle is skipped
-    !    p_list%coll_counter = p_list%coll_counter + 1
-    !    part2 => part2%next
-    !  END IF
-    !  CALL remove_particle_from_partlist(p_list, new_part)
-    !  ion_id = collision%type_block%new_species_id ! ions
-    !  CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
-    !    new_part)
-    !  NULLIFY(new_part)
-    !END IF
 
   END SUBROUTINE vahedi_ionisation
 
@@ -1139,6 +1064,7 @@ CONTAINS
 
   END SUBROUTINE vahedi_split_ionisation
 #endif
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                                                                             !
 !                             NANBU BACKGROUND                                !
