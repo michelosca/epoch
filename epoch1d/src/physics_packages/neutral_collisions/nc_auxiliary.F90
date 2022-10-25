@@ -180,18 +180,16 @@ CONTAINS
                   coll_type%source_species_id <= n_species_bg &
                   .AND. .NOT.is_background) THEN
 
-                ! Nanbu-excitation has new_species_id when source_species_id
+                ! Nanbu-excitation has new_species_id only if source_species_id
                 IF (coll_type%wnanbu) THEN
-                  IF (coll_type%new_species_id <= 0 .OR. &
-                      coll_type%new_species_id > n_species) THEN
-                    ncerr = 4
-                    CYCLE
+                  IF (coll_type%new_species_id > 0 .OR. &
+                      coll_type%new_species_id <= n_species) THEN
+                    ! Nanbu-excitation new species requires same mass for source and new species
+                    m_source = species_list(coll_type%source_species_id)%mass
+                    m_new = species_list(coll_type%new_species_id)%mass
+                    IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
                   END IF
 
-                  ! Nanbu-excitation requires same mass for source and new species
-                  m_source = species_list(coll_type%source_species_id)%mass
-                  m_new = species_list(coll_type%new_species_id)%mass
-                  IF (ABS(m_source - m_new) > TINY(0._num)) ncerr = 10
                 END IF
               ELSE
                 IF (coll_type%wvahedi .AND. .NOT.is_background) THEN
