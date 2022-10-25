@@ -114,7 +114,7 @@ CONTAINS
     LOGICAL :: is_background
     INTEGER :: ncerr
     INTEGER :: ispecies, jspecies, nc_type, ibg
-    REAL(num) :: m1, m2, m_new, m_source, new_weight, source_weight
+    REAL(num) :: m1, m2, m_new, m_source
     CHARACTER(len=string_length) :: iname, jname, type_name
     TYPE(collision_type_block), POINTER :: coll_type
     TYPE(neutrals_block), POINTER :: coll_block
@@ -156,16 +156,15 @@ CONTAINS
                   coll_type%source_species_id > n_species_bg) .AND. &
                   .NOT.is_background) ncerr = 2
 
-              ! Nanbu-ionisation requires species_target_id
+              ! Nanbu-ionisation species_target_id
               IF ((coll_type%new_species_id > 0 .AND. &
-                 coll_type%new_species_id <= n_species) .AND. &
-                 .NOT.is_background) THEN
-                 new_weight = species_list(coll_type%new_species_id)%weight
-                 source_weight=species_list(coll_type%source_species_id)%weight 
-                 IF ( ABS(new_weight - source_weight)>TINY(0._num) ) THEN
-                  ncerr = 3
-                 END IF
+                  coll_type%new_species_id <= n_species) .AND. &
+                  .NOT.is_background) THEN
+                IF (rank==0) THEN
+                  PRINT*,'***WARNING*** Make sure that Nanbu ionisation', &
+                    ' generated ions have the same part. weight than electrons'
                 END IF
+              END IF
 
               ! Nanbu-ionisation requires same mass for source and new species 
               IF ( ncerr == 0 ) THEN
@@ -190,7 +189,14 @@ CONTAINS
                 IF (coll_type%wnanbu) THEN
                   IF (coll_type%new_species_id > 0 .AND. &
                       coll_type%new_species_id <= n_species) THEN
-                      print*,'new species id ', coll_type%new_species_id
+
+                    ! Nanbu-excitation species_target_id
+                    IF (rank==0) THEN
+                      PRINT*,'***WARNING*** Make sure that Nanbu excitation', &
+                        ' generated particles have the same part. weight', &
+                        ' than electrons'
+                    END IF
+
                     ! Nanbu-excitation new species requires same mass for source and new species
                     m_source = species_list(coll_type%source_species_id)%mass
                     m_new = species_list(coll_type%new_species_id)%mass
@@ -258,9 +264,6 @@ CONTAINS
         IF (ncerr == 2) THEN
           WRITE(*,*) 'Ionisation requires requires a valid ', &
             '"source_species"'
-        ELSE IF (ncerr ==3) THEN
-          WRITE(*,*) 'Ionisation requires that source and new species', &
-            ' have the same particle weight'
         ELSE IF (ncerr ==4) THEN
           WRITE(*,*) 'Nanbu excitation requires a valid ', &
             '"new_species" when "source_species" is specified'
