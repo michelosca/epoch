@@ -572,6 +572,7 @@ CONTAINS
 
       ! Remove neutral particle
       IF (ran_w <= w1rat) THEN
+        PRINT*, step, rank, 'Neutral particle was removed while ionisation'
         CALL remove_particle_from_partlist(p_list2, part2)
       END IF
     END IF
