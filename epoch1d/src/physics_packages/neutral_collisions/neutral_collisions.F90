@@ -273,15 +273,6 @@ CONTAINS
     collision%part2 => impact
     DO ipair = 1, int_coll_pairs
 
-      IF (.NOT.(ASSOCIATED(collision%part1))) THEN
-        print*, step, rank, ipair, 'particle 1 is not allocated'
-        EXIT
-      END IF
-      IF (.NOT.(ASSOCIATED(collision%part2))) THEN
-        print*, step, rank, ipair, 'particle 2 is not allocated'
-        EXIT
-      END IF
-
       CALL particle_collision_dynamics(collision)
 
       collision%part1 => collision%part1%next
