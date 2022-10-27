@@ -572,8 +572,16 @@ CONTAINS
 
       ! Remove neutral particle
       IF (ran_w <= w1rat) THEN
-        PRINT*, step, rank, 'Neutral particle was removed while ionisation'
+        ! Use new_part as buffer
+        new_part => part2%next
+
+        ! Remove current neutral particle
         CALL remove_particle_from_partlist(p_list2, part2)
+        CALL destroy_particle(part2)
+
+        ! Point part2 to the following particle
+        part2 => new_part
+        NULLIFY(new_part)
       END IF
     END IF
 
