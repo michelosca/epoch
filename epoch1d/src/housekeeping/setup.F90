@@ -31,9 +31,6 @@ MODULE setup
   USE sdf
   USE boundary
   USE nc_setup
-#ifdef ELECTROSTATIC
-  USE inductive_heating
-#endif
 
   IMPLICIT NONE
 
@@ -748,12 +745,6 @@ CONTAINS
     dt = MIN(dt, dt_neutral_collisions)
 #endif
     
-    ! Time restrictiction due to inductive heating
-    IF (inductive_heating_flag) THEN
-      dt_inductive = inductive_heating_get_dt_min()
-      dt = MIN(dt, dt_inductive)
-    END IF
-
     ! Force user time step
     IF (force_user_dt) dt = user_dt
 
@@ -764,12 +755,8 @@ CONTAINS
       WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq, ' s'
       WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid, ' s'
       WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq, ' s'
-      WRITE(*, 987) 'Laser time-step: ', dt_laser, ' s'
       WRITE(*, 987) 'CFL time-step: ', dt_courant, ' s'
       WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck, ' s'
-      IF (inductive_heating_flag) THEN
-        WRITE(*, 987) 'Inductive heating: ', dt_inductive, ' s'
-      END IF
       IF (force_user_dt) THEN
         WRITE(*, 987) 'User predefined dt: ', user_dt, ' s'
       END IF

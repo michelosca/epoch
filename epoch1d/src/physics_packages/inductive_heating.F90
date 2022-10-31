@@ -59,7 +59,6 @@ MODULE inductive_heating
   PUBLIC :: inductive_heating_setup, inductive_heating_add_source_to_list
   PUBLIC :: inductive_heating_add_particle_velocity
   PUBLIC :: inductive_heating_flag, inductive_heating_block
-  PUBLIC :: inductive_heating_get_dt_min
 
 CONTAINS
 
@@ -302,25 +301,6 @@ CONTAINS
     END DO
   
   END SUBROUTINE inductive_heating_setup 
-
-
-
-  FUNCTION inductive_heating_get_dt_min() RESULT(dt_inductive)
-
-    REAL(num) :: dt_inductive
-    REAL(num) :: j0_max, j0
-    TYPE(inductive_heating_block), POINTER :: inductive_source
-    INTEGER :: i
-
-     j0_max = 0._num
-
-     DO i = 1,n_heating_sources
-      inductive_source => inductive_sources(i)
-      j0 = ABS(inductive_source%j0_amp)
-      j0_max = MAX(j0, j0_max)
-     END DO
-     dt_inductive = (dx * m0 * epsilon0 / q0 / j0_max /2._num)**(1._num/3._num)
-  END FUNCTION
 
 #endif
 END MODULE inductive_heating
