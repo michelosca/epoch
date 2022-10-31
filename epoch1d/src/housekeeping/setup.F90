@@ -700,7 +700,7 @@ CONTAINS
 
   SUBROUTINE set_dt        ! sets CFL limited step
 
-    REAL(num) :: dt_courant, dt_freq, dt_inputdeck, dt_inductive
+    REAL(num) :: dt_courant, dt_freq, dt_inputdeck
     REAL(num) :: dt_gyrfreq, dt_upperhybrid, dt_uppercutofffreq
     REAL(num) :: gyrofreq, plasmafreq, upperhybridfreq, uppercutofffreq
     INTEGER :: io
