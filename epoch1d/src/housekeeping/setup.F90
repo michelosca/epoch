@@ -642,6 +642,9 @@ CONTAINS
         min_bz = MINVAL(bz)
         max_bz = MAX(max_bz, ABS(min_bz))
         max_b_field = MAX(max_bx, max_by, max_bz)
+#ifdef NEUTRAL_COLLISIONS
+        max_b_field = MAX(max_b_field, user_max_b_field)
+#endif
 
         ! Maximum gyrofrequency in this processors and species
         gyrofrequency_temp = ABS(part_q)/part_m*max_b_field
