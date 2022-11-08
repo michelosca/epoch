@@ -107,19 +107,14 @@ CONTAINS
       RETURN
     END IF
     
-    IF (str_cmp(element, 't_profile')) THEN
-      CALL initialise_stack(inductive_source%time_function)
-      CALL tokenize(value, inductive_source%time_function, errcode)
+    IF (str_cmp(element, 'profile')) THEN
+      CALL initialise_stack(inductive_source%function)
+      CALL tokenize(value, inductive_source%function, errcode)
       ! evaluate it once to check that it's a valid block
-      dummy = evaluate(inductive_source%time_function, errcode)
+      dummy = evaluate(inductive_source%function, errcode)
       RETURN
     END IF
 
-    IF (str_cmp(element, 'electron_species_name')) THEN
-      inductive_source%e_name = TRIM(ADJUSTL(value))
-      RETURN
-    END IF
-    
   END FUNCTION inductive_block_handle_element
   
   

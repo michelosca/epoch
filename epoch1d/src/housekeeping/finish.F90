@@ -29,6 +29,7 @@ MODULE finish
   USE probes
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
 #endif
   IMPLICIT NONE
 
@@ -128,6 +129,7 @@ CONTAINS
     CALL deallocate_injectors
 #ifdef ELECTROSTATIC
     CALL finalize_electrostatic_solver
+    CALL inductive_heating_finalize
 #endif
     CALL MPI_COMM_FREE(comm, errcode)
 
