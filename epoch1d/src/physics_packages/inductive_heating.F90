@@ -229,39 +229,84 @@ CONTAINS
 
 
 
-  SUBROUTINE inductive_heating_add_particle_velocity(x_pos,y_vel,charge_weight)
+  SUBROUTINE inductive_heating_add_particle_velocity(vel_data, part_x)
     ! Each particle with position x_pos and y-velocity y_vel is
     ! added to conduction current
 
-    REAL(num), INTENT(IN) :: x_pos, y_vel, charge_weight 
-    REAL(num) :: x_min, x_max
-    INTEGER :: i, ix
-    TYPE(inductive_heating_block), POINTER :: inductive_source
+    REAL(num), INTENT(IN) :: part_x, vel_data
+    REAL(num), DIMENSION(sf_min:sf_max) :: gx
+    INTEGER :: cell_x, ix_min, ix_max
+    INTEGER :: i,j, ix, local_sf_min, local_sf_max
+    REAL(num) :: cell_frac_x, cx2, cell_x_r, idx
+    TYPE(inductive_heating_block), POINTER :: ind_source
     
+    idx = 1._num / dx
+
     DO i = 1, n_heating_sources
-      inductive_source => inductive_sources(i)
+      ind_source => inductive_sources(i)
       
       ! First check: heating source is on/involved
-      IF (.NOT.inductive_source%involved) CYCLE
-      IF (.NOT.inductive_source%source_on) CYCLE 
+      IF (.NOT.ind_source%involved) CYCLE
+      IF (.NOT.ind_source%source_on) CYCLE 
 
-      ! Second check: particle is within the heating source domain
-      IF ( (x_pos >= inductive_source%x_min) .AND. &
-        (x_pos <= inductive_source%x_max) ) THEN
-        
-        ! Find particle cell
-        DO ix = inductive_source%ix_min, inductive_source%ix_max
-          x_min = (ix-1)*dx + x_min_local
-          x_max = ix*dx + x_min_local
-          IF ( (x_pos >= x_min) .AND. (x_pos <= x_max) ) THEN
-            ! Add particle to conduction current
-            inductive_source%j_cond(ix) = inductive_source%j_cond(ix) + &
-              y_vel * charge_weight
-            EXIT
-          END IF
+#ifdef PARTICLE_SHAPE_TOPHAT
+      cell_x_r = (part_x - x_grid_min_local) * idx - 0.5_num
+#else
+      cell_x_r = (part_x - x_grid_min_local) * idx
+#endif
+      cell_x = FLOOR(cell_x_r + 0.5_num)
+      cell_frac_x = REAL(cell_x, num) - cell_x_r
+      cell_x = cell_x + 1
+
+      ! Second check: source cell boundaries
+      ix_min = ind_source%ix_min
+      ix_max = ind_source%ix_max
+      IF (cell_x + sf_max < ix_min) CYCLE
+      IF (cell_x + sf_min > ix_max) CYCLE
+
+#ifdef PARTICLE_SHAPE_BSPLINE3
+#include "bspline3/gxfac.inc"
+#elif  PARTICLE_SHAPE_TOPHAT
+#include "tophat/gxfac.inc"
+#else
+#include "triangle/gxfac.inc"
+#endif
+
+      IF (x_max_boundary_open .AND. cell_x == nx) THEN
+        DO j = 1, sf_max
+          gx(0) = gx(0) + gx(j)
+          gx(j) = 0._num
         END DO
-
       END IF
+#ifdef PARTICLE_SHAPE_TOPHAT
+      IF (x_min_boundary_open .AND. cell_x == 0) THEN
+        gx(1) = gx(1) + gx(0)
+        gx(0) = 0._num
+#else
+      IF (x_min_boundary_open .AND. cell_x == 1) THEN
+        DO j = 1, -sf_min
+          gx(0) = gx(0) + gx(-j)
+          gx(-j) = 0._num
+        END DO
+#endif
+      END IF
+
+      IF (sf_min + cell_x >= ix_min) THEN
+        local_sf_min = sf_min
+      ELSE
+        local_sf_min = ix_min - cell_x
+      END IF
+
+      IF (sf_max + cell_x <= ix_max) THEN
+        local_sf_max = sf_max
+      ELSE
+        local_sf_max = ix_max - cell_x
+      END IF
+      DO ix = local_sf_min, local_sf_max 
+        ind_source%j_cond(cell_x+ix) = ind_source%j_cond(cell_x+ix) + &
+          gx(ix)*vel_data
+      END DO
+      
     END DO
 
   END SUBROUTINE inductive_heating_add_particle_velocity
@@ -484,8 +529,6 @@ CONTAINS
             inductive_source%x_max_sendrecv = .TRUE.
           END IF
           
-          print*,step, rank, 'setup', ix_min, ix_max, &
-            inductive_source%x_min_sendrecv, inductive_source%x_max_sendrecv
           ! Allocate cunrrent arrays
           ALLOCATE(inductive_source%j_cond(ix_min:ix_max))
 

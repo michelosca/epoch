@@ -527,7 +527,7 @@ CONTAINS
     REAL(num) :: cell_frac_x
 
     ! PARTICLE PROPERTIES
-    REAL(num) :: part_x
+    REAL(num) :: part_x, part_qw
     REAL(num) :: part_q, part_m, ipart_m, cmratio, cmratiodto2
 
     ! Weighting factors
@@ -600,6 +600,7 @@ CONTAINS
 #ifndef PER_PARTICLE_CHARGE_MASS
       part_q   = species_list(ispecies)%charge
       part_m   = species_list(ispecies)%mass
+      part_qw = part_q * species_list(ispecies)%weight
       ipart_m  =  1._num/part_m
       cmratio = part_q*ipart_m
       cmratiodto2 = cmratio*dtfac
@@ -738,8 +739,8 @@ CONTAINS
         END IF
 #endif
         IF (inductive_heating_flag) THEN
-          CALL inductive_heating_add_particle_velocity(ispecies, &
-            current%part_pos, part_u(2))
+          CALL inductive_heating_add_particle_velocity(part_u(2)*part_qw, &
+            current%part_pos)
         END IF
 
 #if !defined(NO_PARTICLE_PROBES) && !defined(NO_IO)
@@ -808,7 +809,7 @@ CONTAINS
     REAL(num) :: cell_frac_x
 
     ! PARTICLE PROPERTIES
-    REAL(num) :: part_x
+    REAL(num) :: part_x, part_qw
     REAL(num) :: part_q, part_m, ipart_m, cmratio, cmratiodto2
 
     ! Weighting factors
@@ -867,6 +868,7 @@ CONTAINS
 #ifndef PER_PARTICLE_CHARGE_MASS
       part_q   = species_list(ispecies)%charge
       part_m   = species_list(ispecies)%mass
+      part_qw = part_q * species_list(ispecies)%weight
       ipart_m  =  1._num/part_m
       cmratio = part_q*ipart_m
       cmratiodto2 = cmratio*dtfac
@@ -983,8 +985,8 @@ CONTAINS
           current%part_p   = part_u * part_m
 
           IF (inductive_heating_flag) THEN
-            CALL inductive_heating_add_particle_velocity(ispecies, &
-              current%part_pos, part_u(2))
+            CALL inductive_heating_add_particle_velocity(part_u(2)*part_qw, &
+              current%part_pos)
           END IF
         END IF
 
