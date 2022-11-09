@@ -552,7 +552,7 @@ fields.o: fields.f90 boundary.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 finish.o: finish.F90 collisions.o constants.o deck.o diagnostics.o dist_fn.o \
   injectors.o ionise.o laser.o probes.o setup.o window.o electrostatic.o \
-  nc_setup.o
+  nc_setup.o inductive_heating.o
 helper.o: helper.F90 balance.o boundary.o deltaf_loader.o partlist.o simple_io.o
 ic_module.o: ic_module.f90 helper.o shared_data.o
 inductive_heating.o: inductive_heating.F90 shared_data.o evaluate.o \
@@ -570,7 +570,7 @@ neutral_collisions.o: neutral_collisions.F90 shared_data.o background.o\
   nc_subroutines.o nc_auxiliary.o random_generator.o collisions.o
 nc_auxiliary.o: nc_auxiliary.F90 shared_data.o utilities.o
 nc_setup.o: nc_setup.F90 strings_advanced.o shared_data.o nc_subroutines.o \
-  background.o nc_auxiliary.o inductive_heating.o
+  background.o nc_auxiliary.o
 nc_subroutines.o: nc_subroutines.F90 shared_data.o partlist.o nc_auxiliary.o \
   random_generator.o
 numerics.o: numerics.f90 constants.o
