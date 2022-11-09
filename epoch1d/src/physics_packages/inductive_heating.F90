@@ -113,8 +113,6 @@ CONTAINS
       parameters%pack_ix = i
       inductive_source%j_total(i) = j0_amp * evaluate_with_parameters( &
         inductive_source%function, parameters, err)
-      print*, step, rank, 'j_total',inductive_source%id, &
-        x_min_local + dx*i, inductive_source%j_total(i)
     END DO
 
   END SUBROUTINE update_total_current 
@@ -137,40 +135,10 @@ CONTAINS
     j_cond = inductive_source%j_cond * idx
 
     ! Ghost cells must be shared between processors: send/recv cases
-    !_________|_|_|_|  : this line shows the domain boundary and ghost cells 
-    !x x x x  |        : the 'x' shows the cells where the heating source is applied
-    ! CASE A
-    ! PROCESSOR LEFT from BOUNDARY (e.g. ng = 3, nx = 100, ix_max = 99 )
-    !_________|_|_|_|   send = MAX(0, ix_max - nx)       ->   MAX(0, 99 - 100 = -1) = 0
-    !x x x x  |         recv = MIN(ix_max-(nx-ng),ng)    ->   MIN(99-(100-3) = 2, 3) = 2
-
-    ! PROCESSOR RIGHT from BOUNDARY (e.g. ix_min = -2, ix_max = -1 )
-    !   |_|_|_|_______  send = MIN(ix_max-ix_min+1,ng)   ->   MIN(-1-(-2)+1=2, 3) = 2
-    !    x x  |         recv = MAX(0, MIN(ix_max,ng))    ->   MAX(0,MIN(-1,3)) = MAX(0,-1) = 0
-    
-    ! CASE B
-    ! PROCESSOR LEFT from BOUNDARY (e.g. ng = 3, nx = 100, ix_max = 102)
-    !_________|_|_|_|   send = MAX(0, ix_max - nx)       ->   MAX(0,102 - 100 = 2) = 2
-    !x x x x x|x x      recv = MIN(ix_max-(nx-ng),ng)    ->   MIN(102-(100-3)= 5, 3) = 3
-
-    ! PROCESSOR RIGHT from BOUNDARY (e.g. ix_min=-2, ix_max = 2)
-    !   |_|_|_|_______  send = MIN(ix_max-ix_min+1,ng)   ->   MIN(2-(-2)+1=5, 3) = 3      
-    !    x x x|x x      recv = MAX(0, MIN(ix_max,ng))    ->   MAX(0, MIN(2, 3)) = MAX(0,2) = 2
-    
-    ! CASE C
-    ! PROCESSOR LEFT from BOUNDARY (e.g., ng = 3, nx = 100, ix_max = 103)
-    !_________|_|_|_|   send = MAX(0,ix_max-nx)          ->   MAX(0, 103-100=3) = 3
-    !x x x x x|x x x    recv = MIN(ix_max-(nx-ng),ng)    ->   MIN(103-(100-3)=6,3) = 3 
-
-    ! PROCESSOR RIGHT from BOUNDARY (e.g. ix_min = -2. ix_max = 50)
-    !   |_|_|_|_______  send = MIN(ix_max-ix_min+1,ng)   ->   MIN(50-(-2)+1 = 53, 3) = 3
-    !    x x x|x x x x  recv = MAX(0, MIN(ix_max,ng))    ->   MAX(0, MIN(50,3)) = MAX(0,3) = 3
-    
     IF (inductive_source%x_min_sendrecv) THEN
-      n_send = MIN(ix_max-ix_min+1, ng)
-      n_recv = MAX(0, MIN(ix_max, ng))
+      n_send = MAX(0, MIN(1,ix_max+1)-ix_min)
+      n_recv = MAX(0, MIN(ix_max, ng)-MAX(ix_min-1,0))
 
-      print*, step, rank, 'x_min_sendrecv', n_send, n_recv
       ALLOCATE(temp(n_recv))
 
       ! Send ghost cells at x_min to left processor
@@ -178,8 +146,12 @@ CONTAINS
           tag, temp, n_recv, mpireal, proc_x_min, tag, comm, status, errcode)
 
       ! Load data received from left processor on x_min side (not in ghost cells!)
-      DO i = 1, n_recv
-        j_cond(i) = j_cond(i) + temp(i)
+      start_ix = MAX(1, ix_min)
+      end_ix = start_ix + n_recv - 1
+      j = 1
+      DO i = start_ix, end_ix 
+        j_cond(i) = j_cond(i) + temp(j)
+        j = j + 1
       END DO
       ! Remove data from ghot cells
       IF (ix_min < 1) j_cond(ix_min:MIN(0,ix_max)) = 0._num
@@ -188,10 +160,9 @@ CONTAINS
     END IF
 
     IF (inductive_source%x_max_sendrecv) THEN
-      n_send = MAX(0, ix_max-nx)
-      n_recv = MIN(ix_max-(nx-ng), ng)
+      n_send = MAX(0, ix_max-MAX(ix_min-1, nx))
+      n_recv = MIN(MAX(0,MIN(ix_max,nx)-MAX(ix_min-1,nx-ng)),ng) 
       
-      print*, step, rank, 'x_max_sendrecv', n_send, n_recv
       ALLOCATE(temp(n_recv))
 
       ! Send ghost cells at x_max to right processor
@@ -207,7 +178,7 @@ CONTAINS
       ! Load data received from right processor on x_max side (not in ghost cells!)
       j = 1
       start_ix = MAX(nx-ng+1, ix_min)
-      end_ix = nx-ng+n_recv
+      end_ix = start_ix + n_recv - 1 
       DO i = start_ix, end_ix 
         j_cond(i) = j_cond(i) + temp(j)
         j = j + 1
@@ -219,11 +190,6 @@ CONTAINS
 
     inductive_source%j_cond = j_cond
     DEALLOCATE(j_cond)
-
-    do i = ix_min, ix_max
-      print*, step, rank, 'j_cond',inductive_source%id, &
-        x_min_local + dx*i, inductive_source%j_cond(i)
-    end do
 
   END SUBROUTINE update_conduction_current
 
@@ -326,8 +292,6 @@ CONTAINS
 
     DO i = ix_min, ix_max
       ind_source%j_disp(i) = ind_source%j_total(i) - ind_source%j_cond(i)
-      print*, step, rank, 'j_disp',ind_source%id, &
-        x_min_local + dx*i, ind_source%j_disp(i)
     END DO
 
   END SUBROUTINE update_displacement_current
@@ -472,50 +436,51 @@ CONTAINS
     DO j = 1, n_heating_sources
       inductive_source => inductive_sources(j)
 
-        ! Set source START(MIN) cell
         source_x_min = inductive_source%x_min
         source_x_max = inductive_source%x_max
+        ! Set source START(MIN) cell
         IF (source_x_min > x_max_local + ng * dx) THEN
           ! In this case the heating source is right of this processor
           ! i.e. this processor does not have a heating source
           inductive_source%involved = .FALSE.
-        ELSEIF (source_x_min < x_min_local - ng *dx) THEN
+        ELSEIF ((source_x_min <= x_min_local - ng*dx) .AND. &
+          (source_x_max > x_min_local - ng*dx)) THEN
           inductive_source%involved = .TRUE.
           inductive_source%ix_min = 1 - ng
         ELSE
-          inductive_source%involved = .TRUE.
           DO i = 1-ng, nx+ng
             x_cell_left = (i-1) * dx + x_min_local
             x_cell_right = i * dx + x_min_local
-            IF ((x_cell_left <= source_x_min) .AND. &
-              (x_cell_right > source_x_min)) THEN
+            IF ((x_cell_left < source_x_min) .AND. &
+              (x_cell_right >= source_x_min)) THEN
               inductive_source%ix_min = i
+              inductive_source%involved = .TRUE.
               EXIT
             END IF
           END DO
         END IF
 
-        ! Set source end cell
-        IF (source_x_max < x_min_local - ng * dx) THEN
+        ! Set source END(MAX) cell
+        IF (source_x_max <= x_min_local - ng * dx) THEN
           ! In this case the heating source is left of this processor
           ! i.e. this processor does not have a heating source
           inductive_source%involved = .FALSE.
-        ELSEIF (source_x_max > x_max_local + ng *dx) THEN
+        ELSEIF ((source_x_max > x_max_local + ng*dx) .AND. &
+          (source_x_min <= x_max_local + ng*dx)) THEN
           inductive_source%involved = .TRUE.
           inductive_source%ix_max = nx + ng
         ELSE
-          inductive_source%involved = .TRUE.
           DO i = 1-ng, nx+ng
             x_cell_left = (i-1) * dx + x_min_local
             x_cell_right = i * dx + x_min_local
             IF ((x_cell_left < source_x_max) .AND. &
               (x_cell_right >= source_x_max)) THEN
               inductive_source%ix_max = i
+              inductive_source%involved = .TRUE.
               EXIT
             END IF
           END DO
         END IF
-
         ! Setup IH block in involved processes 
         IF (inductive_source%involved) THEN
           ix_min = inductive_source%ix_min
