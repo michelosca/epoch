@@ -31,9 +31,6 @@ MODULE setup
   USE sdf
   USE boundary
   USE nc_setup
-#ifdef ELECTROSTATIC
-  USE inductive_heating
-#endif
 
   IMPLICIT NONE
 
@@ -645,6 +642,9 @@ CONTAINS
         min_bz = MINVAL(bz)
         max_bz = MAX(max_bz, ABS(min_bz))
         max_b_field = MAX(max_bx, max_by, max_bz)
+#ifdef NEUTRAL_COLLISIONS
+        max_b_field = MAX(max_b_field, user_max_b_field)
+#endif
 
         ! Maximum gyrofrequency in this processors and species
         gyrofrequency_temp = ABS(part_q)/part_m*max_b_field
@@ -703,7 +703,7 @@ CONTAINS
 
   SUBROUTINE set_dt        ! sets CFL limited step
 
-    REAL(num) :: dt_courant, dt_freq, dt_inputdeck, dt_inductive
+    REAL(num) :: dt_courant, dt_freq, dt_inputdeck
     REAL(num) :: dt_gyrfreq, dt_upperhybrid, dt_uppercutofffreq
     REAL(num) :: gyrofreq, plasmafreq, upperhybridfreq, uppercutofffreq
     INTEGER :: io
@@ -748,12 +748,6 @@ CONTAINS
     dt = MIN(dt, dt_neutral_collisions)
 #endif
     
-    ! Time restrictiction due to inductive heating
-    IF (inductive_heating_flag) THEN
-      dt_inductive = inductive_heating_get_dt_min()
-      dt = MIN(dt, dt_inductive)
-    END IF
-
     ! Force user time step
     IF (force_user_dt) dt = user_dt
 
@@ -764,12 +758,8 @@ CONTAINS
       WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq, ' s'
       WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid, ' s'
       WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq, ' s'
-      WRITE(*, 987) 'Laser time-step: ', dt_laser, ' s'
       WRITE(*, 987) 'CFL time-step: ', dt_courant, ' s'
       WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck, ' s'
-      IF (inductive_heating_flag) THEN
-        WRITE(*, 987) 'Inductive heating: ', dt_inductive, ' s'
-      END IF
       IF (force_user_dt) THEN
         WRITE(*, 987) 'User predefined dt: ', user_dt, ' s'
       END IF
