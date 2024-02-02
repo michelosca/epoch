@@ -486,7 +486,6 @@ CONTAINS
     TYPE(particle), POINTER :: current
     LOGICAL :: spec_sum
 #include "particle_head.inc"
-
     data_array = 0.0_num
 
     vol = dx
@@ -1242,5 +1241,69 @@ CONTAINS
     initial_jz = sum_in(3) * fac
 
   END SUBROUTINE calc_initial_current
+
+
+
+  SUBROUTINE calc_neutral_collisions(data_array, current_species, direction)
+
+    REAL(num), DIMENSION(1-ng:), INTENT(OUT) :: data_array
+    INTEGER, INTENT(IN) :: current_species
+    INTEGER, INTENT(IN), OPTIONAL :: direction
+
+    INTEGER :: ispecies, jspecies, nc_type, coll_index
+    TYPE(neutrals_block), POINTER :: collision_block
+    TYPE(collision_type_block), POINTER :: coll_type_block
+
+    data_array = 0._num
+
+    IF (current_species == 0) THEN ! Adds all collisions together
+      DO ispecies = 1, n_species
+        DO jspecies = ispecies, n_species_bg
+          IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
+          collision_block => species_list(ispecies)%neutrals(jspecies)
+          DO nc_type = 1, collision_block%ncolltypes
+            coll_type_block => collision_block%collision_set(nc_type)
+            data_array(1:nx) = data_array(1:nx) &
+              + REAL(coll_type_block%coll_counter,num)
+          END DO
+        END DO
+      END DO
+    ! Looks for a specific collision type
+    ! For AVERAGE puposes
+    ELSEIF (current_species > 0 .AND. .NOT.PRESENT(direction)) THEN
+      coll_index = 0
+      DO ispecies = 1, n_species
+        DO jspecies = ispecies, n_species_bg
+          IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
+          collision_block => species_list(ispecies)%neutrals(jspecies)
+          DO nc_type = 1, collision_block%ncolltypes
+            coll_index = coll_index + 1
+            IF (coll_index == current_species) THEN
+              coll_type_block => collision_block%collision_set(nc_type)
+              data_array(1:nx) = REAL(coll_type_block%coll_counter,num)
+              RETURN
+            END IF
+          END DO
+        END DO
+      END DO
+
+    ! For diagnostics.F90>write_nspecies_field
+    ELSEIF (current_species > 0 .AND. PRESENT(direction)) THEN
+      coll_index = 0
+      DO jspecies = current_species, n_species_bg
+        IF (.NOT.neutral_coll(current_species, jspecies)) CYCLE
+        collision_block => species_list(current_species)%neutrals(jspecies)
+        DO nc_type = 1, collision_block%ncolltypes
+          coll_index = coll_index + 1
+          IF (coll_index == direction) THEN
+            coll_type_block => collision_block%collision_set(nc_type)
+            data_array(1:nx) = REAL(coll_type_block%coll_counter,num)
+            RETURN
+          END IF
+        END DO
+      END DO
+    END IF
+
+  END SUBROUTINE calc_neutral_collisions
 
 END MODULE calc_df

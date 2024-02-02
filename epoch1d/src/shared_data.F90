@@ -157,6 +157,7 @@ MODULE shared_data
     TYPE(particle), POINTER :: head
     TYPE(particle), POINTER :: tail
     INTEGER(i8) :: count
+    INTEGER(i8) :: coll_counter
     INTEGER :: id_update
     ! Pointer is safe if the particles in it are all unambiguously linked
     LOGICAL :: safe
@@ -260,6 +261,13 @@ MODULE shared_data
 
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
+
+    ! Species reinjection
+    INTEGER :: reinjection_id
+
+    !Neutral collisions
+    TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
+
   END TYPE particle_species
 
   REAL(num), ALLOCATABLE, TARGET :: global_species_density(:)
@@ -749,5 +757,175 @@ MODULE shared_data
   END TYPE custom_particle_loader
 
   TYPE(custom_particle_loader), DIMENSION(:), POINTER :: custom_loaders_list
+
+!------------------------------------------------------------------------------
+! Electrostatic potential - Written by M. Osca Engelbrecht
+!------------------------------------------------------------------------------
+
+  REAL(num), ALLOCATABLE, DIMENSION(:) :: es_potential
+  REAL(num) :: es_dt_fact, max_speed, norm_z_factor, max_perturbation_freq
+  REAL(num) :: user_max_speed
+  REAL(num) :: user_dt
+  LOGICAL :: force_user_dt, x_min_boundary_open, x_max_boundary_open
+
+  TYPE potential_block
+    ! Boundary to which potential is attached
+    INTEGER :: boundary
+    ! A unique id number for the potential source (not used directly by EPOCH)
+    ! Only used if hard coding time profiles
+    INTEGER :: id
+    REAL(num) :: profile
+
+    LOGICAL :: use_time_function, use_profile_function
+    TYPE(primitive_stack) :: time_function, profile_function
+
+    REAL(num) :: amp, t_start, t_end
+
+    TYPE(potential_block), POINTER :: next
+  END TYPE potential_block
+
+  TYPE(potential_block), POINTER :: potential_list_x_min, potential_list_x_max
+  INTEGER :: n_potential_source_x_min, n_potential_source_x_max
+  LOGICAL, DIMENSION(2*c_ndims) :: add_potential_source = .FALSE.
+
+  ! E-field spatial and temporal function
+  TYPE efield_block
+
+    LOGICAL :: use_profile_function
+    TYPE(primitive_stack) :: profile_function
+
+  END TYPE efield_block
+
+  TYPE(efield_block), POINTER :: ey_profile, ez_profile
+
+  !Current diagnostics
+  REAL(num) :: wcharge_min, wcharge_max, dwcharge_min, dwcharge_max
+  REAL(num) :: convect_curr_min, convect_curr_max
+  REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
+
+!------------------------------------------------------------------------------
+! Charged-neutral collisions - Written by M. Osca Engelbrecht
+!------------------------------------------------------------------------------
+
+  ! General neutral gas block
+  TYPE neutrals_block
+
+    REAL(num) :: gsigma_max_total, igsigma_max_total
+    REAL(num) :: max_weight
+#ifndef PER_SPECIES_WEIGHT
+    REAL(num) :: max_w1, max_w2
+#endif
+
+    INTEGER :: ncolltypes
+    LOGICAL :: is_background, user_gsigma_max
+
+    TYPE(collision_type_block), DIMENSION(:), POINTER :: collision_set
+    TYPE(background_block), POINTER :: background
+
+  END TYPE neutrals_block
+
+
+  TYPE collision_type_block
+
+    REAL(num) :: ethreshold, gthreshold
+    REAL(num) :: user_factor
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: energy, cross_section
+    REAL(num) :: energy_units, cross_section_units
+
+    INTEGER :: id, source_species_id, new_species_id
+    INTEGER :: table_len
+    CHARACTER(LEN=string_length) :: name, io_name
+
+    ! Collision method
+    LOGICAL :: wnanbu, wvahedi, wnanbusplit, wvahedisplit
+    PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
+
+    ! Collision diagnostics
+    INTEGER, ALLOCATABLE, DIMENSION(:) :: coll_counter
+
+  END TYPE collision_type_block
+
+
+  ! Background gas
+  TYPE background_block
+
+    INTEGER :: id
+    CHARACTER(LEN=string_length) :: name
+    REAL(num) :: mass, temp, dens
+    REAL(num), DIMENSION(3) :: mean_velocity
+    LOGICAL, ALLOCATABLE, DIMENSION(:) :: colliding_species
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: dens_profile, temp_profile
+    REAL(num) :: t_start, t_end
+
+    LOGICAL :: use_dens_profile_fn, use_temp_profile_fn
+
+    TYPE(primitive_stack) :: temp_profile_fn, dens_profile_fn
+
+  END TYPE background_block
+
+  TYPE current_collision_block
+
+    ! Cell position
+    INTEGER :: ix
+
+    ! Species
+    INTEGER :: species1, species2, bg_species
+    LOGICAL :: same_species
+    TYPE(particle_list), POINTER :: p_list1, p_list2
+    TYPE(particle), POINTER :: part1, part2
+
+    ! Collision block
+    TYPE(neutrals_block), POINTER :: collision_block
+    TYPE(collision_type_block), POINTER :: type_block
+
+    ! Collision probability
+    REAL(num) :: pmax
+    REAL(num) :: prob_factor ! = boyd_factor
+
+    ! Collision type
+    INTEGER :: type
+
+    ! Speed and velocities
+    REAL(num) :: g_mag
+    REAL(num), DIMENSION(3) :: u_cm, g, u_2
+
+    ! Background's local temperature
+    REAL(num) :: ix_temp
+
+    ! Particle's masses
+    REAL(num) :: m1, m2, im1, im2, m12, im12, reducedm, ireducedm
+
+    ! Particle's weights
+    REAL(num) :: w1, w2, w1_ratio, w2_ratio
+
+  END TYPE current_collision_block
+
+
+  ABSTRACT INTERFACE
+
+    SUBROUTINE post_collision(collision)
+
+      IMPORT current_collision_block
+
+      TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
+
+    END SUBROUTINE post_collision
+
+  END INTERFACE
+
+  LOGICAL, ALLOCATABLE, DIMENSION(:,:) :: coulomb_coll, neutral_coll
+  CHARACTER(LEN=string_length) :: cross_section_table_location
+
+  REAL(num) :: max_coll_freq
+  REAL(num) :: user_max_b_field, user_max_e_field
+  REAL(num) :: user_max_neutral_coll_freq, neutral_coll_freq_fact
+  REAL(num) :: dt_neutral_collisions, dt_accel
+  INTEGER :: n_species_bg, n_backgrounds
+  INTEGER, ALLOCATABLE, DIMENSION(:) :: total_collision_types
+  LOGICAL :: resolve_sheath
+  TYPE(background_block), DIMENSION(:), POINTER :: background_list
+
+  ! Output
+  LOGICAL :: neutral_collision_counter
 
 END MODULE shared_data

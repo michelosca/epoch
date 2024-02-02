@@ -19,6 +19,7 @@ MODULE random_generator
   PRIVATE
   PUBLIC :: random, random_init, get_random_state, set_random_state
   PUBLIC :: random_box_muller, random_state_type, random_flush_cache
+  PUBLIC :: random_unit_vector
 
   INTEGER, PARAMETER :: init_x = 123456789
   INTEGER, PARAMETER :: init_y = 362436069
@@ -213,5 +214,22 @@ CONTAINS
     END IF
 
   END SUBROUTINE random_flush_cache
+
+
+
+  FUNCTION random_unit_vector()
+
+    DOUBLE PRECISION , DIMENSION(3) :: random_unit_vector
+    DOUBLE PRECISION :: norm
+
+    random_unit_vector(1) = random()*2.D0-1.D0
+    random_unit_vector(2) = random()*2.D0-1.D0
+    random_unit_vector(3) = random()*2.D0-1.D0
+
+    ! Normalize random vector
+    norm = SQRT(DOT_PRODUCT(random_unit_vector, random_unit_vector))
+    random_unit_vector = random_unit_vector / norm
+
+  END FUNCTION random_unit_vector
 
 END MODULE random_generator

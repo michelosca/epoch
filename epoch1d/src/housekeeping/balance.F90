@@ -20,6 +20,9 @@ MODULE balance
   USE redblack_module
   USE timer
   USE utilities
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
 
   IMPLICIT NONE
 
@@ -439,6 +442,16 @@ CONTAINS
     DEALLOCATE(bz)
     ALLOCATE(bz(1-ng:nx_new+ng))
     bz = temp
+
+#ifdef ELECTROSTATIC
+    CALL remap_field(es_potential, temp)
+    DEALLOCATE(es_potential)
+    ALLOCATE(es_potential(1-ng:nx_new+ng))
+    es_potential = temp
+    CALL finalize_petsc
+    CALL initialize_petsc(comm)
+    CALL setup_petsc_variables(nx_new, nx_global)
+#endif
 
     IF (pre_loading) THEN
       IF (ALLOCATED(global_species_density)) DEALLOCATE(global_species_density)

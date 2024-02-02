@@ -22,11 +22,14 @@ MODULE finish
   USE window
   USE laser
   USE collisions
+  USE nc_setup
   USE dist_fn
   USE ionise
   USE injectors
   USE probes
-
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
   IMPLICIT NONE
 
   PRIVATE
@@ -58,7 +61,6 @@ CONTAINS
     DEALLOCATE(x_grid_mins, x_grid_maxs, cell_x_min, cell_x_max)
 
     DEALLOCATE(total_particle_energy_species)
-
     CALL deallocate_probes
 
     DO i = 1, n_species
@@ -74,6 +76,8 @@ CONTAINS
       IF (ASSOCIATED(species_list(i)%background_density)) &
           DEALLOCATE(species_list(i)%background_density, STAT=stat)
     END DO
+
+    CALL deallocate_neutral_collisions
 
     DEALLOCATE(species_list, STAT=stat)
 
@@ -120,7 +124,9 @@ CONTAINS
     CALL deallocate_partlists
     CALL deallocate_eval_stack
     CALL deallocate_injectors
-
+#ifdef ELECTROSTATIC
+    CALL finalize_electrostatic_solver
+#endif
     CALL MPI_COMM_FREE(comm, errcode)
 
   END SUBROUTINE deallocate_memory

@@ -44,6 +44,8 @@ PROGRAM pic
   USE window
   USE split_particle
   USE collisions
+  USE nc_setup
+  USE neutral_collisions
   USE particle_migration
   USE ionise
   USE calc_df
@@ -55,6 +57,9 @@ PROGRAM pic
 #ifdef BREMSSTRAHLUNG
   USE bremsstrahlung
 #endif
+#ifdef ELECTROSTATIC
+  USE electrostatic
+#endif
 
   IMPLICIT NONE
 
@@ -64,7 +69,10 @@ PROGRAM pic
   CHARACTER(LEN=64) :: deck_file = 'input.deck'
   CHARACTER(LEN=*), PARAMETER :: data_dir_file = 'USE_DATA_DIRECTORY'
   CHARACTER(LEN=64) :: timestring
-  REAL(num) :: runtime, dt_store
+  REAL(num) :: runtime
+#ifndef ELECTROSTATIC
+  REAL(num) :: dt_store
+#endif
 
   step = 0
   time = 0.0_num
@@ -123,6 +131,8 @@ PROGRAM pic
   CALL manual_load
   CALL finish_injector_setup
 
+  IF (ANY(neutral_coll)) CALL final_nc_setup
+
   CALL initialise_window ! window.f90
   CALL set_dt
   CALL set_maxwell_solver
@@ -139,23 +149,35 @@ PROGRAM pic
 
   IF (use_current_correction) CALL calc_initial_current
   CALL particle_bcs
+#ifndef ELECTROSTATIC
   CALL efield_bcs
+#endif
 
   IF (ic_from_restart) THEN
     IF (dt_from_restart > 0) dt = dt_from_restart
     IF (step == 0) THEN
       CALL bfield_final_bcs
     ELSE
+#ifndef ELECTROSTATIC
       time = time + dt / 2.0_num
       CALL update_eb_fields_final
       CALL moving_window
+#else
+      CALL es_update_e_field
+#endif
     END IF
   ELSE
+#ifndef ELECTROSTATIC
     dt_store = dt
     dt = dt / 2.0_num
     time = time + dt
     CALL bfield_final_bcs
     dt = dt_store
+#else
+    CALL bfield_final_bcs
+    CALL es_update_e_field
+    CALL es_particles_push_back
+#endif
   END IF
   CALL count_n_zeros
 
@@ -205,12 +227,20 @@ PROGRAM pic
     END IF
 #endif
 
+#ifndef ELECTROSTATIC
     CALL update_eb_fields_half
+#endif
     IF (push) THEN
       CALL run_injectors
       ! .FALSE. this time to use load balancing threshold
       IF (use_balance) CALL balance_workload(.FALSE.)
+#ifdef ELECTROSTATIC
+      CALL es_wall_current_diagnostic
+      CALL es_push_particles
+      CALL es_update_e_field
+#else
       CALL push_particles
+#endif
       IF (use_particle_lists) THEN
         ! After this line, the particles can be accessed on a cell by cell basis
         ! Using the particle_species%secondary_list property
@@ -221,7 +251,8 @@ PROGRAM pic
           IF (use_collisional_ionisation) THEN
             CALL collisional_ionisation
           ELSE
-            CALL particle_collisions
+            IF (ANY(coulomb_coll)) CALL particle_collisions
+            IF (ANY(neutral_coll)) CALL run_neutral_collisions
           END IF
         END IF
 
@@ -232,20 +263,25 @@ PROGRAM pic
       END IF
       IF (use_particle_migration) CALL migrate_particles(step)
       IF (use_field_ionisation) CALL ionise_particles
+#ifndef ELECTROSTATIC
       CALL current_finish
+#endif
       CALL update_particle_count
     END IF
 
     CALL check_for_stop_condition(halt, force_dump)
     IF (halt) EXIT
     step = step + 1
+#ifndef ELECTROSTATIC
     time = time + dt / 2.0_num
     CALL output_routines(step)
     time = time + dt / 2.0_num
-
     CALL update_eb_fields_final
-
     CALL moving_window
+#else
+    time = time + dt
+    CALL output_routines(step)
+#endif
   END DO
 
   IF (rank == 0) runtime = MPI_WTIME() - walltime_started

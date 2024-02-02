@@ -34,7 +34,7 @@ MODULE deck_species_block
   INTEGER(KIND=MPI_OFFSET_KIND) :: offset = 0
   CHARACTER(LEN=string_length), DIMENSION(:), POINTER :: species_names
   INTEGER, DIMENSION(:), POINTER :: species_blocks
-  LOGICAL :: got_name
+  LOGICAL :: got_name, reinjection_flag
   INTEGER :: check_block = c_err_none
   LOGICAL, DIMENSION(:), ALLOCATABLE :: species_charge_set
   INTEGER :: n_secondary_species_in_block
@@ -293,6 +293,7 @@ CONTAINS
     IF (deck_state == c_ds_first) RETURN
     species_id = species_blocks(current_block)
     offset = 0
+    reinjection_flag = .FALSE.
 
   END SUBROUTINE species_block_start
 
@@ -743,6 +744,22 @@ CONTAINS
       RETURN
     END IF
 
+    ! *************************************************************
+    ! This section sets properties for particle reinjection
+    ! *************************************************************
+    IF (str_cmp(element, 'reinjection')) THEN
+      reinjection_flag = .FALSE.
+      DO i = 1, n_species
+        IF (str_cmp(species_list(i)%name,value)) THEN
+          species_list(species_id)%reinjection_id = i
+          reinjection_flag = .TRUE.
+          EXIT
+        END IF
+      END DO
+      IF (.NOT.reinjection_flag) errcode = c_err_bad_setup
+      RETURN
+    END IF
+
     ! Initial conditions
 
     IF (str_cmp(element, 'offset')) THEN
@@ -1139,6 +1156,19 @@ CONTAINS
           END DO
         END IF
         species_list(i)%count = INT(species_list(i)%npart_per_cell, i8)
+      END IF
+
+      IF (species_list(i)%reinjection_id >= 0 .AND. &
+        species_list(i)%bc_particle(1) /= c_bc_open .AND. &
+        species_list(i)%bc_particle(2) /= c_bc_open) THEN
+        species_list(i)%reinjection_id = -1
+        IF (rank==0) THEN
+          DO iu = 1, nio_units ! Print to stdout and to file
+            io = io_units(iu)
+            WRITE(io,*) '*** WARNING ***'
+            WRITE(io,*) 'Reinjection is not possible with periodic boundaries'
+          END DO
+        END IF
       END IF
     END DO
 

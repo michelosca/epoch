@@ -156,7 +156,9 @@ CONTAINS
 #ifdef NO_MPI3
     found = .TRUE.
 #endif
-
+#ifdef ELECTROSTATIC
+    found = .TRUE.
+#endif
     IF (.NOT.found) THEN
       WRITE(*,*) '*************************************************************'
       WRITE(*,*) 'The code was compiled with no compile time options'
@@ -267,6 +269,10 @@ CONTAINS
     WRITE(*,*) 'Disable MPI3 features -DNO_MPI3'
 #else
     defines = IOR(defines, c_def_use_mpi3)
+#endif
+#ifdef ELECTROSTATIC
+    defines = IOR(defines, c_def_electrostatic)
+    WRITE(*,*) 'Electrostatic solver -DELECTROSTATIC'
 #endif
     WRITE(*,*) '*************************************************************'
 
