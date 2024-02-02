@@ -387,11 +387,13 @@ PACK_OPTS = $(GIT_WORK_TREE) $(PACK_PREFIX) $(PACK_SOURCE_CODE) \
 
 #PETSc linear solver
 ifeq ($(findstring PETSC, $(DEFINES)),PETSC)
-  -include $(PETSC_DIR)/lib/petsc/conf/variables
-  -include $(PETSC_DIR)/lib/petsc/conf/rules
-  CFLAGS = $(PETSC_CC_INCLUDES)
-  FFLAGS += $(PETSC_FC_INCLUDES) -fopenmp
-  LDFLAGS +=$(PETSC_LIB)
+  PETSC_GOT := $(shell pkg-config --exists PETSc && echo 0)
+  ifeq ($(PETSC_GOT),0)
+    PETSC_FFLAGS := $(shell pkg-config --cflags PETSc)
+    PETSC_LDFLAGS := $(shell pkg-config --libs PETSc)
+    FFLAGS += $(PETSC_FFLAGS)
+    LDFLAGS += $(PETSC_LDFLAGS)
+  endif
 endif
 
 ifeq ($(DONE_COMMIT),)
