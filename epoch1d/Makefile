@@ -275,6 +275,21 @@ DEFINES += $(D)PER_SPECIES_WEIGHT
 # Electrostatic field solver
 DEFINES += $(D)ELECTROSTATIC
 
+# Collisions between neutral and chaged particles
+DEFINES += $(D)NEUTRAL_COLLISIONS
+
+# Choose Poisson's eq. solver method
+ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
+  DEFINES += $(D)PETSC
+  #DEFINES += $(D)TRIDIAG
+
+  # Secondary electron emission
+  DEFINES += $(D)SEE
+
+  # Particle perpendicular (y-axis) position
+  DEFINES += $(D)PART_PERP_POSITION
+endif
+
 # Automatically add -DPARSER_CHECKING for debug builds
 ifeq ($(strip $(MODE)),debug)
   DEFINES += $(D)PARSER_CHECKING
@@ -323,10 +338,11 @@ SRCFILES = balance.F90 boundary.F90 bremsstrahlung.F90 calc_df.F90 \
   random_generator.f90 redblack_module.f90 setup.F90 shape_functions.F90 \
   shared_data.F90 shunt.F90 simple_io.F90 split_particle.F90 stack.f90 \
   strings.f90 strings_advanced.f90 terminal_controls.F90 timer.f90 \
-  tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
-  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.f90 \
-  neutral_collisions.F90 background.f90 deck_background_block.F90 \
-  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90
+  tokenizer_blocks.f90 utilities.F90 version_data.F90 welcome.F90 window.F90 \
+  electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
+  neutral_collisions.F90 background.F90 deck_background_block.F90 \
+  nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.F90 deck_see_block.F90 \
+  deck_inductive_block.F90 inductive_heating.F90
 
 OBJFILES := $(SRCFILES:.f90=.o)
 OBJFILES := $(OBJFILES:.F90=.o)
@@ -369,18 +385,22 @@ PACK_OPTS = $(GIT_WORK_TREE) $(PACK_PREFIX) $(PACK_SOURCE_CODE) \
 
 -include $(SRCDIR)/COMMIT
 
+#PETSc linear solver
+ifeq ($(findstring PETSC, $(DEFINES)),PETSC)
+  PETSC_GOT := $(shell pkg-config --exists PETSc && echo 0)
+  ifeq ($(PETSC_GOT),0)
+    PETSC_FFLAGS := $(shell pkg-config --cflags PETSc)
+    PETSC_LDFLAGS := $(shell pkg-config --libs PETSc)
+    FFLAGS += $(PETSC_FFLAGS)
+    LDFLAGS += $(PETSC_LDFLAGS)
+  endif
+endif
+
 ifeq ($(DONE_COMMIT),)
 main: commit
 else
 main: $(FULLTARGET)
 endif
-
-#PETSc
--include $(PETSC_DIR)/lib/petsc/conf/variables
--include $(PETSC_DIR)/lib/petsc/conf/rules
-CFLAGS = $(PETSC_CC_INCLUDES)
-FFLAGS += $(PETSC_FC_INCLUDES) -fopenmp
-LDFLAGS +=$(PETSC_LIB)
 
 # Rule to build the fortran files
 
@@ -455,11 +475,12 @@ FORCE:
 
 # All the dependencies
 
-background.o: background.f90 evaluate.o nc_auxiliary.o random_generator.o
+background.o: background.F90 evaluate.o nc_auxiliary.o random_generator.o
 balance.o: balance.F90 boundary.o constants.o mpi_subtype_control.o \
   redblack_module.o timer.o utilities.o electrostatic.o
 boundary.o: boundary.F90 injectors.o laser.o mpi_subtype_control.o \
-  particle_id_hash.o particle_temperature.o partlist.o utilities.o
+  particle_id_hash.o particle_temperature.o partlist.o utilities.o \
+  see.o
 bremsstrahlung.o: bremsstrahlung.F90 calc_df.o partlist.o setup.o
 calc_df.o: calc_df.F90 boundary.o
 collisions.o: collisions.F90 calc_df.o prefetch.o
@@ -476,7 +497,8 @@ deck.o: deck.F90 bremsstrahlung.o custom_deck.o deck_boundaries_block.o \
   deck_laser_block.o deck_part_from_file_block.o deck_particle_probe_block.o \
   deck_qed_block.o deck_species_block.o deck_stencil_block.o \
   deck_subset_block.o deck_window_block.o photons.o strings.o utilities.o \
-  version_data.o deck_electrostatic_block.o deck_background_block.o $(SDFMOD)
+  version_data.o deck_electrostatic_block.o deck_background_block.o \
+  deck_see_block.o deck_inductive_block.o $(SDFMOD)
 
 deck_background_block.o: deck_background_block.F90 background.o constants.o \
   strings_advanced.o
@@ -491,9 +513,11 @@ deck_control_block.o: deck_control_block.F90 fields.o strings_advanced.o \
   timer.o $(SDFMOD)
 deck_dist_fn_block.o: deck_dist_fn_block.f90 dist_fn.o strings_advanced.o \
   utilities.o
-deck_electrostatic_block.o: deck_electrostatic_block.f90 strings_advanced.o \
+deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
 deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
+deck_inductive_block.o: deck_inductive_block.F90 strings_advanced.o \
+  inductive_heating.o
 deck_injector_block.o: deck_injector_block.f90 injectors.o shunt.o \
   strings_advanced.o utilities.o
 deck_io_block.o: deck_io_block.F90 strings_advanced.o utilities.o
@@ -504,6 +528,7 @@ deck_part_from_file_block.o: deck_part_from_file_block.F90 \
 deck_particle_probe_block.o: deck_particle_probe_block.F90 probes.o \
   strings_advanced.o utilities.o
 deck_qed_block.o: deck_qed_block.F90 strings_advanced.o utilities.o
+deck_see_block.o: deck_see_block.F90 see.o strings_advanced.o
 deck_species_block.o: deck_species_block.F90 partlist.o setup.o simple_io.o \
   strings_advanced.o utilities.o
 deck_stencil_block.o: deck_stencil_block.f90 fields.o strings_advanced.o
@@ -516,12 +541,12 @@ diagnostics.o: diagnostics.F90 calc_df.o constants.o deck.o deck_io_block.o \
   strings.o timer.o version_data.o window.o $(SDFMOD) $(ENCODED_SOURCE)
 dist_fn.o: dist_fn.F90 mpi_subtype_control.o particles.o $(SDFMOD)
 electrostatic.o: electrostatic.F90 shared_data.o custom_electrostatic.o \
-  evaluate.o boundary.o
+  evaluate.o boundary.o inductive_heating.o
 epoch1d.o: epoch1d.F90 balance.o bremsstrahlung.o calc_df.o collisions.o \
   current_smooth.o deck.o diagnostics.o fields.o finish.o helper.o ic_module.o \
   injectors.o ionise.o mpi_routines.o particle_migration.o particles.o \
   photons.o setup.o split_particle.o welcome.o window.o electrostatic.o \
-  nc_setup.o neutral_collisions.o
+  nc_setup.o neutral_collisions.o  inductive_heating.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 evaluate.o: evaluate.F90 shunt.o stack.o
 evaluator_blocks.o: evaluator_blocks.F90 custom_parser.o stack.o strings.o
@@ -529,9 +554,11 @@ fields.o: fields.f90 boundary.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 finish.o: finish.F90 collisions.o constants.o deck.o diagnostics.o dist_fn.o \
   injectors.o ionise.o laser.o probes.o setup.o window.o electrostatic.o \
-  nc_setup.o
+  nc_setup.o inductive_heating.o
 helper.o: helper.F90 balance.o boundary.o deltaf_loader.o partlist.o simple_io.o
 ic_module.o: ic_module.f90 helper.o shared_data.o
+inductive_heating.o: inductive_heating.F90 shared_data.o evaluate.o \
+  strings_advanced.o
 injectors.o: injectors.F90 evaluate.o particle_temperature.o partlist.o \
   random_generator.o utilities.o
 ionise.o: ionise.F90 boundary.o numerics.o partlist.o random_generator.o \
@@ -562,6 +589,7 @@ prefetch.o: prefetch.F90 shared_data.o
 probes.o: probes.F90 partlist.o $(SDFMOD)
 random_generator.o: random_generator.f90
 redblack_module.o: redblack_module.f90 partlist.o
+see.o: see.F90 strings_advanced.o shared_data.o random_generator.o partlist.o
 setup.o: setup.F90 balance.o boundary.o constants.o fields.o helper.o \
   injectors.o laser.o mpi_routines.o mpi_subtype_control.o particle_id_hash.o \
   shunt.o split_particle.o timer.o version_data.o welcome.o window.o $(SDFMOD)\
@@ -577,7 +605,7 @@ strings_advanced.o: strings_advanced.f90 evaluate.o shunt.o
 terminal_controls.o: terminal_controls.F90
 timer.o: timer.f90 constants.o
 tokenizer_blocks.o: tokenizer_blocks.f90 strings.o
-utilities.o: utilities.f90 constants.o shared_data.o
+utilities.o: utilities.F90 constants.o shared_data.o
 version_data.o: version_data.F90 $(SRCDIR)/COMMIT
 welcome.o: welcome.F90 shared_data.o terminal_controls.o version_data.o
 window.o: window.F90 boundary.o evaluate.o partlist.o
