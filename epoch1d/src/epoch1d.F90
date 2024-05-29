@@ -44,8 +44,8 @@ PROGRAM pic
   USE window
   USE split_particle
   USE collisions
-  USE nc_setup
-  USE neutral_collisions
+  USE collision_ionise
+  USE background_collisions
   USE particle_migration
   USE ionise
   USE calc_df
@@ -60,12 +60,17 @@ PROGRAM pic
 #ifdef ELECTROSTATIC
   USE electrostatic
 #endif
+#ifdef NEUTRAL_COLLISIONS 
+  USE nc_setup
+  USE neutral_collisions
+#endif
 
   IMPLICIT NONE
 
   INTEGER :: ispecies, ierr
   LOGICAL :: halt = .FALSE., push = .TRUE.
   LOGICAL :: force_dump = .FALSE.
+  LOGICAL :: collision_step, coll_ion_step
   CHARACTER(LEN=64) :: deck_file = 'input.deck'
   CHARACTER(LEN=*), PARAMETER :: data_dir_file = 'USE_DATA_DIRECTORY'
   CHARACTER(LEN=64) :: timestring
@@ -148,6 +153,7 @@ PROGRAM pic
   IF (npart_global > 0) CALL balance_workload(.TRUE.)
 
   IF (use_current_correction) CALL calc_initial_current
+  CALL setup_bc_lists
   CALL particle_bcs
 #ifndef ELECTROSTATIC
   CALL efield_bcs
@@ -190,6 +196,7 @@ PROGRAM pic
 #ifdef BREMSSTRAHLUNG
   IF (use_bremsstrahlung) CALL setup_bremsstrahlung_module()
 #endif
+  CALL setup_background_collisions
 
   IF (rank == 0) THEN
     PRINT*
@@ -200,13 +207,11 @@ PROGRAM pic
   walltime_started = MPI_WTIME()
   IF (.NOT.ic_from_restart) CALL output_routines(step) ! diagnostics.f90
   IF (use_field_ionisation) CALL initialise_ionisation
+  IF (use_collisional_ionisation) CALL setup_coll_ionise_tables
 
   IF (timer_collect) CALL timer_start(c_timer_step)
 
   DO
-    IF ((step >= nsteps .AND. nsteps >= 0) &
-        .OR. (time >= t_end) .OR. halt) EXIT
-
     IF (timer_collect) THEN
       CALL timer_stop(c_timer_step)
       CALL timer_reset
@@ -242,25 +247,43 @@ PROGRAM pic
       CALL push_particles
 #endif
       IF (use_particle_lists) THEN
+        ! Check whether this is a step with collisions or collisional ionisation
+        collision_step = (MODULO(step, coll_n_step) == coll_n_step - 1) &
+          .AND. use_collisions
+        coll_ion_step = MODULO(step, ci_n_step) == ci_n_step - 1 &
+          .AND. use_collisional_ionisation
+
         ! After this line, the particles can be accessed on a cell by cell basis
         ! Using the particle_species%secondary_list property
-        CALL reorder_particles_to_grid
+        IF (use_split .OR. collision_step .OR. coll_ion_step) THEN
+          CALL reorder_particles_to_grid
+        END IF
+
+        IF (coll_ion_step) THEN
+          CALL run_collisional_ionisation
+        END IF
 
         ! call collision operator
+#ifdef NEUTRAL_COLLISIONS
         IF (use_collisions) THEN
-          IF (use_collisional_ionisation) THEN
-            CALL collisional_ionisation
-          ELSE
             IF (ANY(coulomb_coll)) CALL particle_collisions
             IF (ANY(neutral_coll)) CALL run_neutral_collisions
-          END IF
         END IF
+#else
+        IF (collision_step) THEN
+          CALL particle_collisions
+        END IF
+#endif
 
         ! Early beta version of particle splitting operator
         IF (use_split) CALL split_particles
 
-        CALL reattach_particles_to_mainlist
+        IF (use_split .OR. collision_step .OR. coll_ion_step) THEN
+          CALL reattach_particles_to_mainlist
+        END IF
       END IF
+
+      IF (use_background_collisions) CALL run_background_collisions
       IF (use_particle_migration) CALL migrate_particles(step)
       IF (use_field_ionisation) CALL ionise_particles
 #ifndef ELECTROSTATIC
@@ -269,11 +292,15 @@ PROGRAM pic
       CALL update_particle_count
     END IF
 
-    CALL check_for_stop_condition(halt, force_dump)
-    IF (halt) EXIT
     step = step + 1
 #ifndef ELECTROSTATIC
     time = time + dt / 2.0_num
+
+    CALL check_for_stop_condition(halt, force_dump)
+
+    IF ((step >= nsteps .AND. nsteps >= 0) &
+        .OR. (time >= t_end) .OR. halt) EXIT
+
     CALL output_routines(step)
     time = time + dt / 2.0_num
     CALL update_eb_fields_final

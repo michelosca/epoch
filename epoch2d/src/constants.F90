@@ -52,6 +52,24 @@ MODULE constants
 #endif
   INTEGER, PARAMETER :: nio_units = SIZE(io_units)
 
+  ! File units for the injectors which read particle info from files
+  ! Each injector can open up to 8 files (in 2D)
+  ! Multiple file injectors can be specified (up to custom_injector_limit)
+  ! File units start at custom_base_unit, then 8 units for injector 1, the next
+  ! 8 for injector 2, etc
+  ! File units 10000000 to 17999999 are reserved for this routine
+  INTEGER, PARAMETER :: custom_injector_limit = 1.0e6
+  INTEGER, PARAMETER :: custom_base_unit = 1.0e7
+  INTEGER, PARAMETER :: unit_px = 0
+  INTEGER, PARAMETER :: unit_py = 1
+  INTEGER, PARAMETER :: unit_pz = 2
+  INTEGER, PARAMETER :: unit_t  = 3
+  INTEGER, PARAMETER :: unit_w  = 4
+  INTEGER, PARAMETER :: unit_id = 5
+  INTEGER, PARAMETER :: unit_x = 6
+  INTEGER, PARAMETER :: unit_y = 7
+  INTEGER, PARAMETER :: custom_var_num = 8
+
   ! Boundary type codes
   INTEGER, PARAMETER :: c_bc_null = -1
   INTEGER, PARAMETER :: c_bc_periodic = 1
@@ -69,6 +87,12 @@ MODULE constants
   INTEGER, PARAMETER :: c_bc_cpml_outflow = 13
   INTEGER, PARAMETER :: c_bc_mixed = 14
   INTEGER, PARAMETER :: c_bc_heat_bath = 15
+
+  ! Collision types
+  INTEGER, PARAMETER :: c_coll_ignore = 0
+  INTEGER, PARAMETER :: c_coll_collide = 1
+  INTEGER, PARAMETER :: c_coll_background_1st = 2
+  INTEGER, PARAMETER :: c_coll_background_2nd = 3
 
   ! Boundary location codes
   INTEGER, PARAMETER :: c_bd_x_min = 1
@@ -127,6 +151,9 @@ MODULE constants
 
   INTEGER, PARAMETER :: c_ds_first = 1
   INTEGER, PARAMETER :: c_ds_last = 2
+
+  INTEGER, PARAMETER :: c_true_value  = 123454321
+  INTEGER, PARAMETER :: c_false_value = -123454321
 
   ! IO codes
   INTEGER, PARAMETER :: c_io_none = 0
@@ -191,6 +218,8 @@ MODULE constants
       atomic_electric_field = 5.142206538736485312185213306837419e11_num
   ! m0 * c
   REAL(num), PARAMETER :: mc0 = 2.73092429345209278e-22_num
+  ! m0 * c**2
+  REAL(num), PARAMETER :: m0c2 = mc0 * c
 
   ! Constants used in pair production
 #ifdef PHOTONS
@@ -266,6 +295,7 @@ MODULE constants
   INTEGER(i8), PARAMETER :: c_def_use_isatty = 2**24
   INTEGER(i8), PARAMETER :: c_def_use_mpi3 = 2**25
   INTEGER(i8), PARAMETER :: c_def_bremsstrahlung = 2**26
+  INTEGER(i8), PARAMETER :: c_def_probe_time = 2**27
 
   ! Stagger types
   INTEGER, PARAMETER :: c_stagger_ex = c_stagger_face_x
@@ -379,6 +409,8 @@ MODULE constants
   INTEGER, PARAMETER :: c_const_pico = 14
   INTEGER, PARAMETER :: c_const_femto = 15
   INTEGER, PARAMETER :: c_const_atto = 16
+  INTEGER, PARAMETER :: c_const_true = 17
+  INTEGER, PARAMETER :: c_const_false = 18
 
   ! Constants refering to grid properties
   INTEGER, PARAMETER :: c_const_xb = 22
@@ -601,7 +633,9 @@ MODULE constants
   INTEGER, PARAMETER :: c_dump_part_work_y_total = 69
   INTEGER, PARAMETER :: c_dump_part_work_z_total = 70
   INTEGER, PARAMETER :: c_dump_part_opdepth_brem = 71
-  INTEGER, PARAMETER :: num_vars_to_dump         = 71
+  INTEGER, PARAMETER :: c_dump_probe_time        = 72
+  INTEGER, PARAMETER :: c_dump_cou_log           = 73
+  INTEGER, PARAMETER :: num_vars_to_dump         = 73
 
   INTEGER, PARAMETER :: c_subset_random     = 1
   INTEGER, PARAMETER :: c_subset_gamma_min  = 2

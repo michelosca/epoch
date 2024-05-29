@@ -22,13 +22,16 @@ MODULE finish
   USE window
   USE laser
   USE collisions
-  USE nc_setup
+  USE background_collisions
   USE dist_fn
   USE ionise
   USE injectors
   USE probes
 #ifdef ELECTROSTATIC
   USE electrostatic
+#endif
+#ifdef NEUTRAL_COLLISIONS
+  USE nc_setup
 #endif
   IMPLICIT NONE
 
@@ -75,6 +78,13 @@ CONTAINS
       DEALLOCATE(species_list(i)%ext_temp_x_max, STAT=stat)
       IF (ASSOCIATED(species_list(i)%background_density)) &
           DEALLOCATE(species_list(i)%background_density, STAT=stat)
+      IF (species_list(i)%ionise) THEN
+        DEALLOCATE(species_list(i)%coll_ion_incident_ke, STAT=stat)
+        DEALLOCATE(species_list(i)%coll_ion_cross_sec, STAT=stat)
+        DEALLOCATE(species_list(i)%coll_ion_secondary_ke, STAT=stat)
+        DEALLOCATE(species_list(i)%coll_ion_secondary_cdf, STAT=stat)
+        DEALLOCATE(species_list(i)%coll_ion_mean_bind, STAT=stat)
+      END IF
     END DO
 
     CALL deallocate_neutral_collisions
@@ -118,6 +128,7 @@ CONTAINS
     CALL deallocate_window
     CALL deallocate_lasers
     CALL deallocate_collisions
+    CALL deallocate_background_collisions
     CALL deallocate_file_list
     CALL deallocate_dist_fns
     CALL deallocate_ionisation

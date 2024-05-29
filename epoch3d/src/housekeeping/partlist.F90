@@ -73,6 +73,9 @@ CONTAINS
 #ifdef BREMSSTRAHLUNG
     nvar = nvar+1
 #endif
+#ifdef PROBE_TIME
+    nvar = nvar+1
+#endif
 #ifdef WORK_DONE_INTEGRATED
     nvar = nvar+6
 #endif
@@ -461,6 +464,10 @@ CONTAINS
     array(cpos) = a_particle%optical_depth_bremsstrahlung
     cpos = cpos+1
 #endif
+#ifdef PROBE_TIME
+    array(cpos) = a_particle%probe_time
+    cpos = cpos+1
+#endif
 #ifdef WORK_DONE_INTEGRATED
     array(cpos) = a_particle%work_x
     array(cpos+1) = a_particle%work_y
@@ -536,6 +543,10 @@ CONTAINS
     a_particle%optical_depth_bremsstrahlung = array(cpos)
     cpos = cpos+1
 #endif
+#ifdef PROBE_TIME
+    a_particle%probe_time = array(cpos)
+    cpos = cpos+1
+#endif
 #ifdef WORK_DONE_INTEGRATED
     a_particle%work_x = array(cpos)
     a_particle%work_y = array(cpos+1)
@@ -591,6 +602,17 @@ CONTAINS
     new_particle%optical_depth_bremsstrahlung = &
         LOG(1.0_num / (1.0_num - random()))
 #endif
+#ifdef PROBE_TIME
+    new_particle%probe_time = 0.0_num
+#endif
+#ifdef WORK_DONE_INTEGRATED
+    new_particle%work_x = 0_num
+    new_particle%work_y = 0_num
+    new_particle%work_z = 0_num
+    new_particle%work_x_total = 0_num
+    new_particle%work_y_total = 0_num
+    new_particle%work_z_total = 0_num
+#endif 
 
   END SUBROUTINE init_particle
 

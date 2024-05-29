@@ -54,8 +54,10 @@ MODULE diagnostics
   LOGICAL :: reset_collisions, nc_average
   LOGICAL :: restart_flag, dump_source_code, dump_input_decks
   LOGICAL :: dump_field_grid, skipped_any_set
+  LOGICAL :: got_stop_restart = .FALSE.
   LOGICAL :: got_request_dump_name = .FALSE.
   LOGICAL :: got_request_dump_restart = .FALSE.
+  LOGICAL :: from_dump_request = .FALSE.
   CHARACTER(LEN=string_length) :: request_dump_name = ''
   LOGICAL, ALLOCATABLE :: dump_point_grid(:)
   LOGICAL, ALLOCATABLE, SAVE :: prefix_first_call(:)
@@ -278,10 +280,11 @@ CONTAINS
           WRITE(*, '(''Time'', g20.12, '' and iteration'', i12, '' after'', &
               & a)') time, step, timestring
         END IF
-        IF (skipped_any_set) &
-            WRITE(*, *) 'One or more subset ranges were empty: their ', &
-                'fields were not output.'
-        skipped_any_set = .FALSE.
+        IF (skipped_any_set) THEN
+          WRITE(*,*) 'One or more subset ranges were empty: ', &
+                'their fields were not output.'
+          skipped_any_set = .FALSE.
+        END IF
       END IF
     END IF
 
@@ -420,15 +423,10 @@ CONTAINS
         CALL sdf_write_srl(sdf_handle, 'x_grid_min', &
             'Minimum grid position', x_grid_min)
 
-        CALL write_laser_phases(sdf_handle, n_laser_x_min, laser_x_min, &
-            'laser_x_min_phase')
-        CALL write_laser_phases(sdf_handle, n_laser_x_max, laser_x_max, &
-            'laser_x_max_phase')
-
-        CALL write_injector_depths(sdf_handle, injector_x_min, &
-            'injector_x_min_depths', c_dir_x, x_min_boundary)
-        CALL write_injector_depths(sdf_handle, injector_x_max, &
-            'injector_x_max_depths', c_dir_x, x_max_boundary)
+        DO i = 1, 2 * c_ndims
+          CALL write_laser_phases(sdf_handle, i)
+          CALL write_injector_depths(sdf_handle, i)
+        END DO
 
         DO io = 1, n_io_blocks
           CALL sdf_write_srl(sdf_handle, &
@@ -754,10 +752,16 @@ CONTAINS
             c_stagger_cell_centre, calc_poynt_flux, array, fluxdir(1:3), &
             dim_tags)
 
+#ifdef NEUTRAL_COLLISIONS
         CALL write_nspecies_field(c_dump_neutral_collision, code, &
             'neutral_collisions', 'Neutral Collisions', &
             'Number of collisions', c_stagger_cell_centre, &
             calc_neutral_collisions, array)
+#endif
+        CALL write_nspecies_field(c_dump_cou_log, code, &
+            'cou_log', 'Coulomb Logarithm', 'dimensionless', &
+            c_stagger_cell_centre, calc_cou_log, array)
+
         IF (isubset /= 1) THEN
           DO i = 1, n_species
             CALL append_partlist(species_list(i)%attached_list, &
@@ -811,7 +815,7 @@ CONTAINS
 
           CALL check_name_length('subset', &
               'Grid/' // TRIM(sub%name))
-          ranges = cell_global_ranges(global_ranges(sub))
+          ranges = cell_global_ranges(sub)
 
           IF (.NOT. use_offset_grid) THEN
             CALL sdf_write_srl_plain_mesh(sdf_handle, TRIM(temp_block_id), &
@@ -935,9 +939,13 @@ CONTAINS
           CALL append_filename(dump_type, filename, n_io_blocks+2)
         END IF
         IF (iprefix > 1) dump_type = TRIM(file_prefixes(iprefix))
-        WRITE(stat_unit, '(''Wrote '', a7, '' dump number'', i5, '' at time'', &
-          & g20.12, '' and iteration'', i7)') dump_type, &
-          file_numbers(iprefix)-1, time, step
+        IF (from_dump_request) THEN
+          WRITE(stat_unit,'(a)') 'Writing DUMP file request'
+          from_dump_request = .FALSE.
+        END IF
+        WRITE(stat_unit, '(''Wrote '', a7, '', '', a18, '' at time'', &
+          & g12.4, '' and iteration'', i8)') dump_type, &
+          TRIM(filename), time, step
         CALL flush_stat_file()
       END IF
 
@@ -967,82 +975,84 @@ CONTAINS
 
 
 
-  SUBROUTINE write_laser_phases(sdf_handle, laser_count, laser_base_pointer, &
-      block_name)
+  SUBROUTINE write_laser_phases(sdf_handle, boundary)
 
     TYPE(sdf_file_handle), INTENT(IN) :: sdf_handle
-    INTEGER, INTENT(IN) :: laser_count
-    TYPE(laser_block), POINTER :: laser_base_pointer
-    CHARACTER(LEN=*), INTENT(IN) :: block_name
+    INTEGER, INTENT(IN) :: boundary
     REAL(num), DIMENSION(:), ALLOCATABLE :: laser_phases
     INTEGER :: ilas
     TYPE(laser_block), POINTER :: current_laser
+    CHARACTER(LEN=17) :: block_name
+    CHARACTER(LEN=5), DIMENSION(6) :: direction_name = &
+        (/'x_min', 'x_max', 'y_min', 'y_max', 'z_min', 'z_max'/)
 
-    IF (laser_count > 0) THEN
-      ALLOCATE(laser_phases(laser_count))
-      ilas = 1
-      current_laser => laser_base_pointer
+    IF (n_lasers(boundary) < 1) RETURN
 
-      DO WHILE(ASSOCIATED(current_laser))
+    block_name = 'laser_' // direction_name(boundary) // '_phase'
+
+    ALLOCATE(laser_phases(n_lasers(boundary)))
+    ilas = 1
+    current_laser => lasers
+
+    DO WHILE(ASSOCIATED(current_laser))
+      IF (current_laser%boundary == boundary) THEN
         laser_phases(ilas) = current_laser%current_integral_phase
         ilas = ilas + 1
-        current_laser => current_laser%next
-      END DO
+      END IF
+      current_laser => current_laser%next
+    END DO
 
-      CALL sdf_write_srl(sdf_handle, TRIM(block_name), TRIM(block_name), &
-          laser_count, laser_phases, 0)
-      DEALLOCATE(laser_phases)
-    END IF
+    CALL sdf_write_srl(sdf_handle, TRIM(block_name), TRIM(block_name), &
+        n_lasers(boundary), laser_phases, 0)
+    DEALLOCATE(laser_phases)
 
   END SUBROUTINE write_laser_phases
 
 
 
-  SUBROUTINE write_injector_depths(sdf_handle, first_injector, block_name, &
-      direction, runs_this_rank)
+  SUBROUTINE write_injector_depths(sdf_handle, boundary)
 
     TYPE(sdf_file_handle), INTENT(IN) :: sdf_handle
-    TYPE(injector_block), POINTER :: first_injector
-    CHARACTER(LEN=*), INTENT(IN) :: block_name
-    INTEGER, INTENT(IN) :: direction
-    LOGICAL, INTENT(IN) :: runs_this_rank
-    TYPE(injector_block), POINTER :: current_injector
+    INTEGER, INTENT(IN) :: boundary
+    TYPE(injector_block), POINTER :: injector
     REAL(num), DIMENSION(:), ALLOCATABLE :: depths
-    INTEGER :: iinj, inj_count, ierr
+    INTEGER :: inj
+    CHARACTER(LEN=21) :: block_name
+    CHARACTER(LEN=5), DIMENSION(6) :: direction_name = &
+        (/'x_min', 'x_max', 'y_min', 'y_max', 'z_min', 'z_max'/)
 
-    current_injector => first_injector
-    inj_count = 0
-    DO WHILE(ASSOCIATED(current_injector))
-      inj_count = inj_count + 1
-      current_injector => current_injector%next
+    inj = 0
+    injector => injector_list
+
+    DO WHILE(ASSOCIATED(injector))
+      IF (injector%boundary == boundary) THEN
+        inj = inj + 1
+      END IF
+      injector => injector%next
     END DO
 
-    IF (inj_count > 0) THEN
-      ALLOCATE(depths(inj_count))
-      iinj = 1
-      current_injector => first_injector
+    IF (inj == 0) RETURN
 
-      DO WHILE(ASSOCIATED(current_injector))
-        depths(iinj) = current_injector%depth
-        iinj = iinj + 1
-        current_injector => current_injector%next
-      END DO
+    block_name = 'injector_' // direction_name(boundary) // '_depths'
 
-      IF (.NOT. runs_this_rank) depths = HUGE(0.0_num)
+    ALLOCATE(depths(inj))
 
-      IF (rank == 0) THEN
-        CALL MPI_Reduce(MPI_IN_PLACE, depths, inj_count, mpireal, MPI_MIN, &
-            0, comm, ierr)
-      ELSE
-        CALL MPI_Reduce(depths, depths, inj_count, mpireal, MPI_MIN, &
-            0, comm, ierr)
+    inj = 0
+    injector => injector_list
+
+    DO WHILE(ASSOCIATED(injector))
+      IF (injector%boundary == boundary) THEN
+        inj = inj + 1
+        depths(inj) = injector%depth
       END IF
+      injector => injector%next
+    END DO
 
-      CALL sdf_write_srl(sdf_handle, TRIM(block_name), TRIM(block_name), &
-          inj_count, depths, 0)
+    CALL sdf_write_array(sdf_handle, TRIM(block_name), TRIM(block_name), &
+        depths, (/inj/), (/1/), &
+        null_proc=(.NOT. is_boundary(boundary)))
 
-      DEALLOCATE(depths)
-    END IF
+    DEALLOCATE(depths)
 
   END SUBROUTINE write_injector_depths
 
@@ -1201,6 +1211,7 @@ CONTAINS
     dump_source_code = .FALSE.
     dump_input_decks = .FALSE.
     print_arrays = .FALSE.
+    from_dump_request = .FALSE.
     iomask = c_io_none
     iodumpmask = c_io_none
 
@@ -1226,6 +1237,14 @@ CONTAINS
       IF (force) THEN
         io_block_list(io)%dump = .TRUE.
         restart_flag = .TRUE.
+      END IF
+
+      IF (got_request_dump_name) THEN
+        IF (str_cmp(request_dump_name, io_block_list(io)%name)) THEN
+          io_block_list(io)%dump = .TRUE.
+          from_dump_request = .TRUE.
+          got_request_dump_name = .FALSE.
+        END IF
       END IF
 
       IF (.NOT. done_time_sync) THEN
@@ -1336,14 +1355,11 @@ CONTAINS
         END IF
       END IF
 
-      IF (got_request_dump_name) THEN
-        IF (str_cmp(request_dump_name, io_block_list(io)%name)) THEN
-          io_block_list(io)%dump = .TRUE.
-        END IF
-      END IF
-
       io_block_list(io)%average_time_start = &
           time_first - io_block_list(io)%average_time
+    END DO
+
+    DO io = 1, n_io_blocks
       IF (io_block_list(io)%dump) THEN
         print_arrays = .TRUE.
         IF (io_block_list(io)%restart) restart_flag = .TRUE.
@@ -1378,7 +1394,9 @@ CONTAINS
       END IF
     END DO
 
-    IF (got_request_dump_restart) THEN
+    IF (got_request_dump_restart .OR. got_stop_restart) THEN
+      got_request_dump_restart = .FALSE.
+      got_stop_restart = .FALSE.
       restart_flag = .TRUE.
       print_arrays = .TRUE.
       dump_source_code = .TRUE.
@@ -1390,7 +1408,7 @@ CONTAINS
         .AND. restart_dump_every > -1) restart_flag = .TRUE.
     IF (first_call(iprefix) .AND. force_first_to_be_restartable) &
         restart_flag = .TRUE.
-    IF ( last_call .AND. force_final_to_be_restartable) restart_flag = .TRUE.
+    IF (last_call .AND. force_final_to_be_restartable) restart_flag = .TRUE.
     IF (force) THEN
       restart_flag = .TRUE.
       print_arrays = .TRUE.
@@ -1405,9 +1423,6 @@ CONTAINS
 
     IF (force) iomask = IOR(iomask, io_block_list(1)%dumpmask)
     iodumpmask(1,:) = iomask
-
-    got_request_dump_name = .FALSE.
-    got_request_dump_restart = .FALSE.
 
   END SUBROUTINE io_test
 
@@ -1579,6 +1594,7 @@ CONTAINS
               + REAL(array * dt, r4)
         END DO
         DEALLOCATE(array)
+#ifdef NEUTRAL_COLLISIONS
       CASE(c_dump_neutral_collision)
         ALLOCATE(array(1-ng:nx+ng))
         nd = 1
@@ -1591,6 +1607,13 @@ CONTAINS
           CALL calc_neutral_collisions(array, ispecies)
           avg%r4array(:,nd) = REAL(array * dt, r4)
           nd = nd + 1
+#endif
+      CASE(c_dump_cou_log)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_cou_log(array, ispecies-avg%species_sum)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) &
+              + REAL(array * dt, r4)
         END DO
         DEALLOCATE(array)
       END SELECT
@@ -1730,6 +1753,7 @@ CONTAINS
           avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
         END DO
         DEALLOCATE(array)
+#ifdef NEUTRAL_COLLISIONS
       CASE(c_dump_neutral_collision)
         ALLOCATE(array(1-ng:nx+ng))
         nd = 1
@@ -1742,6 +1766,12 @@ CONTAINS
           CALL calc_neutral_collisions(array, ispecies)
           avg%array(:,nd) = array * dt
           nd = nd + 1
+#endif
+      CASE(c_dump_cou_log)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_cou_log(array, ispecies-avg%species_sum)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
         END DO
         DEALLOCATE(array)
       END SELECT
@@ -1760,7 +1790,6 @@ CONTAINS
     REAL(num), DIMENSION(:), ALLOCATABLE :: reduced
     INTEGER :: io, mask, dumped
     INTEGER :: i, ii, rnx
-    INTEGER :: i0, i1
     INTEGER :: subtype, subarray, rsubtype, rsubarray
     INTEGER, DIMENSION(c_ndims) :: dims
     LOGICAL :: convert, dump_skipped, restart_id, normal_id, unaveraged_id
@@ -1769,9 +1798,6 @@ CONTAINS
     TYPE(averaged_data_block), POINTER :: avg
     TYPE(io_block_type), POINTER :: iob
     TYPE(subset), POINTER :: sub
-    INTEGER, DIMENSION(2,c_ndims) :: ranges, ran_sec
-    INTEGER, DIMENSION(c_ndims) :: new_dims
-    LOGICAL :: skip_this_set
 
     mask = iomask(id)
 
@@ -1823,21 +1849,13 @@ CONTAINS
 
       IF (.NOT. sub%skip) THEN
         ! Output every subset. Trust user not to do parts twice
-        ! Calculate the subsection dimensions and ranges
-        ranges = cell_global_ranges(global_ranges(sub))
-        skip_this_set = .FALSE.
+        ! Skip empty subsets
         DO i = 1, c_ndims
-          IF (ranges(2,i) <= ranges(1,i)) THEN
-            skip_this_set = .TRUE.
+          IF (sub%n_global(i) <= 0) THEN
             skipped_any_set = .TRUE.
+            CYCLE
           END IF
         END DO
-        IF (skip_this_set) THEN
-          CYCLE
-        END IF
-        new_dims = (/ ranges(2,1) - ranges(1,1) /)
-        ranges = cell_local_ranges(global_ranges(sub))
-        ran_sec = cell_section_ranges(ranges) + 1
 
         IF (convert) THEN
           rsubtype  = sub%subtype_r4
@@ -1853,16 +1871,9 @@ CONTAINS
         temp_block_id = TRIM(block_id)// '/c_' // TRIM(sub%name)
         temp_name = TRIM(name) // '/Core_' // TRIM(sub%name)
 
-        i0 = ran_sec(1,1); i1 = ran_sec(2,1) - 1
-        IF ( i1 < i0) THEN
-          i0 = 1
-          i1 = i0
-        END IF
-
         CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-            TRIM(temp_name), TRIM(units), new_dims, stagger, &
-            TRIM(temp_grid_id), array(i0:i1), &
-            rsubtype, rsubarray, convert)
+            TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+            TRIM(temp_grid_id), array, rsubtype, rsubarray, convert)
         sub%dump_field_grid = .TRUE.
 
       ELSE
@@ -1965,14 +1976,13 @@ CONTAINS
     INTEGER, INTENT(IN) :: id, code
     CHARACTER(LEN=*), INTENT(IN) :: block_id, name, units
     INTEGER, INTENT(IN) :: stagger
-    REAL(num), DIMENSION(:), INTENT(OUT) :: array
+    REAL(num), DIMENSION(1-ng:), INTENT(OUT) :: array
     INTEGER, DIMENSION(:), INTENT(IN), OPTIONAL :: fluxdir
     CHARACTER(LEN=*), DIMENSION(:), INTENT(IN), OPTIONAL :: dir_tags
     REAL(num), DIMENSION(:), ALLOCATABLE :: reduced
     INTEGER, DIMENSION(c_ndims) :: dims
     INTEGER :: ispecies, io, mask, idir, ndirs, iav
     INTEGER :: i, ii, rnx
-    INTEGER :: i0, i1
     INTEGER :: subtype, subarray, rsubtype, rsubarray
     CHARACTER(LEN=c_id_length) :: temp_block_id, temp_grid_id
     CHARACTER(LEN=c_max_string_length) :: temp_name
@@ -1981,6 +1991,7 @@ CONTAINS
     TYPE(averaged_data_block), POINTER :: avg
     TYPE(io_block_type), POINTER :: iob
     TYPE(subset), POINTER :: sub
+#ifdef NEUTRAL_COLLISIONS
     INTEGER, DIMENSION(2,c_ndims) :: ranges, ran_no_ng
     INTEGER, DIMENSION(c_ndims) :: new_dims
     ! Neutral collision variables
@@ -1990,6 +2001,7 @@ CONTAINS
     CHARACTER(LEN=string_length) :: ispecies_str, jspecies_str
     TYPE(neutrals_block), POINTER :: coll_block
     TYPE(collision_type_block), POINTER :: coll_type_block
+#endif
 
     INTERFACE
       SUBROUTINE func(data_array, current_species, direction)
@@ -2069,18 +2081,14 @@ CONTAINS
 
     IF (dump_sum .OR. dump_species) THEN
       CALL build_species_subset
-      ! Calculate the subsection dimensions and ranges
+      ! Skip empty subsets
       IF (dump_part) THEN
-        ranges = cell_global_ranges(global_ranges(sub))
         DO i = 1, c_ndims
-          IF (ranges(2,i) <= ranges(1,i)) THEN
+          IF (sub%n_global(i) <= 0) THEN
             skipped_any_set = .TRUE.
             RETURN
           END IF
         END DO
-        new_dims = (/ ranges(2,1) - ranges(1,1) /)
-        ranges = cell_local_ranges(global_ranges(sub))
-        ran_no_ng = cell_section_ranges(ranges) + ng + 1
       END IF
     END IF
 
@@ -2147,15 +2155,9 @@ CONTAINS
         ELSE IF (dump_part) THEN
           temp_grid_id = 'grid/' // TRIM(sub%name)
 
-          i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
-          IF (i1 < i0) THEN
-            i0 = 1
-            i1 = i0
-          END IF
-
           CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-              TRIM(temp_name), TRIM(units), new_dims, stagger, temp_grid_id, &
-              array(i0:i1), rsubtype, rsubarray, convert)
+              TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+              temp_grid_id, array, rsubtype, rsubarray, convert)
           sub%dump_field_grid = .TRUE.
         ELSE
           CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
@@ -2366,31 +2368,24 @@ CONTAINS
                 // '/' // TRIM(io_list(ispecies)%name)
               temp_name = &
                 'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
-            END IF
+          END IF
 
-            IF (PRESENT(fluxdir)) THEN
-              CALL func(array, ispecies, fluxdir(idir))
-            ELSE
-              CALL func(array, ispecies)
-            END IF
+          IF (PRESENT(fluxdir)) THEN
+            CALL func(array, ispecies, fluxdir(idir))
+          ELSE
+            CALL func(array, ispecies)
+          END IF
 
-            IF (dump_part) THEN
-              ! First subset is main dump so there wont be any restrictions
-              temp_grid_id = 'grid/' // TRIM(sub%name)
+          IF (dump_part) THEN
+            ! First subset is main dump so there wont be any restrictions
+            temp_grid_id = 'grid/' // TRIM(sub%name)
 
-              i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
-              IF (i1 < i0) THEN
-                i0 = 1
-                i1 = i0
-              END IF
-
-              CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-                TRIM(temp_name), TRIM(units), new_dims, stagger, temp_grid_id, &
-                array(i0:i1), rsubtype, rsubarray, convert)
-
-              sub%dump_field_grid = .TRUE.
-            ELSE
-              CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+                TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+                temp_grid_id, array, rsubtype, rsubarray, convert)
+            sub%dump_field_grid = .TRUE.
+          ELSE
+            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
                 TRIM(temp_name), TRIM(units), dims, stagger, 'grid', array, &
                 subtype, subarray, convert)
 
@@ -2663,6 +2658,13 @@ CONTAINS
 
     IF (done_subset_init) RETURN
     done_subset_init = .TRUE.
+
+    ! Update particle ID values if using
+#if defined(PARTICLE_ID) || defined(PARTICLE_ID4)
+    DO i = 1, n_species 
+      CALL generate_particle_ids(species_list(i)%attached_list)
+    END DO
+#endif
 
     IF (isubset == 1) THEN
       io_list => species_list
@@ -3490,12 +3492,16 @@ CONTAINS
               file=TRIM(data_dir) // '/' // TRIM(request_dump_file))
           IF (ierr == 0) THEN
             READ(lu,'(A)',iostat=ierr) request_dump_name
+            CLOSE(lu, status='DELETE')
             IF (ierr == 0) THEN
               got_request_dump_name = .TRUE.
+              WRITE(stat_unit,'(a)') 'Found DUMP file output request with ' &
+                  // 'contents: ' // TRIM(request_dump_name)
             ELSE
               got_request_dump_restart = .TRUE.
+              WRITE(stat_unit,'(a)') 'Found DUMP file output request'
             END IF
-            CLOSE(lu, status='DELETE')
+            CALL flush_stat_file()
           ELSE
             got_request_dump_name = .FALSE.
             got_request_dump_restart = .FALSE.
@@ -3516,6 +3522,7 @@ CONTAINS
     force_dump = buffer(2)
     got_request_dump_name = buffer(3)
     got_request_dump_restart = buffer(4)
+    got_stop_restart = got_stop_condition
 
     IF (got_request_dump_name) THEN
       CALL MPI_BCAST(request_dump_name, string_length, MPI_CHARACTER, 0, &

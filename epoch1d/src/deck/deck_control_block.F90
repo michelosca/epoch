@@ -71,16 +71,20 @@ CONTAINS
     maxwell_solver = c_maxwell_solver_yee
     got_grid(:) = .FALSE.
     got_time = .FALSE.
+#ifdef ELECTROSTATIC
     user_max_speed = 0._num
-    norm_z_factor = 5._num
     max_perturbation_freq = 1.e-50_num
     user_dt = 0._num
     force_user_dt= .FALSE.
+#endif
 
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     user_max_b_field = 0._num
     user_max_e_field = 0._num
     user_max_neutral_coll_freq = TINY(0._num)
+    physics_table_location = 'src/physics_packages/TABLES'
+#endif
 
   END SUBROUTINE control_deck_initialise
 
@@ -91,6 +95,7 @@ CONTAINS
     CHARACTER(LEN=22) :: filename_fmt, str
     INTEGER :: io, iu
     LOGICAL, SAVE :: warn = .TRUE.
+    LOGICAL :: exists
 
     IF (n_zeros_control > 0) THEN
       IF (n_zeros_control < n_zeros) THEN
@@ -168,6 +173,25 @@ CONTAINS
     IF (dlb_threshold > 0) use_balance = .TRUE.
     IF (dlb_maximum_interval < 1) dlb_maximum_interval = HUGE(1)
     IF (dlb_force_interval < 1) dlb_force_interval = HUGE(1)
+
+    ! Check physics tables are in the correct place
+    IF (rank == 0) THEN
+      INQUIRE(file=TRIM(physics_table_location) // &
+          '/ionisation_energies.table', exist=exists)
+      IF (.NOT.exists) THEN
+        DO iu = 1, nio_units ! Print to stdout and to file
+          io = io_units(iu)
+          WRITE(io,*) '*** WARNING ***'
+          WRITE(io,*) 'Unable to find ionisation_energies.table in ', &
+              'directory "' // TRIM(physics_table_location) // '"'
+          WRITE(io,*) 'Either tables have been modified, or the path to the ', &
+              'physics tables must be set'
+          WRITE(io,*) 'Use key: physics_table_location in the control block.'
+        END DO
+      END IF
+    END IF
+
+    IF (use_field_ionisation) need_random_state = .TRUE.
 
   END SUBROUTINE control_deck_finalise
 
@@ -309,6 +333,9 @@ CONTAINS
         .OR. str_cmp(element, 'use_field_ionise')) THEN
       use_field_ionisation = as_logical_print(value, element, errcode)
 
+    ELSE IF (str_cmp(element, 'physics_table_location')) THEN
+      physics_table_location = TRIM(ADJUSTL(value))
+
     ELSE IF (str_cmp(element, 'use_multiphoton') &
         .OR. str_cmp(element, 'multiphoton')) THEN
       use_multiphoton = as_logical_print(value, element, errcode)
@@ -414,7 +441,7 @@ CONTAINS
       smooth_its = as_integer_print(value, element, errcode)
 
     ELSE IF (str_cmp(element, 'smooth_compensation')) THEN
-      IF(as_logical_print(value, element, errcode)) smooth_comp_its = 1
+      IF (as_logical_print(value, element, errcode)) smooth_comp_its = 1
 
     ELSE IF (str_cmp(element, 'smooth_strides')) THEN
       IF (str_cmp(value, 'auto')) THEN
