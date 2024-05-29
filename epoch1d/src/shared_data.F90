@@ -1009,7 +1009,6 @@ MODULE shared_data
   REAL(num) :: dt_neutral_collisions, dt_accel
   INTEGER :: n_species_bg, n_backgrounds
   INTEGER, ALLOCATABLE, DIMENSION(:) :: total_collision_types
-  LOGICAL :: resolve_sheath
   TYPE(background_block), DIMENSION(:), POINTER :: background_list
 
   ! Output
