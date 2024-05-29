@@ -352,7 +352,9 @@ CONTAINS
     DO iproc = 0, nprocx-1
       x_grid_mins(iproc) = x_global(cell_x_min(iproc+1))
       x_grid_maxs(iproc) = x_global(cell_x_max(iproc+1))
+      x_length_ratio(iproc) = x_grid_maxs(iproc) - x_grid_mins(iproc)
     END DO
+    x_length_ratio = (x_length_ratio + dx) / length_x
 
     x_grid_min_local = x_grid_mins(x_coords)
     x_grid_max_local = x_grid_maxs(x_coords)

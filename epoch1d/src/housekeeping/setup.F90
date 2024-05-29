@@ -144,10 +144,12 @@ CONTAINS
 
     CALL eval_stack_init
 
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collision parameters
     dt_neutral_collisions = HUGE(0._num)
     neutral_coll_freq_fact = 0.01_num
     NULLIFY(background_list)
+#endif
 
   END SUBROUTINE minimal_init
 
@@ -197,8 +199,9 @@ CONTAINS
   SUBROUTINE after_deck_last
 
     INTEGER :: i
-
+#ifdef NEUTRAL_COLLISIONS
     IF (ANY(neutral_coll)) CALL load_neutral_collisions
+#endif
     CALL setup_data_averaging
     CALL setup_split_particles
     CALL setup_field_boundaries
@@ -267,11 +270,15 @@ CONTAINS
         IF (IAND(mask, c_io_no_sum) == 0) &
             nspec_local = 1
         IF (IAND(mask, c_io_species) /= 0) THEN
+#ifdef NEUTRAL_COLLISIONS
           IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
             nspec_local = nspec_local + SUM(total_collision_types)
           ELSE
             nspec_local = nspec_local + n_species
           END IF
+#else
+          nspec_local = nspec_local + n_species
+#endif
         END IF
 
         IF (nspec_local <= 0) CYCLE
@@ -291,11 +298,15 @@ CONTAINS
         IF (IAND(mask, c_io_no_sum) == 0) &
             avg%species_sum = averaged_var_dims(io)
         IF (IAND(mask, c_io_species) /= 0) THEN
+#ifdef NEUTRAL_COLLISIONS
           IF (io == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
             avg%n_species = SUM(total_collision_types)
           ELSE
             avg%n_species = n_species * averaged_var_dims(io)
           END IF
+#else
+          avg%n_species = n_species * averaged_var_dims(io)
+#endif
         END IF
         avg%real_time = 0.0_num
         avg%started = .FALSE.
@@ -336,7 +347,9 @@ CONTAINS
       NULLIFY(species_list(ispecies)%secondary_list)
       NULLIFY(species_list(ispecies)%background_density)
       species_list(ispecies)%bc_particle = c_bc_null
+#ifdef ELECTROSTATIC
       species_list(ispecies)%reinjection_id = -1
+#endif
     END DO
 
     DO ispecies = 1, n_species
@@ -378,7 +391,12 @@ CONTAINS
 #ifndef NO_PARTICLE_PROBES
       NULLIFY(species_list(ispecies)%attached_probes)
 #endif
+#ifdef NEUTRAL_COLLISIONS
       NULLIFY(species_list(ispecies)%neutrals)
+#endif
+#ifdef SEE
+      NULLIFY(species_list(ispecies)%see)
+#endif
     END DO
 
   END SUBROUTINE setup_species
@@ -622,6 +640,9 @@ CONTAINS
         min_bz = MINVAL(bz)
         max_bz = MAX(max_bz, ABS(min_bz))
         max_b_field = MAX(max_bx, max_by, max_bz)
+#ifdef NEUTRAL_COLLISIONS
+        max_b_field = MAX(max_b_field, user_max_b_field)
+#endif
 
         ! Maximum gyrofrequency in this processors and species
         gyrofrequency_temp = ABS(part_q)/part_m*max_b_field
@@ -647,11 +668,8 @@ CONTAINS
   SUBROUTINE set_max_speed
 
     INTEGER :: ispecies
-    INTEGER(8) :: n_part, ipart
-    REAL(num) :: mass, temp, thermal_speed, flow_speed
-    REAL(num) :: speed_local, max_speed_local, max_speed_global
-    REAL(num), DIMENSION(3) :: part_v, sum_flow_speed
-    TYPE(particle), POINTER :: current
+    REAL(num) :: mass, temp, thermal_speed
+    REAL(num) :: speed_local, max_speed_local
 
     max_speed_local = 0._num
 
@@ -660,34 +678,22 @@ CONTAINS
       IF (species_list(ispecies)%species_type == c_species_id_photon) CYCLE
       IF (species_list(ispecies)%count == 0 ) CYCLE
 
+      ! Get initial thermal speed (get a max. speed based on v_thermal, x4)
       CALL setup_ic_temp(ispecies)
       mass = species_list(ispecies)%mass
       temp = MAXVAL(species_temp)
-      thermal_speed = sqrt(kb*temp/mass)
+      thermal_speed = sqrt(kb*temp/mass) * 4.0_num
 
-      current => species_list(ispecies)%attached_list%head
-      n_part = species_list(ispecies)%attached_list%count
-      sum_flow_speed = 0._num
-      DO ipart = 1, n_part
-        part_v = current%part_p
-        sum_flow_speed = part_v + sum_flow_speed
-        current => current%next
-      END DO
-      sum_flow_speed = sum_flow_speed/mass/REAL(n_part,num)
-      flow_speed = DOT_PRODUCT(sum_flow_speed,sum_flow_speed)
-      flow_speed = SQRT(flow_speed)
+      max_speed_local = MAX(max_speed_local, thermal_speed)
 
-      speed_local = norm_z_factor*thermal_speed + flow_speed
-
+      ! Get hypothetical max speed from a predefined max. energy
+      speed_local = SQRT(2._num * q0 * user_max_energy_eV / mass)
       max_speed_local = MAX(max_speed_local, speed_local)
 
     END DO
 
-    CALL MPI_ALLREDUCE(max_speed_local, max_speed_global, 1, MPIREAL, &
+    CALL MPI_ALLREDUCE(max_speed_local, max_speed, 1, MPIREAL, &
       MPI_MAX, comm, errcode)
-
-    ! 'max_speed' variable can be defined in the input deck
-    max_speed = MAX(user_max_speed, max_speed_global)
 
   END SUBROUTINE set_max_speed
 
@@ -724,10 +730,6 @@ CONTAINS
       dt_uppercutofffreq)
     dt = MIN(dt, dt_freq)
 
-    !Laser time restrictions
-    CALL set_laser_dt
-    dt = MIN(dt, dt_laser)
-
     !Courant time restriction
     CALL set_max_speed
     IF (max_speed < TINY(0._num)) max_speed = TINY(0._num)
@@ -738,10 +740,12 @@ CONTAINS
     dt_inputdeck = es_dt_fact/max_perturbation_freq
     dt = MIN(dt, dt_inputdeck)
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
-
+#endif
+    
     ! Force user time step
     IF (force_user_dt) dt = user_dt
 
@@ -752,7 +756,6 @@ CONTAINS
       WRITE(*, 987) 'Gyrofrequency: ', dt_gyrfreq, ' s'
       WRITE(*, 987) 'Upper hybrid frequency: ', dt_upperhybrid, ' s'
       WRITE(*, 987) 'Upper cutoff frequency: ', dt_uppercutofffreq, ' s'
-      WRITE(*, 987) 'Laser time-step: ', dt_laser, ' s'
       WRITE(*, 987) 'CFL time-step: ', dt_courant, ' s'
       WRITE(*, 987) 'Max. perturb. freq.: ', dt_inputdeck, ' s'
       IF (force_user_dt) THEN
@@ -849,9 +852,11 @@ CONTAINS
 
     dt = dt_multiplier * dt
 
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collisions
     CALL set_dt_neutral_collisions
     dt = MIN(dt, dt_neutral_collisions)
+#endif
 
     IF (rank==0) THEN
       WRITE(*,*) &
@@ -889,9 +894,10 @@ CONTAINS
 987 FORMAT (A25, ES10.4)
 
   END SUBROUTINE set_dt
-
 #endif
 
+
+#ifdef NEUTRAL_COLLISIONS
   SUBROUTINE set_max_collision_frequency
 
     INTEGER :: ispecies, jspecies
@@ -936,14 +942,12 @@ CONTAINS
   SUBROUTINE set_dt_acceleration
 
     INTEGER :: ix, ispecies
-    REAL(num) :: e_mod_max, b_mod_max, e_mod, b_mod
+    REAL(num) :: e_mod_max, e_mod
     REAL(num) :: mass, charge
-    REAL(num) :: dt_local, e_dt, ie_dt, b_dt, ib_dt
-    REAL(num) :: mean_speed, temp
-    REAL(num), DIMENSION(3) :: e_field, b_field
+    REAL(num) :: e_dt, ie_dt
+    REAL(num), DIMENSION(3) :: e_field
 
     e_mod_max = 0._num
-    b_mod_max = 0._num
 
     !Calculate the strongest E and B-field
     DO ix = 0, nx
@@ -953,21 +957,12 @@ CONTAINS
       e_mod = DOT_PRODUCT(e_field, e_field)
       e_mod = SQRT(e_mod)
       e_mod_max = MAX(e_mod_max, e_mod)
-
-      b_field(1) = bx(ix)
-      b_field(2) = by(ix)
-      b_field(3) = bz(ix)
-      b_mod = DOT_PRODUCT(b_field, b_field)
-      b_mod = SQRT(b_mod)
-      b_mod_max = MAX(b_mod_max, b_mod)
     END DO
 
     ! Check user-defined max. fields
-    b_mod_max = MAX(b_mod_max, user_max_b_field)
     e_mod_max = MAX(e_mod_max, user_max_e_field)
 
     e_dt = 1.e50_num
-    b_dt = 1.e50_num
 
     DO ispecies = 1, n_species
 
@@ -977,24 +972,14 @@ CONTAINS
       charge = ABS(species_list(ispecies)%charge)
       IF (charge < TINY(0._num)) CYCLE
 
-      CALL setup_ic_temp(ispecies)
-      temp = MINVAL(species_temp)
-      mean_speed = SQRT(3._num*kb*temp/mass)
-
       IF ( .NOT.(e_mod_max < TINY(0._num)) ) THEN
-        ie_dt = mean_speed * mass / charge / e_mod_max
+        ie_dt = dx / SQRT(2._num * q0 * dx * e_mod_max / mass) 
         e_dt = MIN(ie_dt, e_dt)
-      END IF
-      IF ( .NOT.(b_mod_max < TINY(0._num)) ) THEN
-        ib_dt = mean_speed * mass / charge / b_mod_max
-        b_dt = MIN(ib_dt, b_dt)
       END IF
 
     END DO
 
-    dt_local = MIN(e_dt, b_dt)
-
-    CALL MPI_ALLREDUCE(dt_local, dt_accel, 1, MPIREAL, &
+    CALL MPI_ALLREDUCE(e_dt, dt_accel, 1, MPIREAL, &
       MPI_MIN, comm, errcode)
 
   END SUBROUTINE set_dt_acceleration
@@ -1030,7 +1015,7 @@ CONTAINS
 
 987 FORMAT (A25, ES10.4, A2)
   END SUBROUTINE set_dt_neutral_collisions
-
+#endif
 
 
   SUBROUTINE find_species_by_blockid(specname, species_number)
@@ -1420,6 +1405,7 @@ CONTAINS
           CALL read_injector_depths(sdf_handle, block_id, ndims, i)
         END DO
 
+
       CASE(c_blocktype_constant)
         IF (str_cmp(block_id, 'dt_plasma_frequency')) THEN
           CALL sdf_read_srl(sdf_handle, dt_plasma_frequency)
@@ -1461,6 +1447,24 @@ CONTAINS
           END DO
         ELSE IF (str_cmp(block_id, 'elapsed_time')) THEN
           CALL sdf_read_srl(sdf_handle, old_elapsed_time)
+#ifdef ELECTROSTATIC
+        ELSE IF (str_cmp(block_id, 'Q_capacitor_min')) THEN
+          IF (x_min_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, Q_now_min)
+          END IF
+        ELSE IF (str_cmp(block_id, 'Q_capacitor_max')) THEN
+          IF (x_max_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, Q_now_max)
+          END IF
+        ELSE IF (str_cmp(block_id, 'wall_charge_min')) THEN
+          IF (x_min_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, wcharge_min_now)
+          END IF
+        ELSE IF (str_cmp(block_id, 'wall_charge_max')) THEN
+          IF (x_max_boundary) THEN
+            CALL sdf_read_srl(sdf_handle, wcharge_max_now)
+          END IF
+#endif
         END IF
       CASE(c_blocktype_plain_mesh)
         IF (str_cmp(block_id, 'grid') .OR. str_cmp(block_id, 'grid_full')) THEN

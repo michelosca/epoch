@@ -93,6 +93,9 @@ MODULE shared_data
   TYPE particle
     REAL(num), DIMENSION(3) :: part_p
     REAL(num) :: part_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
+#endif
 #if !defined(PER_SPECIES_WEIGHT) || defined(PHOTONS)
     REAL(num) :: weight
 #endif
@@ -160,7 +163,9 @@ MODULE shared_data
     TYPE(particle), POINTER :: head
     TYPE(particle), POINTER :: tail
     INTEGER(i8) :: count
+#ifdef NEUTRAL_COLLISIONS
     INTEGER(i8) :: coll_counter
+#endif
     INTEGER :: id_update
     ! Pointer is safe if the particles in it are all unambiguously linked
     LOGICAL :: safe
@@ -283,12 +288,17 @@ MODULE shared_data
     ! Per-species boundary conditions
     INTEGER, DIMENSION(2*c_ndims) :: bc_particle
 
+#ifdef ELECTROSTATIC
     ! Species reinjection
     INTEGER :: reinjection_id
-
+#endif
+#ifdef NEUTRAL_COLLISIONS
     !Neutral collisions
     TYPE(neutrals_block), DIMENSION(:), POINTER :: neutrals
-
+#endif
+#ifdef SEE
+    TYPE(see_type), POINTER :: see
+#endif
   END TYPE particle_species
 
   REAL(num), ALLOCATABLE, TARGET :: global_species_density(:)
@@ -440,6 +450,7 @@ MODULE shared_data
     TYPE(particle_list) :: sampled_particles
     TYPE(particle_probe), POINTER :: next
     INTEGER :: dumpmask
+    REAL(num) :: t_start, t_end
   END TYPE particle_probe
 #endif
 
@@ -523,9 +534,14 @@ MODULE shared_data
   ! cpml_thicknes cells and then x(1) (and also x_grid_min) is at
   ! the location x_min + dx*(1/2-cpml_thickness)
   REAL(num) :: length_x, dx, x_grid_min, x_grid_max, x_min, x_max
+#ifdef PART_PERP_POSITION
+  REAL(num) :: y_min, y_max
+  LOGICAL :: y_perp_flag
+#endif
   REAL(num) :: x_grid_min_local, x_grid_max_local, x_min_local, x_max_local
   REAL(num) :: x_min_outer, x_max_outer
   REAL(num), DIMENSION(:), ALLOCATABLE :: x_grid_mins, x_grid_maxs
+  REAL(num), DIMENSION(:), ALLOCATABLE :: x_length_ratio
   REAL(num) :: dir_d(c_ndims), dir_min(c_ndims), dir_max(c_ndims)
   REAL(num) :: dir_grid_min(c_ndims), dir_grid_max(c_ndims)
   REAL(num) :: dir_min_local(c_ndims), dir_max_local(c_ndims)
@@ -850,8 +866,8 @@ MODULE shared_data
 !------------------------------------------------------------------------------
 
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_potential
-  REAL(num) :: es_dt_fact, max_speed, norm_z_factor, max_perturbation_freq
-  REAL(num) :: user_max_speed
+  REAL(num) :: es_dt_fact, max_speed, max_perturbation_freq
+  REAL(num) :: user_max_energy_eV
   REAL(num) :: user_dt
   LOGICAL :: force_user_dt, x_min_boundary_open, x_max_boundary_open
 
@@ -886,10 +902,16 @@ MODULE shared_data
   TYPE(efield_block), POINTER :: ey_profile, ez_profile
 
   !Current diagnostics
-  REAL(num) :: wcharge_min, wcharge_max, dwcharge_min, dwcharge_max
   REAL(num) :: convect_curr_min, convect_curr_max
   REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
 
+  LOGICAL :: capacitor_flag, capacitor_min, capacitor_max
+  REAL(num) :: capacitor
+
+  REAL(num) :: Q_now_min, Q_now_max
+  REAL(num) :: wcharge_min_now, wcharge_max_now
+
+#ifdef NEUTRAL_COLLISIONS
 !------------------------------------------------------------------------------
 ! Charged-neutral collisions - Written by M. Osca Engelbrecht
 !------------------------------------------------------------------------------
@@ -898,9 +920,10 @@ MODULE shared_data
   TYPE neutrals_block
 
     REAL(num) :: gsigma_max_total, igsigma_max_total
-    REAL(num) :: max_weight
+    REAL(num) :: min_weight, max_weight
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: max_w1, max_w2
+    REAL(num) :: min_w1, min_w2
 #endif
 
     INTEGER :: ncolltypes
@@ -928,7 +951,11 @@ MODULE shared_data
     PROCEDURE(post_collision), POINTER, NOPASS :: coll_subroutine
 
     ! Collision diagnostics
+#ifdef PER_SPECIES_WEIGHT
     INTEGER, ALLOCATABLE, DIMENSION(:) :: coll_counter
+#else
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: coll_counter
+#endif
 
   END TYPE collision_type_block
 
@@ -974,7 +1001,7 @@ MODULE shared_data
 
     ! Speed and velocities
     REAL(num) :: g_mag
-    REAL(num), DIMENSION(3) :: u_cm, g, u_2
+    REAL(num), DIMENSION(3) :: g, u_2
 
     ! Background's local temperature
     REAL(num) :: ix_temp
@@ -1013,5 +1040,28 @@ MODULE shared_data
 
   ! Output
   LOGICAL :: neutral_collision_counter
+#endif
+
+!------------------------------------------------------------------------------
+! Secondary Electron Emission (SEE) - Written by M. Osca Engelbrecht
+!------------------------------------------------------------------------------
+#ifdef SEE
+  TYPE see_type
+    INTEGER :: species_impact, species_electron
+    LOGICAL :: const_yield_model
+    REAL(num), ALLOCATABLE, DIMENSION(:) :: cross_section, energy
+    PROCEDURE(see_process), POINTER, NOPASS :: see_subroutine
+    REAL(num) :: see_temp
+  END TYPE see_type
+
+  ABSTRACT INTERFACE
+    SUBROUTINE see_process(current_part, species_id, pos_id, out_of_bounds)
+      IMPORT particle
+      TYPE(particle), POINTER, INTENT(INOUT) :: current_part
+      INTEGER, INTENT(IN) :: species_id, pos_id
+      LOGICAL, INTENT(INOUT) :: out_of_bounds
+    END SUBROUTINE see_process
+  END INTERFACE
+#endif
 
 END MODULE shared_data

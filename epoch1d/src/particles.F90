@@ -22,6 +22,7 @@ MODULE particles
 #endif
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
 #endif
   IMPLICIT NONE
 
@@ -589,7 +590,7 @@ CONTAINS
     REAL(num) :: cell_frac_x
 
     ! PARTICLE PROPERTIES
-    REAL(num) :: part_x
+    REAL(num) :: part_x, part_qw
     REAL(num) :: part_q, part_m, ipart_m, cmratio, cmratiodto2
 
     ! Weighting factors
@@ -619,6 +620,16 @@ CONTAINS
     REAL(num), PARAMETER :: fac = (0.5_num)**c_ndims
 #endif
 
+    ! Used for particle probes (to see of probe conditions are satisfied)
+#ifndef NO_PARTICLE_PROBES
+    REAL(num) :: init_part_x, final_part_x
+    TYPE(particle_probe), POINTER :: current_probe
+    TYPE(particle), POINTER :: particle_copy
+    REAL(num) :: d_init, d_final
+    REAL(num) :: probe_energy
+    LOGICAL :: probes_for_species
+#endif
+
     TYPE(particle), POINTER :: current
 #ifdef PREFETCH
     TYPE(particle), POINTER :: next
@@ -632,6 +643,10 @@ CONTAINS
     dto2 = dt * 0.5_num
     dtfac = dto2 * fac
 
+    IF (inductive_heating_flag) THEN
+      CALL inductive_heating_prepare_sources
+    END IF
+
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%immobile) CYCLE
       IF (species_list(ispecies)%species_type == c_species_id_photon) THEN
@@ -640,10 +655,15 @@ CONTAINS
 #endif
         CYCLE
       END IF
+#ifndef NO_PARTICLE_PROBES
+      current_probe => species_list(ispecies)%attached_probes
+      probes_for_species = ASSOCIATED(current_probe)
+#endif
 
 #ifndef PER_PARTICLE_CHARGE_MASS
       part_q   = species_list(ispecies)%charge
       part_m   = species_list(ispecies)%mass
+      part_qw = part_q * species_list(ispecies)%weight
       ipart_m  =  1._num/part_m
       cmratio = part_q*ipart_m
       cmratiodto2 = cmratio*dtfac
@@ -653,7 +673,6 @@ CONTAINS
         is_neutral = .FALSE.
       END IF
 #endif
-
       current => species_list(ispecies)%attached_list%head
       DO ipart = 1, species_list(ispecies)%attached_list%count
 
@@ -677,6 +696,9 @@ CONTAINS
 
         ! Copy the particle properties out for speed
         part_x  = current%part_pos - x_grid_min_local
+#ifndef NO_PARTICLE_PROBES
+        init_part_x = current%part_pos
+#endif
         part_u(1) = current%part_p(1) * ipart_m
 
         ! Lorentz force only affects charged particles
@@ -774,7 +796,60 @@ CONTAINS
         ! particle has now finished move to end of timestep, so copy back
         ! into particle array
         current%part_pos = part_x + x_grid_min_local
+#ifdef PART_PERP_POSITION
+        IF (y_perp_flag) THEN
+          current%part_pos_y = current%part_pos_y + part_u(2) * dt
+        END IF
+#endif
+        IF (inductive_heating_flag) THEN
+          CALL inductive_heating_add_particle_velocity(part_u(2)*part_qw, &
+            current%part_pos)
+        END IF
 
+#if !defined(NO_PARTICLE_PROBES) && !defined(NO_IO)
+        IF (probes_for_species) THEN
+          ! Compare the current particle with the parameters of any probes in
+          ! the system. These particles are copied into a separate part of the
+          ! output file.
+          
+          current_probe => species_list(ispecies)%attached_probes
+
+          ! Cycle through probes
+          DO WHILE(ASSOCIATED(current_probe))
+
+            IF (time >= current_probe%t_start .AND. &
+              time <= current_probe%t_end) THEN
+          
+              ! Note that this is the energy of a single REAL particle in the
+              ! pseudoparticle, NOT the energy of the pseudoparticle
+              probe_energy = 0.5_num * part_m * DOT_PRODUCT(part_u, part_u)
+              final_part_x = current%part_pos
+
+              ! Unidirectional probe
+              IF (probe_energy > current_probe%ek_min) THEN
+                IF (probe_energy < current_probe%ek_max) THEN
+
+                  d_init  = current_probe%normal &
+                      * (current_probe%point - init_part_x)
+                  d_final = current_probe%normal &
+                      * (current_probe%point - final_part_x)
+                  IF (d_final < 0.0_num .AND. d_init >= 0.0_num) THEN
+                    ! this particle is wanted so copy it to the list associated
+                    ! with this probe
+                    ALLOCATE(particle_copy)
+                    particle_copy = current
+                    CALL add_particle_to_partlist(&
+                        current_probe%sampled_particles, particle_copy)
+                    NULLIFY(particle_copy)
+                  END IF
+
+                END IF
+              END IF
+            END IF
+            current_probe => current_probe%next
+          END DO
+        END IF
+#endif
         current => current%next
       END DO
 
@@ -797,7 +872,7 @@ CONTAINS
     REAL(num) :: cell_frac_x
 
     ! PARTICLE PROPERTIES
-    REAL(num) :: part_x
+    REAL(num) :: part_x, part_qw
     REAL(num) :: part_q, part_m, ipart_m, cmratio, cmratiodto2
 
     ! Weighting factors
@@ -840,6 +915,10 @@ CONTAINS
     dto2 = dt * (-0.5_num)
     dtfac = dto2 * fac
 
+    IF (inductive_heating_flag) THEN
+      CALL inductive_heating_prepare_sources
+    END IF
+
     DO ispecies = 1, n_species
       IF (species_list(ispecies)%immobile) CYCLE
       IF (species_list(ispecies)%species_type == c_species_id_photon) THEN
@@ -852,6 +931,7 @@ CONTAINS
 #ifndef PER_PARTICLE_CHARGE_MASS
       part_q   = species_list(ispecies)%charge
       part_m   = species_list(ispecies)%mass
+      part_qw = part_q * species_list(ispecies)%weight
       ipart_m  =  1._num/part_m
       cmratio = part_q*ipart_m
       cmratiodto2 = cmratio*dtfac
@@ -966,6 +1046,11 @@ CONTAINS
 
           ! Update particle MOMENTUM
           current%part_p   = part_u * part_m
+
+          IF (inductive_heating_flag) THEN
+            CALL inductive_heating_add_particle_velocity(part_u(2)*part_qw, &
+              current%part_pos)
+          END IF
         END IF
 
         current => current%next

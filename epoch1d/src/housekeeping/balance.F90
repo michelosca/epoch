@@ -293,6 +293,8 @@ CONTAINS
         DEALLOCATE(x_grid_mins, x_grid_maxs)
         ALLOCATE(x_grid_mins(0:nprocx-1))
         ALLOCATE(x_grid_maxs(0:nprocx-1))
+        DEALLOCATE(x_length_ratio)
+        ALLOCATE(x_length_ratio(0:nprocx-1))
       ELSE
         old_comm = comm
         old_coordinates(:) = coordinates(:)
@@ -448,9 +450,19 @@ CONTAINS
     DEALLOCATE(es_potential)
     ALLOCATE(es_potential(1-ng:nx_new+ng))
     es_potential = temp
+
+    CALL remap_field(es_current, temp)
+    DEALLOCATE(es_current)
+    ALLOCATE(es_current(1-ng:nx_new+ng))
+    es_current= temp
+    ALLOCATE(es_current(1-ng:nx+ng))
+#ifndef TRIDIAG
     CALL finalize_petsc
     CALL initialize_petsc(comm)
-    CALL setup_petsc_variables(nx_new, nx_global)
+    CALL setup_petsc_variables(nx_new)
+#else
+    CALL update_cell_count(nx_new)
+#endif
 #endif
 
     IF (pre_loading) THEN

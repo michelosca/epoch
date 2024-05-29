@@ -481,6 +481,7 @@ FORCE:
 # All the dependencies
 
 background_collisions.o: background_collisions.F90 calc_df.o partlist.o setup.o
+background.o: background.F90 evaluate.o nc_auxiliary.o random_generator.o
 balance.o: balance.F90 boundary.o constants.o mpi_subtype_control.o \
   redblack_module.o timer.o utilities.o electrostatic.o
 bethe_heitler.o: bethe_heitler.F90 calc_df.o partlist.o particles.o setup.o
@@ -523,7 +524,7 @@ deck_dist_fn_block.o: deck_dist_fn_block.f90 dist_fn.o strings_advanced.o \
   utilities.o
 deck_electrostatic_block.o: deck_electrostatic_block.F90 strings_advanced.o \
   electrostatic.o
-deck_fields_block.o: deck_fields_block.f90 simple_io.o strings_advanced.o
+deck_fields_block.o: deck_fields_block.F90 simple_io.o strings_advanced.o
 deck_inductive_block.o: deck_inductive_block.F90 strings_advanced.o \
   inductive_heating.o
 deck_injector_block.o: deck_injector_block.F90 file_injectors.o injectors.o \

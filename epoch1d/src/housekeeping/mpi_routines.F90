@@ -193,6 +193,7 @@ CONTAINS
 
     ALLOCATE(npart_each_rank(nproc))
     ALLOCATE(x_grid_mins(0:nprocx-1), x_grid_maxs(0:nprocx-1))
+    ALLOCATE(x_length_ratio(0:nprocx-1))
     ALLOCATE(cell_x_min(nprocx), cell_x_max(nprocx))
 
     nx_global = nx_global + 2 * cpml_thickness
@@ -257,8 +258,10 @@ CONTAINS
 #ifdef ELECTROSTATIC
     ALLOCATE(es_current(1-ng:nx+ng))
     ALLOCATE(es_potential(1-ng:nx+ng))
+    es_potential = 0._num
+#ifndef TRIDIAG
     CALL initialize_petsc(comm)
-    CALL setup_petsc_variables(nx, nx_global)
+#endif
 #endif
 
     ! Setup the particle lists

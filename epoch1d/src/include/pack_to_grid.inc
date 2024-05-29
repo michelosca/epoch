@@ -14,3 +14,24 @@
 #else
 #include "triangle/gxfac.inc"
 #endif
+
+#ifdef ELECTROSTATIC
+    IF (x_max_boundary_open .AND. cell_x == nx) THEN
+      DO j = 1, sf_max
+        gx(0) = gx(0) + gx(j)
+        gx(j) = 0._num
+      END DO
+    END IF
+#ifdef PARTICLE_SHAPE_TOPHAT
+    IF (x_min_boundary_open .AND. cell_x == 0) THEN
+      gx(1) = gx(1) + gx(0)
+      gx(0) = 0._num
+#else
+    IF (x_min_boundary_open .AND. cell_x == 1) THEN
+      DO j = 1, minus_sf_min
+        gx(0) = gx(0) + gx(-j)
+        gx(-j) = 0._num
+      END DO
+#endif
+    END IF
+#endif

@@ -16,6 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE nc_subroutines
+#ifdef NEUTRAL_COLLISIONS
 
   USE shared_data
   USE partlist
@@ -167,7 +168,7 @@ CONTAINS
 
     reducedm = collision%reducedm
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision)
 
     ! Post-collision momentum
     random_direction = random_unit_vector()
@@ -211,7 +212,7 @@ CONTAINS
     ireducedm = collision%ireducedm
     e_threshold = collision%type_block%ethreshold
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 
     !Random vector
     random_direction = random_unit_vector()
@@ -291,6 +292,9 @@ CONTAINS
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, random_direction
     REAL(num) :: m1, m2, im1, w1, w2, w_diff, w_min, reducedm
     REAL(num) :: ran_e, part2_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part2_pos_y
+#endif
     REAL(num) :: g_mag, e_threshold, e_excess, u_excess, u_excess_total
     INTEGER :: species1, ion_id
     LOGICAL :: merge_electrons
@@ -301,10 +305,13 @@ CONTAINS
       m1 = m1, im1 = im1, m2 = m2, w1 = w1, w2 = w2, part1 = part1, &
       part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     reducedm = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+    part2_pos_y = part2%part_pos_y
+#endif
 
     ! Excess energy distribution between the two electrons
     e_excess = 0.5_num*reducedm*g_mag*g_mag - e_threshold
@@ -360,6 +367,9 @@ CONTAINS
     u_e2 = u_excess*random_direction  ! cm frame of reference
     new_part%part_p = (u_cm + u_e2)*m1
     new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part2_pos_y
+#endif
     new_part%weight = w_min
     CALL add_particle_to_partlist( &
       species_list(species1)%attached_list, new_part)
@@ -376,6 +386,9 @@ CONTAINS
     CALL create_particle(new_part)
     new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
     new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part2_pos_y
+#endif
     new_part%weight = w_min
     CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
       new_part)
@@ -406,7 +419,7 @@ CONTAINS
     m2 = collision%m2
     part1 => collision%part1
     part2 => collision%part2
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     mu = collision%reducedm
     p_scat = mu * collision%g
 
@@ -420,6 +433,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = u_cm * m1 - p_scat
       new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
       new_part%weight = w2
       CALL add_particle_to_partlist( &
         species_list(collision%species1)%attached_list, new_part)
@@ -448,6 +464,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = u_cm * m2 + p_scat
       new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part1%part_pos_y
+#endif
       new_part%weight = w1
       CALL add_particle_to_partlist( &
         species_list(collision%species2)%attached_list, new_part)
@@ -497,7 +516,7 @@ CONTAINS
       w2 = w2, &
 #endif
       part1 = part1, part2 = part2, p_list2 = p_list2)
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     mu = collision%reducedm
 
@@ -521,7 +540,8 @@ CONTAINS
     END IF
 
     ! Impact particle: neutral -> ion + electron
-    IF (ran_w <= w1rat) THEN
+    ion_id = collision%type_block%new_species_id ! ions
+    IF (ion_id > 0) THEN
       ! The new electron
       CALL create_particle(new_part)
       random_direction = random_unit_vector()
@@ -529,6 +549,9 @@ CONTAINS
       u_e2 = u_excess*random_direction  ! cm frame of reference
       new_part%part_p = (u_cm + u_e2)*m1
       new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = w2
 #endif
@@ -536,22 +559,30 @@ CONTAINS
         species_list(species1)%attached_list, new_part)
       NULLIFY(new_part)
 
-      ! New ion: move neutral particle to ion species list
-      new_part => part2
+      ! Create a new ion
+      CALL create_particle(new_part)
+      new_part%part_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2%part_pos_y
+#endif
       new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
-      IF (.NOT.ASSOCIATED(p_list2%head, TARGET=part2)) THEN
-        ! If particle is not the head of the list
-        part2 => part2%prev
-      ELSE
-        ! If particle is the head of the list then one particle is skipped
-        p_list2%coll_counter = p_list2%coll_counter + 1
-        part2 => part2%next
-      END IF
-      CALL remove_particle_from_partlist(p_list2, new_part)
-      ion_id = collision%type_block%new_species_id ! ions
       CALL add_particle_to_partlist( species_list(ion_id)%attached_list, &
         new_part)
       NULLIFY(new_part)
+
+      ! Remove neutral particle
+      IF (ran_w <= w1rat) THEN
+        ! Use new_part as buffer
+        new_part => part2%next
+
+        ! Remove current neutral particle
+        CALL remove_particle_from_partlist(p_list2, part2)
+        CALL destroy_particle(part2)
+
+        ! Point part2 to the following particle
+        part2 => new_part
+        NULLIFY(new_part)
+      END IF
     END IF
 
     CALL link_particle_pointers(collision, part1, part2)
@@ -563,29 +594,29 @@ CONTAINS
 
   SUBROUTINE nanbu_charge_exchange(collision)
 
-    ! Collision process: backscattering
-    ! Elastic 180 degrees scattering
+    ! Collision process: charge_exchange
+    ! I + N -> N + I
+    ! Where the ions (I) are species1 and neutrals (N) are background
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num) :: ran_w
-    REAL(num) :: mu, m
+    REAL(num) :: mu, m, ranw
     REAL(num), DIMENSION(3) :: g, p_scat, u_cm
 
     mu = collision%reducedm
     g = collision%g
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 
     ! Post-collision momentum
     p_scat = mu * g
 
-    ran_w = random()
-    IF (ran_w <= collision%w2_ratio) THEN
+    ranw = random()
+    IF (ranw <= collision%w2_ratio) THEN
       m = collision%m1
       collision%part1%part_p = u_cm*m - p_scat
     END IF
 
-    IF (ran_w <= collision%w1_ratio) THEN
+    IF (ranw <= collision%w1_ratio) THEN
       m = collision%m2
       collision%part2%part_p = u_cm*m + p_scat
     END IF
@@ -602,53 +633,51 @@ CONTAINS
 
     ! Collision process: electron elastic scattering
     ! e + N -> e + N
-    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, p_scat, u_cm
+    REAL(num), DIMENSION(3) :: g, v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, m2, mu
-    REAL(num) :: ran1
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1, im2
+    REAL(num) :: ranw, w2rat
+    TYPE(particle), POINTER :: part1
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    ! Incoming normalised velocity vector
-    v_inc = vector_normalisation(collision%g)
+    ! Electrons must be species 1, and neutrals => species2
+    CALL set_particle_properties(collision, &
+      m1 = m1, im2 = im2, w2_ratio = w2rat, &
+      part1 = part1, g = g)
 
-    !Theta angle
-    costheta = v_inc(1)
-    sintheta = SQRT(1._num - costheta*costheta)
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
+    ranw = random()
+    IF (ranw <= w2rat) THEN
+      ! Incoming normalised velocity vector
+      v_inc = vector_normalisation(g)
 
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+      !Theta angle
+      costheta = v_inc(1)
+      sintheta = SQRT(1._num - costheta*costheta)
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
 
-    ! Post-collision speed (g_scat)
-    m1 = collision%m1
-    m2 = collision%m2
-    mu = collision%reducedm
-    g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    delta_e = 2._num * m1 / m2 * (1._num - coschi)
-    e_scat = e_inc * (1._num - delta_e)
-    g_scat = SQRT(2._num * e_scat / mu)
-    p_scat = v_scat * g_scat * mu
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
-    ! Post-collision momentum
-    ran1 = random()
-    u_cm = collision%u_cm
-    IF (ran1 <= collision%w2_ratio) THEN
-      collision%part1%part_p = u_cm*m1 + p_scat
-    END IF
-    IF (ran1 <= collision%w1_ratio) THEN
-      collision%part2%part_p = u_cm*m2 - p_scat
+      ! Post-collision speed (g_scat)
+      g_mag = collision%g_mag
+      e_inc = 0.5_num * m1 * g_mag * g_mag
+      delta_e = 2._num * m1 * im2 * (1._num - coschi)
+      e_scat = e_inc * (1._num - delta_e)
+      g_scat_m1 = SQRT(2._num * e_scat * m1)
+
+      ! Post-collision momentum
+      part1%part_p = v_scat * g_scat_m1
     END IF
 
   END SUBROUTINE vahedi_electron_elastic_scattering
@@ -659,50 +688,54 @@ CONTAINS
 
     ! Collision process: electron elastic scattering
     ! e + N -> e + N
-    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, p_scat, u_cm
+    REAL(num), DIMENSION(3) :: g, v_inc, v_scat, v_inc_i, u_cm
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, mu
-    REAL(num) :: ranw
+    REAL(num) :: e_inc, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1, m12, ucm_mag2
+    REAL(num) :: ranw, w2rat
+    TYPE(particle), POINTER :: part1
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    ! Incoming normalised velocity vector
-    v_inc = random_unit_vector() 
+    ! Ions must be species 1, and neutrals => species2
+    CALL set_particle_properties(collision, &
+      m1 = m1, w2_ratio = w2rat, &
+      part1 = part1, g = g)
 
-    !Theta angle
-    costheta = v_inc(1)
-    sintheta = SQRT(1._num - costheta*costheta)
-    ! Chi angle
-    coschi = SQRT(1._num - random())
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-
-    ! Post-collision speed (g_scat)
-    mu = collision%reducedm
-    g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    e_scat = e_inc * coschi * coschi
-    g_scat = SQRT(2._num * e_scat / mu)
-    p_scat = v_scat * g_scat * mu
-
-    ! Post-collision momentum
     ranw = random()
-    u_cm = collision%u_cm
-    IF (ranw <= collision%w2_ratio) THEN
-      collision%part1%part_p = u_cm*collision%m1 + p_scat
-    END IF
-    IF (ranw <= collision%w1_ratio) THEN
-      collision%part2%part_p = u_cm*collision%m2 - p_scat
+    IF (ranw <= w2rat) THEN
+      m12 = collision%m12
+
+      ! Incoming normalised velocity vector
+      v_inc = random_unit_vector()
+
+      !Theta angle
+      costheta = v_inc(1)
+      sintheta = SQRT(1._num - costheta*costheta)
+      ! Chi angle
+      coschi = SQRT(1._num - random())
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+
+      ! Post-collision speed (g_scat)
+      u_cm = cm_velocity(collision)
+      g_mag = collision%g_mag
+      ucm_mag2 = DOT_PRODUCT(u_cm, u_cm)
+      e_inc = 0.5_num * m1 * g_mag * g_mag
+      e_scat = e_inc * coschi * coschi + 0.5_num * m12 * ucm_mag2
+      g_scat_m1 = SQRT(2._num * e_scat * m1)
+
+      ! Post-collision momentum
+      part1%part_p = v_scat * g_scat_m1
     END IF
 
   END SUBROUTINE vahedi_ion_elastic_scattering
@@ -716,84 +749,51 @@ CONTAINS
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    INTEGER :: excited_id
     REAL(num) :: g_mag, e_threshold
-    REAL(num) :: e_inc, e_scat, g_scat
+    REAL(num) :: e_inc, e_scat, g_scat_m1
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: m1, m2, mu, w1rat, w2rat
+    REAL(num) :: m1, w2rat
     REAL(num) :: ran_w, sinratio
-    REAL(num), DIMENSION(3) :: p_2, u_cm, p_scat, g
+    REAL(num), DIMENSION(3) :: g
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
-    TYPE(particle), POINTER :: part1, part2, new_part
-    TYPE(particle_list), POINTER :: p_list
+    TYPE(particle), POINTER :: part1
 
     CALL set_particle_properties(collision, &
-      m1 = m1, m2 = m2, w1_ratio = w1rat, w2_ratio = w2rat, &
-      part1 = part1, part2 = part2, p_list2 = p_list, g = g)
-    mu = collision%reducedm
-    u_cm = collision%u_cm
-    e_threshold = collision%type_block%ethreshold
-    g_mag = collision%g_mag
-
-    ! Incoming normalised velocity vector
-    v_inc = vector_normalisation(g)
-
-    !Theta angle
-    costheta = v_inc(1)
-    sintheta = SQRT(1._num - costheta*costheta)
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-
-    ! Post collision energy and speed
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    e_scat = e_inc - e_threshold
-    g_scat = SQRT(2._num * e_scat / mu)
-    p_scat = v_scat * g_scat * mu
+      m1 = m1, w2_ratio = w2rat, &
+      part1 = part1, g = g)
 
     ran_w = random()
     IF (ran_w <= w2rat) THEN
+      e_threshold = collision%type_block%ethreshold
+      g_mag = collision%g_mag
+
+      ! Incoming normalised velocity vector
+      v_inc = vector_normalisation(g)
+
+      !Theta angle
+      costheta = v_inc(1)
+      sintheta = SQRT(1._num - costheta*costheta)
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+
+      e_inc = 0.5_num * m1 * g_mag * g_mag
+      e_scat = e_inc - e_threshold
+      g_scat_m1 = SQRT(2._num * e_scat * m1)
+
       ! Post-collision momentum
-      part1%part_p = u_cm*m1 + p_scat
+      part1%part_p = v_scat * g_scat_m1
     END IF
-
-    IF (ran_w <= w1rat) THEN
-      ! Post-collision momentum
-      p_2 = u_cm*m2 - p_scat
-
-      excited_id = collision%type_block%new_species_id
-      IF (excited_id>0) THEN !Move particle to excited particle list
-        new_part => part2
-        ! Link part1 pointer to next colliding particle
-        IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
-          part2 => part2%prev
-        ELSE
-          part2 => part2%next
-        END IF
-        new_part%part_p = p_2
-        CALL remove_particle_from_partlist(p_list, new_part)
-        CALL add_particle_to_partlist( &
-          species_list(excited_id)%attached_list, new_part)
-        NULLIFY(new_part)
-
-      ELSE ! Just carry on with the same particle
-        part2%part_p = p_2
-      END IF
-
-    END IF
-
-    CALL link_particle_pointers(collision, part1, part2)
-    NULLIFY(p_list)
 
   END SUBROUTINE vahedi_excitation
 
@@ -807,48 +807,47 @@ CONTAINS
     ! species2 = neutral (N)
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
-
-    REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
-    REAL(num) :: m1, m2, im1, mu
-#ifndef PER_SPECIES_WEIGHT
-    REAL(num) :: w2
+    REAL(num), DIMENSION(3) :: g, v_inc, v_scat, v_inc_i
+    REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1, m2, part_pos, ran_e, ranw, w2rat
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
 #endif
-    REAL(num) :: ran_e, ran_w, phi, w1rat, w2rat
-    REAL(num) :: g_mag, e_threshold
-    REAL(num) :: costheta, sintheta, cosphi, sinphi, coschi, sinchi
-    REAL(num) :: sinratio, e_inc, e_scat, g_scat
-    INTEGER :: ion_id, species1
-    TYPE(particle), POINTER :: new_part, part1, part2
-    TYPE(particle_list) , POINTER :: p_list
+    INTEGER :: species_id, species1
+    TYPE(particle), POINTER :: part1, part2, new_part
 
-    CALL set_particle_properties(collision, species1 = species1, &
-      m1 = m1, m2 = m2, im1 = im1, w1_ratio = w1rat, w2_ratio = w2rat, g = g, &
+    ! Electron is species 1 and neutral => species 2
+    CALL set_particle_properties(collision, m1 = m1, m2 = m2, &
+      g = g, species1 = species1, w2_ratio = w2rat, &
 #ifndef PER_SPECIES_WEIGHT
-      w2 = w2, &
+      w1 = w1, &
 #endif
-      part1 = part1, part2 = part2, p_list2 = p_list)
+      part1 = part1, part2 = part2)
 
-    e_threshold = collision%type_block%ethreshold
-    g_mag = collision%g_mag
-    mu = collision%reducedm
-    u_cm = collision%u_cm
+    ranw = random()
+    IF (ranw <= w2rat) THEN
 
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    e_scat = e_inc - e_threshold
-    g_scat = SQRT(2._num * e_scat * im1)
-    ran_e = 0.5_num !random() ! Energy split ratio
+      part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      part_pos_y = part1%part_pos_y
+#endif
+      g_mag = collision%g_mag
 
-    ! Incoming normalised velocity vector
-    v_inc = vector_normalisation(g)
-    v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
-    !Theta angle
-    costheta = v_inc(1)
-    sintheta = SQRT(1._num - costheta*costheta)
+      e_inc = 0.5_num * m1 * g_mag * g_mag
+      delta_e = collision%type_block%ethreshold
+      e_scat = e_inc - delta_e
+      g_scat_m1 = SQRT(2._num * e_scat * m1)
+      ran_e = 0.5_num ! random()
 
-    ! Random weight ratio
-    ran_w = random()
-    ! Electron #1: existing one
-    IF (ran_w <= w2rat) THEN
+      ! Incoming normalised velocity vector
+      v_inc = vector_normalisation(g)
+      v_inc_i = crossproduct(v_inc,(/1._num, 0._num, 0._num/))
+      !Theta angle
+      costheta = v_inc(1)
+      sintheta = SQRT(1._num - costheta*costheta)
+
+      ! Electron #1:
       ! Chi angle
       coschi = 1._num - 2._num * random()
       sinchi = SQRT(1._num - coschi*coschi)
@@ -861,58 +860,54 @@ CONTAINS
       v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
         crossproduct(v_inc_i,v_inc) * sinratio * cosphi
       ! Post-collision momentum
-      u_e1 = v_scat * g_scat * SQRT(ran_e)
-      part1%part_p = (u_cm + u_e1) * m1
-    END IF
+      part1%part_p = v_scat*g_scat_m1*SQRT(ran_e)
 
-    ! Impact particle: neutral -> ion + electron
-    IF (ran_w <= w1rat) THEN
-      ! The new electron
-      ! Chi angle
-      coschi = 1._num - 2._num * random()
-      sinchi = SQRT(1._num - coschi*coschi)
-      ! Phi angle
-      phi = 2._num * pi * random()
-      cosphi = COS(phi)
-      sinphi = SIN(phi)
-      ! Scattered normalised vector
-      sinratio = sinchi / sintheta
-      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-
-      ! The new electron
-      CALL create_particle(new_part)
-      u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
-      new_part%part_p = (u_cm + u_e2)*m1
-      new_part%part_pos = part2%part_pos
-#ifndef PER_SPECIES_WEIGHT
-      new_part%weight = w2 ! Electron's weight
+      ! Collision product from ionisation
+      species_id = collision%type_block%new_species_id ! ions
+      IF (species_id > 0) THEN
+        ! Electron #2:
+        ! Chi angle
+        coschi = 1._num - 2._num * random()
+        sinchi = SQRT(1._num - coschi*coschi)
+        ! Phi angle
+        phi = 2._num * pi * random()
+        cosphi = COS(phi)
+        sinphi = SIN(phi)
+        ! Scattered normalised vector
+        sinratio = sinchi / sintheta
+        v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+          crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+        ! Create a new electron particle
+        CALL create_particle(new_part)
+        new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
+        new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+        new_part%part_pos_y = part_pos_y
 #endif
-      CALL add_particle_to_partlist( &
-        species_list(species1)%attached_list, new_part)
-      NULLIFY(new_part)
+#ifndef PER_SPECIES_WEIGHT
+        new_part%weight = w1 ! Electron's weight
+#endif
+        CALL add_particle_to_partlist(&
+          species_list(species1)%attached_list, &
+          new_part)
+        NULLIFY(new_part)
 
-      ! New ion: move neutral particle to ion species list
-      new_part => part2
-      new_part%part_p = collision%u_2 * m2
-      IF (.NOT.ASSOCIATED(p_list%head, TARGET=part2)) THEN
-        ! If particle is not the head of the list
-        part2 => part2%prev
-      ELSE
-        ! If particle is the head of the list then one particle is skipped
-        p_list%coll_counter = p_list%coll_counter + 1
-        part2 => part2%next
+        ! Ion
+        ! Create a new ion particle and assign neutral particle's momentum
+        CALL create_particle(new_part)
+        new_part%part_p = part2%part_p
+        new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+        new_part%part_pos_y = part_pos_y
+#endif
+#ifndef PER_SPECIES_WEIGHT
+        new_part%weight = w1 ! Electron's weight
+#endif
+        CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+          new_part)
+        NULLIFY(new_part)
       END IF
-      CALL remove_particle_from_partlist(p_list, new_part)
-      ion_id = collision%type_block%new_species_id ! ions
-      CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
-        new_part)
-      NULLIFY(new_part)
-
     END IF
-
-    CALL link_particle_pointers(collision, part1, part2)
-    NULLIFY(p_list)
 
   END SUBROUTINE vahedi_ionisation
 
@@ -929,6 +924,9 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: u_cm, u_e1, u_e2, v_inc, v_inc_i, v_scat, g
     REAL(num) :: m1, m2, im1, mu, part2_pos
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part2_pos_y
+#endif
     REAL(num) :: w1, w2, w_diff, w_min, w1max_rat, w2max_rat
     REAL(num) :: ran_e, phi
     REAL(num) :: g_mag, e_threshold
@@ -945,10 +943,13 @@ CONTAINS
       w1max_rat = w1max_rat, w2max_rat = w2max_rat, &
       g = g, part2 = part2, p_list1 = p_list1, p_list2 = p_list2)
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     mu = collision%reducedm
     e_threshold = collision%type_block%ethreshold
     part2_pos = part2%part_pos
+#ifdef PART_PERP_POSITION
+    part2_pos_y = part2%part_pos_y
+#endif
 
     ! Energy balance and post collision speed
     e_inc = 0.5_num * mu * g_mag * g_mag
@@ -1039,6 +1040,9 @@ CONTAINS
       u_e2 = v_scat * g_scat * SQRT(1._num - ran_e)
       new_part%part_p = u_e2 * m1
       new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2_pos_y
+#endif
       new_part%weight = w_min
       CALL add_particle_to_partlist( &
         species_list(species1)%attached_list, new_part)
@@ -1055,6 +1059,9 @@ CONTAINS
       CALL create_particle(new_part)
       new_part%part_p = collision%u_2 * m2
       new_part%part_pos = part2_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part2_pos_y
+#endif
       new_part%weight = w_min
       CALL add_particle_to_partlist(species_list(ion_id)%attached_list, &
         new_part)
@@ -1066,6 +1073,7 @@ CONTAINS
 
   END SUBROUTINE vahedi_split_ionisation
 #endif
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                                                                             !
 !                             NANBU BACKGROUND                                !
@@ -1089,7 +1097,7 @@ CONTAINS
 
     reducedm = collision%reducedm
     g_mag = collision%g_mag
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     m1 = collision%m1
 
     ! Post-collision momentum
@@ -1130,7 +1138,7 @@ CONTAINS
     im1 = collision%im1
     m2 = collision%m2
     im2 = collision%im2
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
 #ifndef PER_SPECIES_WEIGHT
     w1 = collision%w1
 #endif
@@ -1163,6 +1171,9 @@ CONTAINS
     u_e2 = u_excess*random_direction  ! cm frame of reference
     new_part%part_p = (u_cm + u_e2)*m1
     new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part1%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
     new_part%weight = w1 ! Electron's weight
 #endif
@@ -1175,6 +1186,9 @@ CONTAINS
     CALL create_particle(new_part)
     new_part%part_p = u_cm * (m2 - m1) - m1*(u_e1 + u_e2)
     new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+    new_part%part_pos_y = part1%part_pos_y
+#endif
 #ifndef PER_SPECIES_WEIGHT
     new_part%weight = w1 ! Electron's weight
 #endif
@@ -1207,7 +1221,7 @@ CONTAINS
     m1 = collision%m1
     reducedm = collision%reducedm
     ireducedm = collision%ireducedm
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
     e_threshold = collision%type_block%ethreshold
     excited_id = collision%type_block%new_species_id
@@ -1227,6 +1241,9 @@ CONTAINS
       ! Post-collision momentum
       CALL create_particle(new_part)
       new_part%part_pos = part1%part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part1%part_pos_y
+#endif
       new_part%part_p = u_cm*m2 - p_scat
 #ifndef PER_SPECIES_WEIGHT
       new_part%weight = collision%w1
@@ -1251,26 +1268,25 @@ CONTAINS
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num) :: reducedm, m1
+    REAL(num) :: mu, m1
     REAL(num), DIMENSION(3) :: g, p_scat, u_cm
 #ifndef PER_SPECIES_WEIGHT
-    REAL(num) :: ran_w
+    REAL(num) :: ranw
 
-    ran_w = random()
-    IF (ran_w > collision%w1_ratio) RETURN
+    ranw = random()
+    IF (ranw > collision%w1_ratio) RETURN
 #endif
 
-    reducedm = collision%reducedm
+    mu = collision%reducedm
     g = collision%g
-    u_cm = collision%u_cm
+    u_cm = cm_velocity(collision) 
     m1 = collision%m1
 
     ! Post-collision momentum
-    p_scat = reducedm * g
+    p_scat = mu * g
     collision%part1%part_p = u_cm*m1 - p_scat 
 
   END SUBROUTINE nanbu_charge_exchange_bg
-
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1286,8 +1302,8 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, m2, mu
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1, im2
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1315,17 +1331,16 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
+    im2 = collision%im2
     m1 = collision%m1
-    m2 = collision%m2
-    mu = collision%reducedm
     g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    delta_e = 2._num * m1 / m2 * (1._num - coschi)
+    e_inc = 0.5_num * m1 * g_mag * g_mag
+    delta_e = 2._num * m1 * im2 * (1._num - coschi)
     e_scat = e_inc * (1._num - delta_e)
-    g_scat = SQRT(2._num * e_scat / mu)
+    g_scat_m1 = SQRT(2._num * e_scat * m1)
 
     ! Post-collision momentum
-    collision%part1%part_p = (collision%u_cm + v_scat * g_scat) * m1
+    collision%part1%part_p = v_scat * g_scat_m1
 
   END SUBROUTINE vahedi_electron_elastic_scattering_bg
 
@@ -1337,11 +1352,10 @@ CONTAINS
     ! e + N -> e + N
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
 
-    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i, u_cm
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, mu, m1
-    REAL(num) , DIMENSION(3) :: u_cm, p_scat
+    REAL(num) :: e_inc, e_scat, g_scat_m1, g_mag, ucm_mag2
+    REAL(num) :: sinratio, m1, m12
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1369,17 +1383,17 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
-    mu = collision%reducedm
+    m1 = collision%m1
+    m12 = collision%m12
+    u_cm = cm_velocity(collision) 
     g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
-    e_scat = e_inc * coschi * coschi
-    g_scat = SQRT(2._num * e_scat / mu)
-    p_scat = v_scat * g_scat * mu
+    ucm_mag2 = DOT_PRODUCT(u_cm, u_cm)
+    e_inc = 0.5_num * m1 * g_mag * g_mag
+    e_scat = e_inc * coschi*coschi + 0.5_num * m12 * ucm_mag2
+    g_scat_m1 = SQRT(2._num * e_scat * m1)
 
     ! Post-collision momentum
-    u_cm = collision%u_cm
-    m1 = collision%m1
-    collision%part1%part_p = u_cm*m1 + p_scat
+    collision%part1%part_p = v_scat * g_scat_m1
 
   END SUBROUTINE vahedi_ion_elastic_scattering_bg
 
@@ -1393,8 +1407,8 @@ CONTAINS
 
     REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, mu
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
 
@@ -1422,16 +1436,16 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
 
+
     m1 = collision%m1
-    mu = collision%reducedm
     g_mag = collision%g_mag
-    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
     delta_e = collision%type_block%ethreshold
     e_scat = e_inc - delta_e
-    g_scat = SQRT(2._num * e_scat / mu)
+    g_scat_m1 = SQRT(2._num * e_scat * m1)
 
     ! Post-collision momentum
-    collision%part1%part_p = (collision%u_cm + v_scat * g_scat) * m1
+    collision%part1%part_p = v_scat * g_scat_m1
 
   END SUBROUTINE vahedi_excitation_bg
 
@@ -1444,10 +1458,13 @@ CONTAINS
     TYPE(particle), POINTER :: new_part
 
     TYPE(current_collision_block), POINTER, INTENT(INOUT) :: collision
-    REAL(num), DIMENSION(3) :: u_cm, v_inc, v_scat, v_inc_i
+    REAL(num), DIMENSION(3) :: v_inc, v_scat, v_inc_i
     REAL(num) :: costheta, sintheta, coschi, sinchi, cosphi, sinphi, phi
-    REAL(num) :: e_inc, delta_e, e_scat, g_scat, g_mag
-    REAL(num) :: sinratio, m1, part_pos, ran_e, mu
+    REAL(num) :: e_inc, delta_e, e_scat, g_scat_m1, g_mag
+    REAL(num) :: sinratio, m1, part_pos, ran_e
+#ifdef PART_PERP_POSITION
+    REAL(num) :: part_pos_y
+#endif
     INTEGER :: species_id
 #ifndef PER_SPECIES_WEIGHT
     REAL(num) :: ran_w
@@ -1457,15 +1474,16 @@ CONTAINS
 #endif
 
     part_pos = collision%part1%part_pos
-    u_cm = collision%u_cm
+#ifdef PART_PERP_POSITION
+    part_pos_y = collision%part1%part_pos_y
+#endif
     m1 = collision%m1
-    mu = collision%reducedm
     g_mag = collision%g_mag
 
-    e_inc = 0.5_num * mu * g_mag * g_mag
+    e_inc = 0.5_num * m1 * g_mag * g_mag
     delta_e = collision%type_block%ethreshold
     e_scat = e_inc - delta_e
-    g_scat = SQRT(2._num * e_scat * collision%im1)
+    g_scat_m1 = SQRT(2._num * e_scat * m1)
     ran_e = 0.5_num ! random()
 
     ! Incoming normalised velocity vector
@@ -1488,47 +1506,67 @@ CONTAINS
     v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
       crossproduct(v_inc_i,v_inc) * sinratio * cosphi
     ! Post-collision momentum
-    collision%part1%part_p = (u_cm + v_scat*g_scat*SQRT(ran_e)) * m1
+    collision%part1%part_p = v_scat*g_scat_m1*SQRT(ran_e)
 
-
-    ! Electron #2:
-    ! Chi angle
-    coschi = 1._num - 2._num * random()
-    sinchi = SQRT(1._num - coschi*coschi)
-    ! Phi angle
-    phi = 2._num * pi * random()
-    cosphi = COS(phi)
-    sinphi = SIN(phi)
-    ! Scattered normalised vector
-    sinratio = sinchi / sintheta
-    v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
-      crossproduct(v_inc_i,v_inc) * sinratio * cosphi
-    ! Create a new electron particle
-    species_id = collision%species1
-    CALL create_particle(new_part)
-    new_part%part_p = (u_cm + v_scat * g_scat * SQRT(1._num - ran_e)) * m1
-    new_part%part_pos = part_pos
-#ifndef PER_SPECIES_WEIGHT
-    new_part%weight = collision%w1 ! Electron's weight
-#endif
-    CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
-      new_part)
-    NULLIFY(new_part)
-
-
-    ! Ion
-    ! Create a new ion particle and assign neutral particle's momentum
+    ! Collision product from ionisation
     species_id = collision%type_block%new_species_id ! ions
-    CALL create_particle(new_part)
-    new_part%part_p = collision%u_2 * collision%m2
-    new_part%part_pos = part_pos
-#ifndef PER_SPECIES_WEIGHT
-    new_part%weight = collision%w1 ! Electron's weight
+    IF (species_id > 0) THEN
+      ! Electron #2:
+      ! Chi angle
+      coschi = 1._num - 2._num * random()
+      sinchi = SQRT(1._num - coschi*coschi)
+      ! Phi angle
+      phi = 2._num * pi * random()
+      cosphi = COS(phi)
+      sinphi = SIN(phi)
+      ! Scattered normalised vector
+      sinratio = sinchi / sintheta
+      v_scat = v_inc * coschi + v_inc_i * sinratio * sinphi + &
+        crossproduct(v_inc_i,v_inc) * sinratio * cosphi
+      ! Create a new electron particle
+      CALL create_particle(new_part)
+      new_part%part_p = v_scat*g_scat_m1*SQRT(1._num - ran_e)
+      new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part_pos_y
 #endif
-    CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
-      new_part)
-    NULLIFY(new_part)
+#ifndef PER_SPECIES_WEIGHT
+      new_part%weight = collision%w1 ! Electron's weight
+#endif
+      CALL add_particle_to_partlist(&
+        species_list(collision%species1)%attached_list, &
+        new_part)
+      NULLIFY(new_part)
+
+
+      ! Ion
+      ! Create a new ion particle and assign neutral particle's momentum
+      CALL create_particle(new_part)
+      new_part%part_p = collision%u_2 * collision%m2
+      new_part%part_pos = part_pos
+#ifdef PART_PERP_POSITION
+      new_part%part_pos_y = part_pos_y
+#endif
+#ifndef PER_SPECIES_WEIGHT
+      new_part%weight = collision%w1 ! Electron's weight
+#endif
+      CALL add_particle_to_partlist(species_list(species_id)%attached_list, &
+        new_part)
+      NULLIFY(new_part)
+    END IF
 
   END SUBROUTINE vahedi_ionisation_bg
 
+  
+
+  FUNCTION cm_velocity(collision)
+
+    REAL(num), DIMENSION(3) :: cm_velocity
+    TYPE(current_collision_block) :: collision
+
+    cm_velocity = (collision%part1%part_p+collision%m2*collision%u_2) &
+      * collision%im12
+  END FUNCTION cm_velocity
+
+#endif
 END MODULE nc_subroutines

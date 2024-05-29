@@ -296,6 +296,10 @@ MODULE constants
   INTEGER(i8), PARAMETER :: c_def_probe_time = 2**27
 #ifdef ELECTROSTATIC
   INTEGER(i8), PARAMETER :: c_def_electrostatic = 2**28
+  INTEGER(i8), PARAMETER :: c_def_es_tridiag = 2**28 - 1
+  INTEGER(i8), PARAMETER :: c_def_es_petsc = 2**28 - 100
+  INTEGER(i8), PARAMETER :: c_def_part_perp_position = 2**28 - 1000
+  INTEGER(i8), PARAMETER :: c_def_see = 2**28 - 10000
 #endif
 
   ! Stagger types
@@ -564,7 +568,11 @@ MODULE constants
   ! In shared_data:
   ! fng is the number of ghost cells needed by the field solver
   ! sng is the number of ghost cells needed by the current smoother
+#ifdef ELECTROSTATIC
+  INTEGER, PARAMETER :: ng = png
+#else
   INTEGER, PARAMETER :: ng = png + 2
+#endif  
   INTEGER, PARAMETER :: jng = MAX(ng,png)
   ! ncell_min is the number of cells needed by the domain before subcyling
   ! of communications is required
@@ -648,7 +656,10 @@ MODULE constants
   INTEGER, PARAMETER :: c_dump_es_potential      = 74
   INTEGER, PARAMETER :: c_dump_es_current        = 75
   INTEGER, PARAMETER :: c_dump_neutral_collision = 76
-  INTEGER, PARAMETER :: num_vars_to_dump         = 76
+  INTEGER, PARAMETER :: c_dump_power_absorption_x= 77
+  INTEGER, PARAMETER :: c_dump_power_absorption_y= 78
+  INTEGER, PARAMETER :: c_dump_power_absorption_z= 79
+  INTEGER, PARAMETER :: num_vars_to_dump         = 79
 #else
   INTEGER, PARAMETER :: num_vars_to_dump         = 73
 #endif
@@ -677,8 +688,11 @@ MODULE constants
   INTEGER, PARAMETER :: c_subset_id_min     = 22
   INTEGER, PARAMETER :: c_subset_id_max     = 23
   INTEGER, PARAMETER :: c_subset_max        = 23
-
+#ifdef NEUTRAL_COLLISIONS
+  INTEGER, PARAMETER :: c_max_string_length = 72
+#else
   INTEGER, PARAMETER :: c_max_string_length = 68
+#endif
   INTEGER, PARAMETER :: c_max_prefix = 16
   ! Maximum path length on Linux machines
   INTEGER, PARAMETER :: c_max_path_length = 4096 + c_max_prefix

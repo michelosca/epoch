@@ -1,0 +1,121 @@
+begin:constant
+  mass_neutral = 7322.120571611805               # electron mass multiple
+  temp_neutral = 300                             # [K]
+  dens_neutral = 321.e20                         # [m^-3]
+
+  temp_electron = 30000                          # [K]
+  dens_plasma = 3.84e14                          # [m^-3]
+
+  f = 13.56e6                                    # [Hz]
+  freq = f * 2 * pi                              # [rad/s]
+  v_amp = 120                                    # [V]
+
+  t_av = 32/f                                    # [s]
+  t_sim_end = 15360/f                            # [s]
+  t_output_start = t_sim_end - t_av              # [s]
+
+  pcles_per_species_per_cell = 64 
+end:constant
+
+
+begin:control
+  nx = 512
+  t_end = t_sim_end
+  x_start = 0.0                                  # [m]
+  x_end = 0.067                                  # [m]
+  
+  use_random_seed = T 
+  
+  dt_multiplier = 0.1                            # CLF condition multiplier
+  
+  es_dt_fact = 0.1
+  max_perturbation_frequency = freq              # [Hz]
+  neutral_coll_frequency_factor = 0.01
+  max_e_field = 1.e4                             # [V/m]
+  max_energy_ev = 50                             # [eV]
+  stdout_frequency = 100000
+  user_dt = 1/3200/f                             # [s] 
+end:control
+
+
+begin:boundaries
+  bc_x_min_particle = open
+  bc_x_max_particle = open
+  bc_x_min_field = open
+  bc_x_max_field = open
+end:boundaries
+
+
+begin:species
+  name = electrons
+  charge = -1
+  mass = 1
+  npart_per_cell = pcles_per_species_per_cell
+  temp = temp_electron
+  density = dens_plasma
+end:species
+
+
+begin:species
+  name = ions
+  charge = 1
+  mass = mass_neutral
+  npart_per_cell = pcles_per_species_per_cell
+  temp = temp_neutral
+  density = dens_plasma
+end:species
+
+
+begin:background
+  name = neutrals
+  id = 1
+  mass = mass_neutral
+  density = dens_neutral
+  temperature = temp_neutral
+  colliding_species = electrons
+  colliding_species = ions
+  density_profile = 1
+  temperature_profile = 1
+  t_start = 0
+  t_end = t_end
+end:background
+
+
+begin:collisions
+  use_collisions = T
+  collide = none
+  use_nanbu = T
+  cross_section_table_location = ./tests/turner_benchmark/background_field
+end:collisions
+
+
+begin:electrostatic
+  boundary = x_max
+  amp = v_amp
+  t_profile = sin(freq*time)
+end:electrostatic
+
+
+begin:output
+  name = average
+  file_prefix = average
+
+  dt_average = t_av
+
+  # output start
+  time_start = t_output_start
+  dump_last = F
+  dump_first = F
+
+  # output snapshot
+  dt_snapshot = t_av
+
+  # Properties on grid
+  grid = always
+  ex = always + average
+
+  potential = always + average
+  number_density = always + species + average
+  neutral_collisions = always + species + average
+  jx = always + species + average
+end:output

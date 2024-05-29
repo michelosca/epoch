@@ -51,7 +51,6 @@ MODULE diagnostics
   INTEGER(i8), ALLOCATABLE :: species_offset(:)
   INTEGER(i8), ALLOCATABLE :: ejected_offset(:)
   LOGICAL :: reset_ejected, done_species_offset_init, done_subset_init
-  LOGICAL :: reset_collisions, nc_average
   LOGICAL :: restart_flag, dump_source_code, dump_input_decks
   LOGICAL :: dump_field_grid, skipped_any_set
   LOGICAL :: got_stop_restart = .FALSE.
@@ -314,7 +313,6 @@ CONTAINS
 
     dims = (/nx_global/)
 
-    reset_collisions = .FALSE.
     reset_ejected = .FALSE.
     any_written = .FALSE.
 
@@ -428,6 +426,10 @@ CONTAINS
           CALL write_injector_depths(sdf_handle, i)
         END DO
 
+#ifdef ELECTROSTATIC
+        CALL write_electrostatic_bc
+#endif
+
         DO io = 1, n_io_blocks
           CALL sdf_write_srl(sdf_handle, &
               'time_prev/'//TRIM(io_block_list(io)%name), &
@@ -483,13 +485,14 @@ CONTAINS
       CALL write_field(c_dump_bz, code, 'bz', 'Magnetic Field/Bz', 'T', &
           c_stagger_bz, bz)
 
+#ifndef ELECTROSTATIC
       CALL write_field(c_dump_jx, code, 'jx', 'Current/Jx', 'A/m^2', &
           c_stagger_jx, jx)
       CALL write_field(c_dump_jy, code, 'jy', 'Current/Jy', 'A/m^2', &
           c_stagger_jy, jy)
       CALL write_field(c_dump_jz, code, 'jz', 'Current/Jz', 'A/m^2', &
           c_stagger_jz, jz)
-#ifdef ELECTROSTATIC
+#else
       CALL write_field(c_dump_es_potential, code, 'es_potential', &
           'Electric Potential/Vx', 'V', c_stagger_electrostatic, es_potential)
       CALL write_field(c_dump_es_current, code, 'es_current', &
@@ -761,6 +764,19 @@ CONTAINS
         CALL write_nspecies_field(c_dump_cou_log, code, &
             'cou_log', 'Coulomb Logarithm', 'dimensionless', &
             c_stagger_cell_centre, calc_cou_log, array)
+#ifdef ELECTROSTATIC
+        CALL write_nspecies_field(c_dump_power_absorption_x, code, &
+            'power_abs_x', 'Power_Absorption_x', 'W/m^3', &
+            c_stagger_ex, calc_per_species_current, array, (/c_dir_x/))
+
+        CALL write_nspecies_field(c_dump_power_absorption_y, code, &
+            'power_abs_y', 'Power_Absorption_y', 'W/m^3', &
+            c_stagger_ey, calc_per_species_current, array, (/c_dir_y/))
+
+        CALL write_nspecies_field(c_dump_power_absorption_z, code, &
+            'power_abs_z', 'Power_Absorption_z', 'W/m^3', &
+            c_stagger_ez, calc_per_species_current, array, (/c_dir_z/))
+#endif
 
         IF (isubset /= 1) THEN
           DO i = 1, n_species
@@ -966,8 +982,6 @@ CONTAINS
         CALL destroy_partlist(ejected_list(i)%attached_list)
       END DO
     END IF
-
-    IF (reset_collisions) CALL collision_counter_set_zero
 
     IF (timer_collect) CALL timer_stop(c_timer_io)
 
@@ -1456,13 +1470,35 @@ CONTAINS
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(by * dt, r4)
       CASE(c_dump_bz)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(bz * dt, r4)
+#ifndef ELECTROSTATIC
       CASE(c_dump_jx)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jx(1-ng:nx+ng) * dt, r4)
       CASE(c_dump_jy)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jy(1-ng:nx+ng) * dt, r4)
       CASE(c_dump_jz)
         avg%r4array(:,1) = avg%r4array(:,1) + REAL(jz(1-ng:nx+ng) * dt, r4)
-#ifdef ELECTROSTATIC
+#else
+      CASE(c_dump_jx)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jy)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jz)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + REAL(array*dt, r4)
+        END DO
+        DEALLOCATE(array)
       CASE(c_dump_es_potential)
         avg%r4array(:,1) = avg%r4array(:,1) &
           + REAL(es_potential(1-ng:nx+ng) * dt, r4)
@@ -1600,12 +1636,12 @@ CONTAINS
         nd = 1
         IF (avg%species_sum == 1) THEN
           CALL calc_neutral_collisions(array, 0)
-          avg%r4array(:,nd) = REAL(array * dt, r4)
+          avg%r4array(:,nd) = avg%r4array(:,nd) + REAL(array * dt, r4)
           nd = nd + 1
         END IF
         DO ispecies = 1, avg%n_species
           CALL calc_neutral_collisions(array, ispecies)
-          avg%r4array(:,nd) = REAL(array * dt, r4)
+          avg%r4array(:,nd) = avg%r4array(:,nd) + REAL(array * dt, r4)
           nd = nd + 1
 #endif
       CASE(c_dump_cou_log)
@@ -1614,6 +1650,31 @@ CONTAINS
           CALL calc_cou_log(array, ispecies-avg%species_sum)
           avg%r4array(:,ispecies) = avg%r4array(:,ispecies) &
               + REAL(array * dt, r4)
+        END DO
+        DEALLOCATE(array)
+#endif
+      CASE(c_dump_power_absorption_x)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ex*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_y)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ey*dt, r4)
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_z)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%r4array(:,ispecies) = avg%r4array(:,ispecies) + &
+            REAL(array*ez*dt, r4)
         END DO
         DEALLOCATE(array)
       END SELECT
@@ -1632,13 +1693,35 @@ CONTAINS
         avg%array(:,1) = avg%array(:,1) + by * dt
       CASE(c_dump_bz)
         avg%array(:,1) = avg%array(:,1) + bz * dt
+#ifndef ELECTROSTATIC
       CASE(c_dump_jx)
         avg%array(:,1) = avg%array(:,1) + jx(1-ng:nx+ng) * dt
       CASE(c_dump_jy)
         avg%array(:,1) = avg%array(:,1) + jy(1-ng:nx+ng) * dt
       CASE(c_dump_jz)
         avg%array(:,1) = avg%array(:,1) + jz(1-ng:nx+ng) * dt
-#ifdef ELECTROSTATIC
+#else
+      CASE(c_dump_jx)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_x)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jy)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_y)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_jz)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array,ispecies-avg%species_sum,c_dir_z)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
       CASE(c_dump_es_potential)
         avg%array(:,1) = avg%array(:,1) + es_potential(1-ng:nx+ng) * dt
       CASE(c_dump_es_current)
@@ -1759,12 +1842,12 @@ CONTAINS
         nd = 1
         IF (avg%species_sum == 1) THEN
           CALL calc_neutral_collisions(array, 0)
-          avg%array(:,nd) = array * dt
+          avg%array(:,nd) = avg%array(:,nd) + array * dt
           nd = nd + 1
         END IF
         DO ispecies = 1, avg%n_species
           CALL calc_neutral_collisions(array, ispecies)
-          avg%array(:,nd) = array * dt
+          avg%array(:,nd) = avg%array(:,nd) + array * dt
           nd = nd + 1
 #endif
       CASE(c_dump_cou_log)
@@ -1772,6 +1855,28 @@ CONTAINS
         DO ispecies = 1, n_species_local
           CALL calc_cou_log(array, ispecies-avg%species_sum)
           avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
+        END DO
+        DEALLOCATE(array)
+#endif
+      CASE(c_dump_power_absorption_x)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_x)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ex * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_y)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_y)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ey * dt
+        END DO
+        DEALLOCATE(array)
+      CASE(c_dump_power_absorption_z)
+        ALLOCATE(array(1-ng:nx+ng))
+        DO ispecies = 1, n_species_local
+          CALL calc_per_species_current(array, ispecies-avg%species_sum,c_dir_z)
+          avg%array(:,ispecies) = avg%array(:,ispecies) + array * ez * dt
         END DO
         DEALLOCATE(array)
       END SELECT
@@ -1994,6 +2099,7 @@ CONTAINS
 #ifdef NEUTRAL_COLLISIONS
     INTEGER, DIMENSION(2,c_ndims) :: ranges, ran_no_ng
     INTEGER, DIMENSION(c_ndims) :: new_dims
+#ifdef NEUTRAL_COLLISIONS
     ! Neutral collision variables
     INTEGER :: jspecies, nc_type, species1, species2, coll_index
     LOGICAL :: nc_flag, next_species
@@ -2026,7 +2132,6 @@ CONTAINS
     ! The variable is either averaged or has snapshot specified
     unaveraged_id = IAND(mask, c_io_averaged) == 0 &
         .OR. IAND(mask, c_io_snapshot) /= 0
-
     convert = IAND(mask, c_io_dump_single) /= 0 .AND. .NOT.restart_id
 
     IF (convert) THEN
@@ -2037,23 +2142,16 @@ CONTAINS
       subarray = subarray_field
     END IF
 
+#ifdef NEUTRAL_COLLISIONS
     nc_flag = .FALSE.
+#endif
     IF (PRESENT(fluxdir)) THEN
       ndirs = SIZE(fluxdir)
+#ifdef NEUTRAL_COLLISIONS
     ELSEIF (id == c_dump_neutral_collision .AND. ANY(neutral_coll)) THEN
-      nc_average = .FALSE.
       nc_flag = .TRUE.
       ndirs = 1
-      ! Flag checking whether neutral collisions are being averaged
-      DO io = 1, n_io_blocks
-        iob => io_block_list(io)
-        IF (.NOT.iob%dump) CYCLE
-        mask = iob%dumpmask(id)
-        IF (IAND(mask, c_io_averaged) == 0) CYCLE
-        avg => iob%averaged_data(id)
-        IF (.NOT.avg%started) CYCLE
-        nc_average = .TRUE.
-      END DO
+#endif
     ELSE
       ndirs = 1
     END IF
@@ -2122,6 +2220,14 @@ CONTAINS
           CALL func(array, 0)
         END IF
 
+        IF (id == c_dump_power_absorption_x) THEN
+          array = array * ex
+        ELSEIF (id == c_dump_power_absorption_y) THEN
+          array = array * ey
+        ELSEIF (id == c_dump_power_absorption_z) THEN
+          array = array * ez
+        END IF
+
         IF (dump_skipped) THEN
           rnx = sub%n_local(1)
 
@@ -2184,6 +2290,7 @@ CONTAINS
       temp_grid_id = 'grid/r_' // TRIM(sub%name)
 
       DO ispecies = 1, n_species
+#ifdef NEUTRAL_COLLISIONS
         IF (nc_flag) THEN ! neutral collisions
           IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
           idir = 0
@@ -2216,6 +2323,14 @@ CONTAINS
 
               CALL func(array, ispecies, idir)
 
+              IF (id == c_dump_power_absorption_x) THEN
+                array = array * ex
+              ELSEIF (id == c_dump_power_absorption_y) THEN
+                array = array * ey
+              ELSEIF (id == c_dump_power_absorption_z) THEN
+                array = array * ez
+              END IF
+
               IF (dump_part) THEN
                 ! First subset is main dump so there wont be any restrictions
                 temp_grid_id = 'grid/' // TRIM(sub%name)
@@ -2241,56 +2356,68 @@ CONTAINS
             END DO
           END DO
         ELSE
-          IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
-          DO idir = 1, ndirs
-            IF (PRESENT(dir_tags)) THEN
-              CALL check_name_length('dir tag', &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name))
+#endif
+        IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+        DO idir = 1, ndirs
+          IF (PRESENT(dir_tags)) THEN
+            CALL check_name_length('dir tag', &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-            ELSE
-              CALL check_name_length('species', &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
+            temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+          ELSE
+            CALL check_name_length('species', &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
-            END IF
+            temp_block_id = TRIM(block_id) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name)
+          END IF
 
-            CALL check_name_length('subset', &
-              TRIM(temp_name) // '/Reduced_' // TRIM(sub%name))
+          CALL check_name_length('subset', &
+            TRIM(temp_name) // '/Reduced_' // TRIM(sub%name))
 
-            temp_block_id = TRIM(temp_block_id) // '/r_' // TRIM(sub%name)
-            temp_name = TRIM(temp_name) // '/Reduced_' // TRIM(sub%name)
+          temp_block_id = TRIM(temp_block_id) // '/r_' // TRIM(sub%name)
+          temp_name = TRIM(temp_name) // '/Reduced_' // TRIM(sub%name)
 
-            IF (PRESENT(fluxdir)) THEN
-              CALL func(array, ispecies, fluxdir(idir))
-            ELSE
-              CALL func(array, ispecies)
-            END IF
+          IF (PRESENT(fluxdir)) THEN
+            CALL func(array, ispecies, fluxdir(idir))
+          ELSE
+            CALL func(array, ispecies)
+          END IF
 
-            ii = sub%n_start(1) + 1
-            DO i = 1, rnx
-              reduced(i) = array(ii)
-              ii = ii + sub%skip_dir(1)
-            END DO
+          IF (id == c_dump_power_absorption_x) THEN
+            array = array * ex
+          ELSEIF (id == c_dump_power_absorption_y) THEN
+            array = array * ey
+          ELSEIF (id == c_dump_power_absorption_z) THEN
+            array = array * ez
+          END IF
 
-            CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
-              TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
-              TRIM(temp_grid_id), reduced, rsubtype, rsubarray, convert)
-
-            sub%dump_field_grid = .TRUE.
+          ii = sub%n_start(1) + 1
+          DO i = 1, rnx
+            reduced(i) = array(ii)
+            ii = ii + sub%skip_dir(1)
           END DO
+
+          CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+            TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+            TRIM(temp_grid_id), reduced, rsubtype, rsubarray, convert)
+
+          sub%dump_field_grid = .TRUE.
+        END DO
+#ifdef NEUTRAL_COLLISIONS
         END IF
+#endif
       END DO
     ELSE IF (dump_species) THEN
       DO ispecies = 1, n_species
+#ifdef NEUTRAL_COLLISIONS
         IF (nc_flag) THEN ! neutral collisions
           IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
           idir = 0
@@ -2322,6 +2449,14 @@ CONTAINS
                 // '/' // TRIM(collpair_str)
 
               CALL func(array, ispecies, idir)
+        
+              IF (id == c_dump_power_absorption_x) THEN
+                array = array * ex
+              ELSEIF (id == c_dump_power_absorption_y) THEN
+                array = array * ey
+              ELSEIF (id == c_dump_power_absorption_z) THEN
+                array = array * ez
+              END IF
 
               IF (dump_part) THEN
                 ! First subset is main dump so there wont be any restrictions
@@ -2348,21 +2483,22 @@ CONTAINS
             END DO
           END DO
         ELSE
-          IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
-          DO idir = 1, ndirs
-            IF (PRESENT(dir_tags)) THEN
-              CALL check_name_length('dir tag', &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name))
+#endif
+        IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+        DO idir = 1, ndirs
+          IF (PRESENT(dir_tags)) THEN
+            CALL check_name_length('dir tag', &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name))
 
-              temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-              temp_name = &
-                'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
-                // '/' // TRIM(io_list(ispecies)%name)
-            ELSE
-              CALL check_name_length('species', &
-                'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
+            temp_block_id = TRIM(block_id) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+            temp_name = &
+              'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
+              // '/' // TRIM(io_list(ispecies)%name)
+          ELSE
+            CALL check_name_length('species', &
+              'Derived/' // TRIM(name) // '/' // TRIM(io_list(ispecies)%name))
 
               temp_block_id = TRIM(block_id) &
                 // '/' // TRIM(io_list(ispecies)%name)
@@ -2374,6 +2510,14 @@ CONTAINS
             CALL func(array, ispecies, fluxdir(idir))
           ELSE
             CALL func(array, ispecies)
+          END IF
+
+          IF (id == c_dump_power_absorption_x) THEN
+            array = array * ex
+          ELSEIF (id == c_dump_power_absorption_y) THEN
+            array = array * ey
+          ELSEIF (id == c_dump_power_absorption_z) THEN
+            array = array * ez
           END IF
 
           IF (dump_part) THEN
@@ -2393,6 +2537,7 @@ CONTAINS
             END IF
           END DO
         END IF
+#endif
       END DO
     END IF
 
@@ -2442,8 +2587,11 @@ CONTAINS
 
         IF (avg%n_species > 0) THEN
           iav = avg%species_sum
+#ifdef NEUTRAL_COLLISIONS
           IF (nc_flag) ndirs = 1
+#endif
           DO ispecies = 1, avg%n_species / ndirs
+#ifdef NEUTRAL_COLLISIONS
             IF (nc_flag) THEN ! This determines the collision type
               coll_index = 0
               next_species = .TRUE.
@@ -2467,6 +2615,9 @@ CONTAINS
             ELSE
               IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
             END IF
+#else
+            IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+#endif
 
             DO idir = 1, ndirs
               IF (PRESENT(dir_tags)) THEN
@@ -2479,6 +2630,7 @@ CONTAINS
                 temp_name = &
                     'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
                     // '_averaged/' // TRIM(io_list(ispecies)%name)
+#ifdef NEUTRAL_COLLISIONS
               ELSE IF (nc_flag) THEN
                 colltype_str = coll_type_block%io_name
                 IF (str_cmp(colltype_str, 'none')) THEN
@@ -2498,6 +2650,7 @@ CONTAINS
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
                 temp_name = 'Derived/' // TRIM(name) // '_averaged/' // &
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
+#endif
               ELSE
                 CALL check_name_length('species', &
                     'Derived/' // TRIM(name) &
@@ -2552,8 +2705,11 @@ CONTAINS
 
         IF (avg%n_species > 0) THEN
           iav = avg%species_sum
+#ifdef NEUTRAL_COLLISIONS
           IF (nc_flag) ndirs = 1
+#endif
           DO ispecies = 1, avg%n_species / ndirs
+#ifdef NEUTRAL_COLLISIONS
             IF (nc_flag) THEN ! This determines the collision type
               coll_index = 0
               next_species = .TRUE.
@@ -2577,6 +2733,9 @@ CONTAINS
             ELSE
               IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
             END IF
+#else
+            IF (IAND(io_list(ispecies)%dumpmask, code) == 0) CYCLE
+#endif
 
             DO idir = 1, ndirs
               IF (PRESENT(dir_tags)) THEN
@@ -2589,6 +2748,7 @@ CONTAINS
                 temp_name = &
                     'Derived/' // TRIM(name) // '/' // TRIM(dir_tags(idir)) &
                     // '_averaged/' // TRIM(io_list(ispecies)%name)
+#ifdef NEUTRAL_COLLISIONS
               ELSE IF (nc_flag) THEN
                 colltype_str = coll_type_block%io_name
                 IF (str_cmp(colltype_str, 'none')) THEN
@@ -2608,6 +2768,7 @@ CONTAINS
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
                 temp_name = 'Derived/' // TRIM(name) // '_averaged/' // &
                   TRIM(colltype_str) // '/' // TRIM(collpair_str)
+#endif
               ELSE
                 CALL check_name_length('species', &
                     'Derived/' // TRIM(name) &
@@ -2633,15 +2794,9 @@ CONTAINS
         avg%array = 0.0_num
       END IF
 
-      IF (nc_flag) reset_collisions = .TRUE.
       avg%real_time = 0.0_num
       avg%started = .FALSE.
     END DO
-
-    IF (nc_flag .AND. &
-      IAND(mask, c_io_never) == 0 .AND. IAND(mask, code) /= 0) THEN
-      reset_collisions = .TRUE.
-    END IF
 
   END SUBROUTINE write_nspecies_field
 
@@ -3696,24 +3851,41 @@ CONTAINS
   END SUBROUTINE write_source_info
 
 
-
-  SUBROUTINE collision_counter_set_zero
-
-    INTEGER :: ispecies, jspecies, nc_type
-    TYPE(neutrals_block), POINTER :: collision_block
-    TYPE(collision_type_block), POINTER :: coll_type_block
-
-    DO ispecies = 1, n_species
-      DO jspecies = ispecies, n_species_bg
-        IF (.NOT.neutral_coll(ispecies, jspecies)) CYCLE
-        collision_block => species_list(ispecies)%neutrals(jspecies)
-        DO nc_type = 1, collision_block%ncolltypes
-          coll_type_block => collision_block%collision_set(nc_type)
-          coll_type_block%coll_counter = 0
-        END DO
-      END DO
-    END DO
-
-  END SUBROUTINE collision_counter_set_zero
-
+#ifdef ELECTROSTATIC
+  SUBROUTINE write_electrostatic_bc
+    REAL(num) :: Q_buffer, wcharge_buffer
+        ! Send x-min boundary data to all processors 
+        IF (x_min_boundary) THEN
+          Q_buffer = Q_now_min
+          wcharge_buffer = wcharge_min_now 
+        ELSE
+          Q_buffer = 0._num 
+          wcharge_buffer = 0._num 
+        END IF
+        CALL MPI_BCAST(Q_buffer, 1, MPI_DOUBLE_PRECISION, 0, comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'Q_capacitor_min', &
+            'Capacitor charge at x-min', Q_buffer)
+        CALL MPI_BCAST(wcharge_buffer, 1, MPI_DOUBLE_PRECISION, 0, comm, &
+          errcode) 
+        CALL sdf_write_srl(sdf_handle, 'wall_charge_min', &
+            'Surface charge density at x-min', wcharge_buffer)
+        
+        ! Send x-max boundary data to all processors 
+        IF (x_max_boundary) THEN
+          Q_buffer = Q_now_max
+          wcharge_buffer = wcharge_max_now 
+        ELSE
+          Q_buffer = 0._num 
+          wcharge_buffer = 0._num 
+        END IF
+        CALL MPI_BCAST(Q_buffer, 1, MPI_DOUBLE_PRECISION, nproc-1, &
+          comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'Q_capacitor_max', &
+            'Capacitor charge at x-max', Q_buffer)
+        CALL MPI_BCAST(wcharge_buffer, 1, MPI_DOUBLE_PRECISION, nproc-1, &
+          comm, errcode) 
+        CALL sdf_write_srl(sdf_handle, 'wall_charge_max', &
+            'Surface charge density at x-max', wcharge_buffer)
+  END SUBROUTINE
+#endif
 END MODULE diagnostics

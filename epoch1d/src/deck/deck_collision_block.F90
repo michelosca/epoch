@@ -39,14 +39,15 @@ CONTAINS
       use_collisional_ionisation = .FALSE.
       got_nanbu = .FALSE.
 #ifdef NEUTRAL_COLLISIONS
-      cross_section_table_location = &
-        'src/physics_packages/TABLES/neutral_collisions'
+      cross_section_table_location = TRIM(ADJUSTL(data_dir))
 #endif
-    ELSE
+   ELSE
       ALLOCATE(coll_pairs_touched(1:n_species, 1:n_species))
       coll_pairs_touched = .FALSE.
       CALL setup_collisions ! Only coulomb collisions
+#ifdef NEUTRAL_COLLISIONS
       CALL neutral_collisions_start
+#endif
     END IF
 
   END SUBROUTINE collision_deck_initialise
@@ -56,7 +57,9 @@ CONTAINS
   SUBROUTINE collision_deck_finalise
 
     INTEGER :: i, j
+#ifdef NEUTRAL_COLLISIONS
     REAL(num) :: qi, qj
+#endif
     LOGICAL, SAVE :: first = .TRUE.
 
     IF (deck_state == c_ds_first) RETURN
@@ -79,7 +82,9 @@ CONTAINS
           END IF
         END DO
       END DO
+#ifdef NEUTRAL_COLLISIONS
       IF (n_backgrounds > 0) use_collisions = .TRUE.
+#endif
       use_particle_lists = use_particle_lists .OR. use_collisions
       need_random_state = .TRUE.
 

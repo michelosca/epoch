@@ -311,6 +311,11 @@ CONTAINS
         current%pvol = npart_per_cell
 #endif
         current%part_pos = x(ix) + (random() - 0.5_num) * dx
+#ifdef PART_PERP_POSITION
+        IF (y_perp_flag) THEN
+          current%part_pos_y = random() * (y_max - y_min) + y_min
+        END IF
+#endif
 
         ipart = ipart + 1
         current => current%next
@@ -530,6 +535,11 @@ CONTAINS
           current%pvol = npart_per_cell
 #endif
           current%part_pos = x(ix) + (random() - 0.5_num) * dx
+#ifdef PART_PERP_POSITION
+          IF (y_perp_flag) THEN
+            current%part_pos_y = random() * (y_max - y_min) + y_min
+          END IF
+#endif
 
           ipart = ipart + 1
           current => current%next
@@ -575,6 +585,11 @@ CONTAINS
         current%pvol = npart_per_cell
 #endif
         current%part_pos = x(cell_x) + (random() - 0.5_num) * dx
+#ifdef PART_PERP_POSITION
+        IF (y_perp_flag) THEN
+          current%part_pos_y = random() * (y_max - y_min) + y_min
+        END IF
+#endif
 
         current => current%next
       END DO

@@ -47,7 +47,9 @@ CONTAINS
     dumpmask_warned = .FALSE.
 
     track_ejected_particles = .FALSE.
-    neutral_collision_counter = .FALSE.
+#ifdef NEUTRAL_COLLISIONS
+   neutral_collision_counter = .FALSE.
+#endif
     dump_absorption = .FALSE.
     averaged_var_block = 0
     new_style_io_block = .FALSE.
@@ -735,6 +737,14 @@ CONTAINS
 #endif
     ELSE IF (str_cmp(element, 'coulomb_logarithm')) THEN
       elementselected = c_dump_cou_log
+#ifdef ELECTROSTATIC
+    ELSE IF (str_cmp(element, 'power_absorption_x')) THEN
+      elementselected = c_dump_power_absorption_x
+    ELSE IF (str_cmp(element, 'power_absorption_y')) THEN
+      elementselected = c_dump_power_absorption_y
+    ELSE IF (str_cmp(element, 'power_absorption_z')) THEN
+      elementselected = c_dump_power_absorption_z
+#endif
     ELSE
       got_element = .FALSE.
 
@@ -856,6 +866,9 @@ CONTAINS
         IF (mask_element == c_dump_jx) bad = .FALSE.
         IF (mask_element == c_dump_jy) bad = .FALSE.
         IF (mask_element == c_dump_jz) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_x) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_y) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_z) bad = .FALSE.
         IF (mask_element == c_dump_total_energy_sum) bad = .FALSE.
 #ifdef NEUTRAL_COLLISIONS
         IF (mask_element == c_dump_neutral_collision) bad = .FALSE.
@@ -891,6 +904,9 @@ CONTAINS
         IF (mask_element == c_dump_jx) bad = .FALSE.
         IF (mask_element == c_dump_jy) bad = .FALSE.
         IF (mask_element == c_dump_jz) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_x) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_y) bad = .FALSE.
+        IF (mask_element == c_dump_power_absorption_z) bad = .FALSE.
         IF (mask_element == c_dump_poynt_flux) bad = .FALSE.
         IF (mask_element == c_dump_es_potential) bad = .FALSE.
         IF (mask_element == c_dump_es_current) bad = .FALSE.

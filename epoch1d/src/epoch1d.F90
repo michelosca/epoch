@@ -59,6 +59,10 @@ PROGRAM pic
 #endif
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
+#endif
+#ifdef NEUTRAL_COLLISIONS
+  USE neutral_collisions
 #endif
 #ifdef NEUTRAL_COLLISIONS 
   USE nc_setup
@@ -135,9 +139,18 @@ PROGRAM pic
   CALL custom_particle_load
   CALL manual_load
   CALL finish_injector_setup
+#ifdef ELECTROSTATIC
+#ifdef PETSC
+  CALL setup_petsc_variables(nx)
+#endif
+#endif
 
+
+#ifdef NEUTRAL_COLLISIONS
   IF (ANY(neutral_coll)) CALL final_nc_setup
-
+#endif
+  IF (inductive_heating_flag) CALL inductive_heating_setup
+  
   CALL initialise_window ! window.f90
   CALL set_dt
   CALL set_maxwell_solver
@@ -169,7 +182,7 @@ PROGRAM pic
       CALL update_eb_fields_final
       CALL moving_window
 #else
-      CALL es_update_e_field
+      CALL es_initialize_e_field
 #endif
     END IF
   ELSE
@@ -181,7 +194,7 @@ PROGRAM pic
     dt = dt_store
 #else
     CALL bfield_final_bcs
-    CALL es_update_e_field
+    CALL es_initialize_e_field
     CALL es_particles_push_back
 #endif
   END IF
@@ -264,16 +277,14 @@ PROGRAM pic
         END IF
 
         ! call collision operator
-#ifdef NEUTRAL_COLLISIONS
-        IF (use_collisions) THEN
-            IF (ANY(coulomb_coll)) CALL particle_collisions
-            IF (ANY(neutral_coll)) CALL run_neutral_collisions
-        END IF
-#else
         IF (collision_step) THEN
+#ifdef NEUTRAL_COLLISIONS
+          IF (ANY(neutral_coll)) CALL run_neutral_collisions
+          IF (ANY(coulomb_coll)) CALL particle_collisions
+#else
           CALL particle_collisions
-        END IF
 #endif
+        END IF
 
         ! Early beta version of particle splitting operator
         IF (use_split) CALL split_particles

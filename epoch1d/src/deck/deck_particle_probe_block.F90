@@ -179,8 +179,19 @@ CONTAINS
       RETURN
     END IF
 
+    IF (str_cmp(element, 'ek_min_eV')) THEN
+      working_probe%ek_min = as_real_print(value, element, errcode) * q0
+      RETURN
+    END IF
+
     IF (str_cmp(element, 'ek_max')) THEN
       working_probe%ek_max = as_real_print(value, element, errcode)
+      IF (working_probe%ek_max < 0) working_probe%ek_max = HUGE(1.0_num)
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 'ek_max_eV')) THEN
+      working_probe%ek_max = as_real_print(value, element, errcode) * q0
       IF (working_probe%ek_max < 0) working_probe%ek_max = HUGE(1.0_num)
       RETURN
     END IF
@@ -188,6 +199,16 @@ CONTAINS
     IF (str_cmp(element, 'name')) THEN
       got_name = .TRUE.
       working_probe%name = TRIM(value)
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 't_start')) THEN
+      working_probe%t_start = as_real_print(value, element, errcode)
+      RETURN
+    END IF
+
+    IF (str_cmp(element, 't_end')) THEN
+      working_probe%t_end = as_real_print(value, element, errcode)
       RETURN
     END IF
 

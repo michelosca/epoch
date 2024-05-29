@@ -29,6 +29,7 @@ MODULE finish
   USE probes
 #ifdef ELECTROSTATIC
   USE electrostatic
+  USE inductive_heating
 #endif
 #ifdef NEUTRAL_COLLISIONS
   USE nc_setup
@@ -87,7 +88,9 @@ CONTAINS
       END IF
     END DO
 
-    CALL deallocate_neutral_collisions
+#ifdef NEUTRAL_COLLISIONS
+   CALL deallocate_neutral_collisions
+#endif
 
     DEALLOCATE(species_list, STAT=stat)
 
@@ -137,6 +140,7 @@ CONTAINS
     CALL deallocate_injectors
 #ifdef ELECTROSTATIC
     CALL finalize_electrostatic_solver
+    CALL inductive_heating_finalize
 #endif
     CALL MPI_COMM_FREE(comm, errcode)
 

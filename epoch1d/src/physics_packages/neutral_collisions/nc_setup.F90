@@ -16,6 +16,7 @@
 ! written by M. Osca Engelbrecht
 
 MODULE nc_setup
+#ifdef NEUTRAL_COLLISIONS
 
   USE strings_advanced
   USE shared_data
@@ -43,7 +44,7 @@ CONTAINS
   SUBROUTINE load_neutral_collisions
 
     INTEGER :: ispecies, jspecies, n_coll_type, lines, l, species
-    INTEGER :: iu, io, errcode, iread, file_id, header_lines
+    INTEGER :: errcode, iread, file_id, header_lines
     LOGICAL :: ij_exists, ji_exists, header, is_background
     
     CHARACTER(string_length) :: element, value
@@ -105,15 +106,12 @@ CONTAINS
               IF (is_background) coll_block%background => background
             ELSE ! No table is found
               IF (rank == 0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'No energy-cross-section table is found for', &
-                    ' species pair ', TRIM(ADJUSTL(ij_filename))
-                  WRITE(io,*) 'Please add table and rerun code'
-                  WRITE(io,*) ''
-                END DO
+                WRITE(*,*)
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'No energy-cross-section table is found for', &
+                  ' species pair ', TRIM(ADJUSTL(ij_filename))
+                WRITE(*,*) 'Please add table and rerun code'
+                WRITE(*,*) ''
               END IF
               CALL MPI_BARRIER(comm, errcode)
               CALL abort_code(c_err_missing_elements)
@@ -163,13 +161,10 @@ CONTAINS
               OPEN(file_id,FILE=TRIM(full_path_file), STATUS='OLD', &
                 IOSTAT=errcode)
               IF (errcode /= 0 .AND. rank==0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'Error reading cross section files'
-                  WRITE(io,*)
-                END DO
+                WRITE(*,*)
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'Error reading cross section files'
+                WRITE(*,*)
                 CALL abort_code(c_err_bad_value)
               END IF
 
@@ -194,13 +189,10 @@ CONTAINS
               
               ! Check the number of lines read. Minimum is one line
               IF (rank==0 .AND. lines == 0) THEN
-                DO iu = 1, nio_units ! Print to stdout and to file
-                  io = io_units(iu)
-                  WRITE(io,*) '*** ERROR ***'
-                  WRITE(io,*) 'Table in file ', TRIM(ij_type_k_filename), &
-                      ' is empty'
-                  WRITE(io,*)
-                END DO
+                WRITE(*,*) '*** ERROR ***'
+                WRITE(*,*) 'Table in file ', TRIM(ij_type_k_filename), &
+                    ' is empty'
+                WRITE(*,*)
                 CALL abort_code(c_err_io_error)
               END IF
 
@@ -269,7 +261,6 @@ CONTAINS
     TYPE(neutrals_block), POINTER, INTENT(INOUT) :: coll_block
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     INTEGER, INTENT(IN) :: ispecies, jspecies
-    INTEGER :: io, iu
     REAL(num) :: mi, mj, mu
 
     ! Convert energy data into Joules
@@ -297,19 +288,16 @@ CONTAINS
     IF (coll_block%is_background) THEN
       IF (.NOT.coll_type%wnanbu .AND. .NOT.coll_type%wvahedi) THEN
         IF (rank == 0) THEN
-          DO iu = 1, nio_units ! Print to stdout and to file
-            io = io_units(iu)
-            WRITE(io,*)
-            WRITE(io,*) '*** WARNING ***'
-            WRITE(io,*) "Collisions with background gas are only possible", &
-              " with Nanbu's or Vahedi's method"
-            WRITE(io,*) 'Collision between ', &
-              TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
-              TRIM(ADJUSTL(coll_block%background%name))
-            WRITE(io,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
-              " switched to Nanbu's method"
-            WRITE(io,*) ''
-          END DO
+          WRITE(*,*)
+          WRITE(*,*) '*** WARNING ***'
+          WRITE(*,*) "Collisions with background gas are only possible", &
+            " with Nanbu's or Vahedi's method"
+          WRITE(*,*) 'Collision between ', &
+            TRIM(ADJUSTL(species_list(ispecies)%name)), ' and ', &
+            TRIM(ADJUSTL(coll_block%background%name))
+          WRITE(*,*) ' - Type ', TRIM(ADJUSTL(coll_type%name)), &
+            " switched to Nanbu's method"
+          WRITE(*,*) ''
         END IF
         coll_type%wnanbu = .TRUE.
         coll_type%wvahedi = .FALSE.
@@ -329,7 +317,6 @@ CONTAINS
 
     TYPE(collision_type_block), POINTER, INTENT(INOUT) :: coll_type
     LOGICAL, INTENT(IN) :: is_background
-    INTEGER :: io, iu
     LOGICAL :: linked, background_mismatch
     CHARACTER(len=20) :: method_str
 
@@ -386,15 +373,12 @@ CONTAINS
       END IF
 #else
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Collision split method is only possible with', &
-            ' per-particle weight set-up.'
-          WRITE(io,*) 'Please recompile, and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Collision split method is only possible with', &
+          ' per-particle weight set-up.'
+        WRITE(*,*) 'Please recompile, and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -452,15 +436,12 @@ CONTAINS
       END IF
 #else
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Collision split method is only possible with', &
-            ' per-particle weight set-up.'
-          WRITE(io,*) 'Please recompile, and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Collision split method is only possible with', &
+          ' per-particle weight set-up.'
+        WRITE(*,*) 'Please recompile, and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -473,14 +454,11 @@ CONTAINS
         IF (coll_type%wvahedi) method_str = 'Vahedi'
         IF (coll_type%wvahedisplit) method_str = 'Vahedi split'
         IF (coll_type%wnanbusplit) method_str = 'Nanbu split'
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) TRIM(coll_type%name), ' is not available for ', &
-            TRIM(ADJUSTL(method_str)), ' method'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) TRIM(coll_type%name), ' is not available for ', &
+          TRIM(ADJUSTL(method_str)), ' method'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -488,14 +466,10 @@ CONTAINS
 
     IF (background_mismatch) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) TRIM(coll_type%name), ' method is not available for ', &
-            'collisions with background gas'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) TRIM(coll_type%name), ' method is not available for ', &
+          'collisions with background gas'
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -511,26 +485,33 @@ CONTAINS
     TYPE(neutrals_block), POINTER, INTENT(INOUT) :: coll_block
 #ifndef PER_SPECIES_WEIGHT
     INTEGER(8) :: npart, ipart
-    REAL(num) :: all_max_weight
+    REAL(num) :: all_max_weight, all_min_weight
     REAL(num) :: max_w1, max_w2
+    REAL(num) :: min_w1, min_w2
     TYPE(particle), POINTER :: current
 #endif
-    REAL(num) :: max_weight, wi, wj
+    REAL(num) :: max_weight, min_weight, wi, wj
     
-    max_weight = 1._num
+    max_weight = -1._num
+    min_weight = 1.e100_num
 #ifndef PER_SPECIES_WEIGHT
     current => species_list(ispecies)%attached_list%head
     npart = species_list(ispecies)%attached_list%count
-    max_w1 = 1._num
+    max_w1 = max_weight
+    min_w1 = min_weight
     DO ipart = 1, npart
       wi = current%weight
       max_w1 = MAX(wi, max_w1)
+      min_w1 = MIN(wi, min_w1)
       current => current%next
     END DO
     CALL MPI_ALLREDUCE(max_w1,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
     coll_block%max_w1 = all_max_weight
+    CALL MPI_ALLREDUCE(min_w1,all_min_weight,1,MPIREAL,MPI_MIN,comm,errcode)
+    coll_block%min_w1 = all_min_weight
     
-    max_w2 = 1._num
+    max_w2 = max_weight
+    min_w2 = min_weight
     IF (ispecies /= jspecies) THEN
       IF (jspecies <= n_species) THEN
         current => species_list(jspecies)%attached_list%head
@@ -538,14 +519,18 @@ CONTAINS
         DO ipart = 1, npart
           wj = current%weight
           max_w2 = MAX(wj, max_w2)
+          min_w2 = MIN(wj, min_w2)
           current => current%next
         END DO
       END IF
     END IF
     CALL MPI_ALLREDUCE(max_w2,all_max_weight,1,MPIREAL,MPI_MAX,comm,errcode)
     coll_block%max_w2 = all_max_weight
+    CALL MPI_ALLREDUCE(min_w2,all_min_weight,1,MPIREAL,MPI_MIN,comm,errcode)
+    coll_block%min_w2 = all_min_weight
 
     max_weight = MAX(coll_block%max_w1, coll_block%max_w2)
+    min_weight = MIN(coll_block%min_w1, coll_block%min_w2)
 #else
     wi = species_list(ispecies)%weight
     IF (jspecies > n_species) THEN
@@ -554,8 +539,16 @@ CONTAINS
       wj = species_list(jspecies)%weight
     END IF
     max_weight = MAX(wi, wj)
+
+    IF (jspecies > n_species) THEN
+      wj = 1.e100_num
+    ELSE
+      wj = species_list(jspecies)%weight
+    END IF
+    min_weight = MIN(wi, wj)
 #endif
     coll_block%max_weight = max_weight
+    coll_block%min_weight = min_weight
     
   END SUBROUTINE get_max_weight
 
@@ -601,15 +594,12 @@ CONTAINS
     
 
     REAL(num) :: g, g_min, g_max
-    REAL(num) :: gsigma,gsigma_min,gsigma_max,gsigma_total,global_gsigma_max
+    REAL(num) :: gsigma,gs_min,gs_max,gsigma_total,global_gsigma_max
     REAL(num) :: user_factor
-    REAL(num), ALLOCATABLE, DIMENSION(:) :: g_next
-    INTEGER :: ispecies, jspecies, ncolltypes
-    INTEGER :: ctype, line
-    INTEGER, ALLOCATABLE, DIMENSION(:) :: ie, tlen
-    LOGICAL, ALLOCATABLE, DIMENSION(:) :: completed
+    INTEGER :: ispecies, jspecies, ncolltypes, tlen
+    INTEGER :: ctype1, ctype2, line, g_entries, i
     TYPE(neutrals_block), POINTER :: coll_block
-    TYPE(collision_type_block), POINTER :: coll_type
+    TYPE(collision_type_block), POINTER :: coll_type1, coll_type2
 
     DO ispecies = 1, n_species
       DO jspecies = 1, n_species_bg
@@ -621,75 +611,65 @@ CONTAINS
           CYCLE
         END IF
 
-        ! Each collision type will have its own index: ie
-        ncolltypes = coll_block%ncolltypes
-        ALLOCATE(ie(ncolltypes), tlen(ncolltypes), g_next(ncolltypes))
-        ALLOCATE(completed(ncolltypes))
-        ie = 1
-        completed = .FALSE.
-        DO ctype = 1, ncolltypes
-          coll_type => coll_block%collision_set(ctype)
-          tlen(ctype) = coll_type%table_len
-          g_next(ctype) = coll_type%energy(1)
-        END DO
-
         ! Get MAX(g*sigma_total)
         global_gsigma_max = 0._num
-        DO WHILE ( .NOT.ALL(completed) )
 
-          g = MINVAL(g_next)
+        ! Go through all energy values present in this coll_block
+        ncolltypes = coll_block%ncolltypes
 
-          ! In case an g max.value is stopping the g-sweep
-          DO ctype = 1, ncolltypes
-            IF (ABS(g_next(ctype) - g) <= TINY(0._num) .AND. &
-              ie(ctype) == tlen(ctype)) THEN
-                completed(ctype) = .TRUE.
-                g_next(ctype) = HUGE(0._num)
-            END IF
-          END DO
+        ! Loop over collision types
+        DO ctype1 = 1, ncolltypes
+          coll_type1 => coll_block%collision_set(ctype1)
+          g_entries = coll_type1%table_len
 
-          ! Move index in table with min. g value
-          DO ctype = 1, ncolltypes
-            IF (.NOT.completed(ctype) .AND. &
-              ABS(g_next(ctype) - g) <= TINY(0._num)) THEN
-              coll_type => coll_block%collision_set(ctype)
-              ie(ctype) = ie(ctype) + 1
-              g_next(ctype) = coll_type%energy(ie(ctype))
-            END IF
-          END DO
+          ! Loop over g-values in cross-section tables
+          DO i = 1, g_entries
+            g = coll_type1%energy(i)
 
-          gsigma_total = 0._num
-          DO ctype = 1, ncolltypes
-            coll_type => coll_block%collision_set(ctype)
-            user_factor = coll_type%user_factor
-            gsigma = -1._num
-            IF (tlen(ctype) == 1) THEN
-              ! Only one line: cross-section is constant
-              gsigma = coll_type%cross_section(1)
-            ELSE
-              ! cross-section is energy dependent
-              DO line = 2, tlen(ctype)
-                g_min = coll_type%energy(line-1)
-                g_max = coll_type%energy(line)
-                IF (g < g_max .AND. g >= g_min ) THEN
-                  gsigma_min = coll_type%cross_section(line-1)
-                  gsigma_max = coll_type%cross_section(line)
-                  ! Interpolation
-                  gsigma = interpolation(g_min,g_max,gsigma_min,gsigma_max,g)
-                  gsigma = gsigma * user_factor
-                  EXIT
+            ! Get gsigma total for the current value of g
+            gsigma_total = 0._num
+
+            ! Loop over collision types
+            DO ctype2 = 1, ncolltypes
+
+              coll_type2 => coll_block%collision_set(ctype2)
+              user_factor = coll_type2%user_factor
+              ! Get g-cross-section value
+              IF (ctype1 == ctype2) THEN
+                gsigma = coll_type1%cross_section(i) * user_factor
+              ELSE
+                gsigma = -1._num
+                tlen = coll_type2%table_len
+                IF (tlen == 1) THEN
+                  ! Only one line: cross-section is constant
+                  gsigma = coll_type2%cross_section(1)
+                ELSE
+                  ! cross-section is energy dependent
+                  DO line = 2, tlen
+                    g_min = coll_type2%energy(line-1)
+                    g_max = coll_type2%energy(line)
+                    IF (g < g_max .AND. g >= g_min ) THEN
+                      gs_min = coll_type2%cross_section(line-1)
+                      gs_max = coll_type2%cross_section(line)
+                      ! Interpolation
+                      gsigma = interpolation(g_min, g_max, gs_min, gs_max, g)
+                      gsigma = gsigma * user_factor
+                      EXIT
+                    END IF
+                  END DO
+                  CALL crosssection_out_of_range(gsigma, g, coll_type2)
                 END IF
-              END DO
-              CALL crosssection_out_of_range(gsigma, g, coll_type)
-            END IF
+              END IF
 
-            gsigma_total = gsigma_total + gsigma
-          END DO ! collision types
-          global_gsigma_max = MAX(global_gsigma_max, gsigma_total)
+              gsigma_total = gsigma_total + gsigma
+            END DO ! collision types 2
+            NULLIFY(coll_type2)
 
-        END DO ! Do while loop
+            ! Checker whether current g-sigma is max.
+            global_gsigma_max = MAX(global_gsigma_max, gsigma_total)
 
-        DEALLOCATE(ie, tlen, completed, g_next)
+          END DO ! g-entries loop
+        END DO ! collision types 1
 
         ! Update coll_block
         coll_block%gsigma_max_total = global_gsigma_max
@@ -757,7 +737,7 @@ CONTAINS
 
   SUBROUTINE allocate_table_header(element, value, coll_type, coll_block)
   
-    INTEGER :: errcode, io, iu, ibg
+    INTEGER :: errcode, ibg
     LOGICAL :: flag
     REAL(num) :: conversion_factor
     CHARACTER(*), INTENT(IN) :: element, value
@@ -830,16 +810,20 @@ CONTAINS
       ELSEIF (str_cmp(value, 'excitation')) THEN
         coll_type%id = c_nc_excitation
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'ionisation')) THEN
+      ELSEIF (str_cmp(value, 'ionisation') .OR. &
+          str_cmp(value, 'ionization')) THEN
         coll_type%id = c_nc_ionisation
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'charge exchange')) THEN
+      ELSEIF (str_cmp(value, 'charge exchange') .OR. &
+          str_cmp(value, 'charge_exchange')) THEN
         coll_type%id = c_nc_charge_exchange
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'elastic_electron')) THEN
+      ELSEIF (str_cmp(value, 'elastic_electron') .OR. &
+          str_cmp(value, 'elastic electron')) THEN
         coll_type%id = c_nc_elastic_electron
         coll_type%name = TRIM(ADJUSTL(value))
-      ELSEIF (str_cmp(value, 'elastic_ion')) THEN
+      ELSEIF (str_cmp(value, 'elastic_ion') .OR. &
+          str_cmp(value, 'elastic ion')) THEN
         coll_type%id = c_nc_elastic_ion
         coll_type%name = TRIM(ADJUSTL(value))
       END IF
@@ -873,15 +857,12 @@ CONTAINS
 
     IF (errcode /= c_err_none) THEN
       IF (rank == 0) THEN
-        DO iu = 1, nio_units ! Print to stdout and to file
-          io = io_units(iu)
-          WRITE(io,*)
-          WRITE(io,*) '*** ERROR ***'
-          WRITE(io,*) 'Neutral collision table value "species_source_name"', &
-            ' "species_target_name" has not been defined correctly'
-          WRITE(io,*) 'Please fix value(s) and rerun code'
-          WRITE(io,*) ''
-        END DO
+        WRITE(*,*)
+        WRITE(*,*) '*** ERROR ***'
+        WRITE(*,*) 'Neutral collision table value "species_source_name"', &
+          ' "species_target_name" has not been defined correctly'
+        WRITE(*,*) 'Please fix value(s) and rerun code'
+        WRITE(*,*) ''
       END IF
       CALL MPI_BARRIER(comm, errcode)
       CALL abort_code(c_err_bad_setup)
@@ -917,7 +898,11 @@ CONTAINS
 
     IF (neutral_collision_counter) THEN
       ALLOCATE(coll_type%coll_counter(nx))
+#ifdef PER_SPECIES_WEIGHT
       coll_type%coll_counter = 0
+#else
+      coll_type%coll_counter = 0._num
+#endif
     END IF
 
   END SUBROUTINE init_collision_type_block
@@ -1015,4 +1000,5 @@ CONTAINS
 
   END SUBROUTINE deallocate_collision_type_block
 
+#endif
 END MODULE nc_setup
