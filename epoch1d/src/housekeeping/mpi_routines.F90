@@ -256,7 +256,6 @@ CONTAINS
     ALLOCATE(jy(1-jng:nx+jng))
     ALLOCATE(jz(1-jng:nx+jng))
 #ifdef ELECTROSTATIC
-    ALLOCATE(es_current(1-ng:nx+ng))
     ALLOCATE(es_potential(1-ng:nx+ng))
     es_potential = 0._num
 #ifndef TRIDIAG

@@ -903,7 +903,6 @@ MODULE shared_data
 
   !Current diagnostics
   REAL(num) :: convect_curr_min, convect_curr_max
-  REAL(num), ALLOCATABLE, DIMENSION(:) :: es_current
 
   LOGICAL :: capacitor_flag, capacitor_min, capacitor_max
   REAL(num) :: capacitor

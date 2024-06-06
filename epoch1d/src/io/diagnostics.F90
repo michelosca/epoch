@@ -495,8 +495,6 @@ CONTAINS
 #else
       CALL write_field(c_dump_es_potential, code, 'es_potential', &
           'Electric Potential/Vx', 'V', c_stagger_electrostatic, es_potential)
-      CALL write_field(c_dump_es_current, code, 'es_current', &
-          'Electric Current/I', 'A/m^2', c_stagger_electrostatic, es_current)
 #endif
       IF (cpml_boundaries) THEN
         CALL sdf_write_srl(sdf_handle, 'boundary_thickness', &
@@ -1502,9 +1500,6 @@ CONTAINS
       CASE(c_dump_es_potential)
         avg%r4array(:,1) = avg%r4array(:,1) &
           + REAL(es_potential(1-ng:nx+ng) * dt, r4)
-      CASE(c_dump_es_current)
-        avg%r4array(:,1) = avg%r4array(:,1) &
-            + REAL(es_current(1-ng:nx+ng) * dt, r4)
 #endif
       CASE(c_dump_ekbar)
         ALLOCATE(array(1-ng:nx+ng))
@@ -1727,8 +1722,6 @@ CONTAINS
         DEALLOCATE(array)
       CASE(c_dump_es_potential)
         avg%array(:,1) = avg%array(:,1) + es_potential(1-ng:nx+ng) * dt
-      CASE(c_dump_es_current)
-        avg%array(:,1) = avg%array(:,1) + es_current(1-ng:nx+ng) * dt
 #endif
       CASE(c_dump_ekbar)
         ALLOCATE(array(1-ng:nx+ng))

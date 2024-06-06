@@ -35,7 +35,7 @@ MODULE electrostatic
 
   PUBLIC :: es_update_e_field, setup_electrostatic
   PUBLIC :: es_initialize_e_field
-  PUBLIC :: init_potential, es_wall_current_diagnostic
+  PUBLIC :: init_potential 
   PUBLIC :: attach_potential, update_cell_count
   PUBLIC :: potential_update_spatial_profile, min_init_electrostatic
   PUBLIC :: finalize_electrostatic_solver
@@ -877,8 +877,6 @@ CONTAINS
     pot_ext_max = 0._num
     pot_ext_min = 0._num
 
-    es_current = 0._num
-
     wcharge_min_prev = 0._num
     wcharge_min_now = Q_now_min 
     wcharge_max_prev = 0._num
@@ -937,22 +935,6 @@ CONTAINS
     END IF
 
   END SUBROUTINE update_cell_count
-
-
-
-  SUBROUTINE es_wall_current_diagnostic
-
-    IF (x_min_boundary_open) THEN
-      es_current(1) = (wcharge_min_diff - convect_curr_min) / dt
-      convect_curr_min = 0._num
-    END IF
-
-    IF (x_max_boundary_open) THEN
-      es_current(nx) = (wcharge_max_diff - convect_curr_max) / dt
-      convect_curr_max = 0._num
-    END IF
-
-  END SUBROUTINE es_wall_current_diagnostic
 
 
 

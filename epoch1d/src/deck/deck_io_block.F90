@@ -644,8 +644,6 @@ CONTAINS
     ELSE IF (str_cmp(element, 'potential')) THEN
       elementselected = c_dump_es_potential
 
-    ELSE IF (str_cmp(element, 'wall_current')) THEN
-      elementselected = c_dump_es_current
 #endif
     ELSE IF (str_cmp(element, 'ekbar') &
         .OR. str_cmp(element, 'average_particle_energy')) THEN
@@ -909,7 +907,6 @@ CONTAINS
         IF (mask_element == c_dump_power_absorption_z) bad = .FALSE.
         IF (mask_element == c_dump_poynt_flux) bad = .FALSE.
         IF (mask_element == c_dump_es_potential) bad = .FALSE.
-        IF (mask_element == c_dump_es_current) bad = .FALSE.
 
         ! Unset 'no_sum' dumpmask for grid variables
         IF (.NOT.bad) mask = IAND(mask, NOT(c_io_no_sum))

@@ -257,7 +257,6 @@ PROGRAM pic
       ! .FALSE. this time to use load balancing threshold
       IF (use_balance) CALL balance_workload(.FALSE.)
 #ifdef ELECTROSTATIC
-      CALL es_wall_current_diagnostic
       CALL es_push_particles
       CALL es_update_e_field
 #else

@@ -654,12 +654,11 @@ MODULE constants
   INTEGER, PARAMETER :: c_dump_cou_log           = 73
 #ifdef ELECTROSTATIC
   INTEGER, PARAMETER :: c_dump_es_potential      = 74
-  INTEGER, PARAMETER :: c_dump_es_current        = 75
-  INTEGER, PARAMETER :: c_dump_neutral_collision = 76
-  INTEGER, PARAMETER :: c_dump_power_absorption_x= 77
-  INTEGER, PARAMETER :: c_dump_power_absorption_y= 78
-  INTEGER, PARAMETER :: c_dump_power_absorption_z= 79
-  INTEGER, PARAMETER :: num_vars_to_dump         = 79
+  INTEGER, PARAMETER :: c_dump_neutral_collision = 75
+  INTEGER, PARAMETER :: c_dump_power_absorption_x= 76
+  INTEGER, PARAMETER :: c_dump_power_absorption_y= 77
+  INTEGER, PARAMETER :: c_dump_power_absorption_z= 78
+  INTEGER, PARAMETER :: num_vars_to_dump         = 78
 #else
   INTEGER, PARAMETER :: num_vars_to_dump         = 73
 #endif
