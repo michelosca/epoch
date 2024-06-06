@@ -6,12 +6,12 @@ begin:constant
   temp_electron = 30000                          # [K]
   dens_plasma = 2.56e14                          # [m^-3]
 
-  f = 13.56e6                                    # [Hz]
-  freq = f * 2 * pi                              # [rad/s]
+  freq_Hz = 13.56e6                                    # [Hz]
+  freq_rad = freq_Hz * 2 * pi                              # [rad/s]
   v_amp = 450                                    # [V]
 
-  t_av = 32/f                                    # [s]
-  t_sim_end = 1280/f                             # [s]
+  t_av = 32/freq_Hz                              # [s]
+  t_sim_end = 1280/freq_Hz                       # [s]
   t_output_start = t_sim_end - t_av              # [s]
 
   pcles_per_species_per_cell = 512
@@ -29,11 +29,11 @@ begin:control
   dt_multiplier = 0.1                            # CLF condition multiplier
   
   es_dt_fact = 0.1
-  max_perturbation_frequency = freq              # [Hz]
+  max_perturbation_frequency = freq_Hz           # [Hz]
   neutral_coll_frequency_factor = 0.01
   max_energy_ev = 50                             # [50]
   stdout_frequency = 100000
-  user_dt = 1/400/f                              # [s]
+  user_dt = 1/400/freq_Hz                        # [s]
 end:control
 
 
@@ -91,7 +91,7 @@ end:collisions
 begin:electrostatic
   boundary = x_max
   amp = v_amp
-  t_profile = sin(freq*time)
+  t_profile = sin(freq_rad*time)
 end:electrostatic
 
 

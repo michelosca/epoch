@@ -61,9 +61,8 @@ CONTAINS
       ! species1 mass & weight
       collision%m1 = species_list(species1)%mass
       collision%im1 = 1._num/collision%m1
-#ifdef PER_SPECIES_WEIGHT
       collision%w1 = species_list(species1)%weight
-#endif
+      
       !Randomize species1's particle list
       DO ix = 1, nx
         p_list1 => species_list(species1)%secondary_list(ix)
@@ -131,11 +130,9 @@ CONTAINS
     collision%reducedm = collision%m1*collision%m2*collision%im12
     collision%ireducedm = 1._num/collision%reducedm
     w_max = collision%collision_block%max_weight
-#ifdef PER_SPECIES_WEIGHT
     collision%w2 = species_list(species2)%weight
     collision%w1_ratio = collision%w1 / w_max
     collision%w2_ratio = collision%w2 / w_max
-#endif
 
     !Maximum collision probability
     ! Collisions per grid
@@ -405,9 +402,6 @@ CONTAINS
     REAL(num) :: p_total, p_low, p_top, igsigma_max
     REAL(num) :: ran1
     REAL(num) :: g_mag
-#ifndef PER_SPECIES_WEIGHT
-    REAL(num) :: min_weight
-#endif
     REAL(num), DIMENSION(3) :: u_1, u_2, g
     REAL(num), ALLOCATABLE, DIMENSION(:) :: gsigma_arr, prob_arr
     TYPE(neutrals_block), POINTER :: collision_block
@@ -469,34 +463,13 @@ CONTAINS
       ! IO collision data
       IF (neutral_collision_counter) THEN
         ix = collision%ix
-#ifdef PER_SPECIES_WEIGHT
         coll_type_block%coll_counter(ix) = coll_type_block%coll_counter(ix)+1
-#else
-        IF (collision_block%is_background) THEN
-          min_weight = collision%part1%weight
-        ELSE
-          min_weight = MIN(collision%part1%weight, collision%part2%weight)
-        END IF
-        coll_type_block%coll_counter(ix) = coll_type_block%coll_counter(ix) + &
-          min_weight
-#endif
       END IF
 
       ! Store velocity values (used later in coll_subroutine)
       collision%g = g
       collision%u_2 = u_2
       collision%g_mag = g_mag
-#ifndef PER_SPECIES_WEIGHT
-      IF (collision_block%is_background) THEN
-        collision%w1 = collision%part1%weight
-        collision%w1_ratio = collision%w1 / collision_block%max_weight
-      ELSE
-        collision%w1 = collision%part1%weight
-        collision%w2 = collision%part2%weight
-        collision%w1_ratio = collision%w1 / collision_block%max_weight
-        collision%w2_ratio = collision%w2 / collision_block%max_weight
-      END IF
-#endif
 
       ! Calculate post-collision momenta
       CALL coll_type_block%coll_subroutine(collision)
@@ -655,11 +628,7 @@ CONTAINS
         collision_block => species_list(ispecies)%neutrals(jspecies)
         DO nc_type = 1, collision_block%ncolltypes
           coll_type_block => collision_block%collision_set(nc_type)
-#ifdef PER_SPECIES_WEIGHT
           coll_type_block%coll_counter = 0
-#else
-          coll_type_block%coll_counter = 0._num
-#endif
         END DO
       END DO
     END DO

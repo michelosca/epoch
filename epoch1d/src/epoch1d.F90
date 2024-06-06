@@ -72,7 +72,11 @@ PROGRAM pic
   IMPLICIT NONE
 
   INTEGER :: ispecies, ierr
+#ifdef ELECTROSTATIC
+  LOGICAL :: push = .TRUE.
+#else
   LOGICAL :: halt = .FALSE., push = .TRUE.
+#endif
   LOGICAL :: force_dump = .FALSE.
   LOGICAL :: collision_step, coll_ion_step
   CHARACTER(LEN=64) :: deck_file = 'input.deck'

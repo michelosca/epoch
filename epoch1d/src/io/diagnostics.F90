@@ -1643,6 +1643,8 @@ CONTAINS
           CALL calc_neutral_collisions(array, ispecies)
           avg%r4array(:,nd) = avg%r4array(:,nd) + REAL(array * dt, r4)
           nd = nd + 1
+        END DO
+        DEALLOCATE(array)
 #endif
       CASE(c_dump_cou_log)
         ALLOCATE(array(1-ng:nx+ng))
@@ -1652,7 +1654,7 @@ CONTAINS
               + REAL(array * dt, r4)
         END DO
         DEALLOCATE(array)
-#endif
+#ifdef ELECTROSTATIC
       CASE(c_dump_power_absorption_x)
         ALLOCATE(array(1-ng:nx+ng))
         DO ispecies = 1, n_species_local
@@ -1677,6 +1679,7 @@ CONTAINS
             REAL(array*ez*dt, r4)
         END DO
         DEALLOCATE(array)
+#endif
       END SELECT
 
     ELSE
@@ -1849,6 +1852,8 @@ CONTAINS
           CALL calc_neutral_collisions(array, ispecies)
           avg%array(:,nd) = avg%array(:,nd) + array * dt
           nd = nd + 1
+        END DO
+        DEALLOCATE(array)
 #endif
       CASE(c_dump_cou_log)
         ALLOCATE(array(1-ng:nx+ng))
@@ -1857,7 +1862,7 @@ CONTAINS
           avg%array(:,ispecies) = avg%array(:,ispecies) + array * dt
         END DO
         DEALLOCATE(array)
-#endif
+#ifdef ELECTROSTATIC
       CASE(c_dump_power_absorption_x)
         ALLOCATE(array(1-ng:nx+ng))
         DO ispecies = 1, n_species_local
@@ -1880,6 +1885,7 @@ CONTAINS
         END DO
         DEALLOCATE(array)
       END SELECT
+#endif
     END IF
 
   END SUBROUTINE average_field
@@ -2096,9 +2102,6 @@ CONTAINS
     TYPE(averaged_data_block), POINTER :: avg
     TYPE(io_block_type), POINTER :: iob
     TYPE(subset), POINTER :: sub
-#ifdef NEUTRAL_COLLISIONS
-    INTEGER, DIMENSION(2,c_ndims) :: ranges, ran_no_ng
-    INTEGER, DIMENSION(c_ndims) :: new_dims
 #ifdef NEUTRAL_COLLISIONS
     ! Neutral collision variables
     INTEGER :: jspecies, nc_type, species1, species2, coll_index
@@ -2334,20 +2337,14 @@ CONTAINS
               IF (dump_part) THEN
                 ! First subset is main dump so there wont be any restrictions
                 temp_grid_id = 'grid/' // TRIM(sub%name)
-
-                i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
-                IF (i1 < i0) THEN
-                  i0 = 1
-                  i1 = i0
-                END IF
-
-                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id),&
-                  TRIM(temp_name), TRIM(units), new_dims,stagger,temp_grid_id,&
-                  array(i0:i1), rsubtype, rsubarray, convert)
+                
+                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+                  TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+                  temp_grid_id, array, rsubtype, rsubarray, convert)
 
                 sub%dump_field_grid = .TRUE.
               ELSE
-                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id),&
+                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
                   TRIM(temp_name), TRIM(units), dims, stagger, 'grid', array, &
                   subtype, subarray, convert)
 
@@ -2462,23 +2459,16 @@ CONTAINS
                 ! First subset is main dump so there wont be any restrictions
                 temp_grid_id = 'grid/' // TRIM(sub%name)
 
-                i0 = ran_no_ng(1,1); i1 = ran_no_ng(2,1) - 1
-                IF (i1 < i0) THEN
-                  i0 = 1
-                  i1 = i0
-                END IF
-
-                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id),&
-                  TRIM(temp_name), TRIM(units), new_dims,stagger,temp_grid_id,&
-                  array(i0:i1), rsubtype, rsubarray, convert)
-
+                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
+                  TRIM(temp_name), TRIM(units), sub%n_global, stagger, &
+                  temp_grid_id, array, rsubtype, rsubarray, convert)
                 sub%dump_field_grid = .TRUE.
               ELSE
-                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id),&
+                CALL sdf_write_plain_variable(sdf_handle, TRIM(temp_block_id), &
                   TRIM(temp_name), TRIM(units), dims, stagger, 'grid', array, &
                   subtype, subarray, convert)
-
                 dump_field_grid = .TRUE.
+
               END IF
             END DO
           END DO
@@ -2511,7 +2501,7 @@ CONTAINS
           ELSE
             CALL func(array, ispecies)
           END IF
-
+#ifdef ELECTROSTATIC
           IF (id == c_dump_power_absorption_x) THEN
             array = array * ex
           ELSEIF (id == c_dump_power_absorption_y) THEN
@@ -2519,7 +2509,7 @@ CONTAINS
           ELSEIF (id == c_dump_power_absorption_z) THEN
             array = array * ez
           END IF
-
+#endif
           IF (dump_part) THEN
             ! First subset is main dump so there wont be any restrictions
             temp_grid_id = 'grid/' // TRIM(sub%name)
@@ -2536,6 +2526,7 @@ CONTAINS
               dump_field_grid = .TRUE.
             END IF
           END DO
+#ifdef NEUTRAL_COLLISIONS
         END IF
 #endif
       END DO

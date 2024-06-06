@@ -714,12 +714,6 @@ CONTAINS
 #ifdef SEE
     TYPE(see_type), POINTER :: see_block
 #endif
-#ifndef PER_SPECIES_WEIGHT
-    REAL(num) :: injection_weight
-#endif
-    boundary_shift = dx * REAL((1 + png + cpml_thickness) / 2, num)
-    x_min_outer = x_min - boundary_shift
-    x_max_outer = x_max + boundary_shift
 
     x_shift = length_x + 2.0_num * dx * REAL(cpml_thickness, num)
 
@@ -730,18 +724,13 @@ CONTAINS
       bc_species = species_list(ispecies)%bc_particle
 
 #ifdef ELECTROSTATIC
-#ifdef PER_SPECIES_WEIGHT
       part_weight = species_list(ispecies)%weight
-#endif
       part_charge = species_list(ispecies)%charge
 
       ! In case reinjection is on
       IF (species_list(ispecies)%reinjection_id > 0) THEN
         reinjection = .TRUE.
         n_injections = 0
-#ifndef PER_SPECIES_WEIGHT
-        injection_weight = 0._num
-#endif
       ELSE
         reinjection = .FALSE.
       END IF
@@ -804,16 +793,10 @@ CONTAINS
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
-#ifndef PER_SPECIES_WEIGHT
-                part_weight = cur%weight
-#endif
                 convect_curr_min = convect_curr_min + part_weight * part_charge
 
                 IF (reinjection) THEN
                   n_injections = n_injections + 1
-#ifndef PER_SPECIES_WEIGHT
-                  injection_weight = injection_weight + part_weight 
-#endif
                 END IF
 #ifdef SEE
                 IF (ASSOCIATED(see_block)) THEN
@@ -896,16 +879,10 @@ CONTAINS
 #ifdef ELECTROSTATIC
               ELSE IF (bc == c_bc_open) THEN
                 out_of_bounds = .TRUE.
-#ifndef PER_SPECIES_WEIGHT
-                part_weight = cur%weight
-#endif
                 convect_curr_max = convect_curr_max + part_weight * part_charge
 
                 IF (reinjection) THEN
                   n_injections = n_injections + 1
-#ifndef PER_SPECIES_WEIGHT
-                  injection_weight = injection_weight + part_weight
-#endif
                 END IF
 #ifdef SEE
                 IF (ASSOCIATED(see_block)) THEN
@@ -999,12 +976,7 @@ CONTAINS
 
 #ifdef ELECTROSTATIC
       IF (reinjection) THEN
-#ifndef PER_SPECIES_WEIGHT
-        CALL reinject_particles(n_injections, species_list(ispecies), 0, &
-          injection_weight)
-#else
         CALL reinject_particles(n_injections, species_list(ispecies), 0)
-#endif
       END IF
 #endif
 

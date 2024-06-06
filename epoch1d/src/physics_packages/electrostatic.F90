@@ -136,17 +136,11 @@ CONTAINS
       ! Copy the particle properties out for speed
       part_q  = species_list(ispecies)%charge
       IF (ABS(part_q) < TINY(0._num)) CYCLE
-#ifdef PER_SPECIES_WEIGHT      
       part_weight = species_list(ispecies)%weight
       wdata = part_q * part_weight
-#endif
 
       current => species_list(ispecies)%attached_list%head
       DO WHILE (ASSOCIATED(current))
-#ifndef PER_SPECIES_WEIGHT
-        part_weight = current%weight
-        wdata = part_q * part_weight
-#endif
 
 #ifdef PARTICLE_SHAPE_TOPHAT
         cell_x_r = (current%part_pos - x_min_local) * idx - 0.5_num

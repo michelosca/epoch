@@ -330,12 +330,12 @@ SRCFILES = background_collisions.F90 balance.F90 bethe_heitler.F90 \
 	custom_laser.f90 custom_parser.f90 deck.F90 deck_boundaries_block.f90 \
 	deck_bremsstrahlung_block.F90 deck_collision_block.F90 \
 	deck_constant_block.f90 deck_control_block.F90 deck_dist_fn_block.f90 \
-	deck_fields_block.f90 deck_injector_block.F90 deck_io_block.F90 \
+	deck_fields_block.F90 deck_injector_block.F90 deck_io_block.F90 \
 	deck_io_global_block.F90 deck_laser_block.f90 deck_part_from_file_block.F90 \
 	deck_particle_probe_block.F90 deck_qed_block.F90 deck_species_block.F90 \
 	deck_stencil_block.f90 deck_subset_block.F90 deck_window_block.f90 \
 	deltaf_loader.F90 diagnostics.F90 dist_fn.F90 epoch1d.F90 evaluate.F90 \
-	evaluator_blocks.F90 fields.f90 file_injectors.F90 finish.f90 helper.F90 \
+	evaluator_blocks.F90 fields.f90 file_injectors.F90 finish.F90 helper.F90 \
 	ic_module.f90 injectors.F90 ionise.F90 iterators.F90 laser.f90 \
 	mpi_routines.F90 mpi_subtype_control.f90 numerics.f90 particle_id_hash.F90 \
 	particle_migration.F90 particle_pointer_advance.f90 particle_temperature.F90 \
@@ -343,7 +343,7 @@ SRCFILES = background_collisions.F90 balance.F90 bethe_heitler.F90 \
 	random_generator.f90 redblack_module.f90 setup.F90 shape_functions.F90 \
 	shared_data.F90 shunt.F90 simple_io.F90 split_particle.F90 stack.f90 \
 	strings.f90 strings_advanced.f90 terminal_controls.F90 timer.f90 \
-	tokenizer_blocks.f90 utilities.f90 version_data.F90 welcome.F90 window.F90 \
+	tokenizer_blocks.f90 utilities.F90 version_data.F90 welcome.F90 window.F90 \
   electrostatic.F90 custom_electrostatic.F90 deck_electrostatic_block.F90 \
   neutral_collisions.F90 background.F90 deck_background_block.F90 \
   nc_setup.F90 nc_subroutines.F90 nc_auxiliary.F90 see.F90 deck_see_block.F90 \
@@ -563,7 +563,7 @@ evaluator_blocks.o: evaluator_blocks.F90 custom_parser.o stack.o strings.o
 fields.o: fields.f90 boundary.o
 	$(FC) -c $(FFLAGS) $(FLTCONS) -o $(OBJDIR)/$@ $(PREPROFLAGS) $<
 file_injectors.o: file_injectors.F90 partlist.o utilities.o
-finish.o: finish.f90 background_collisions.o collisions.o constants.o deck.o \
+finish.o: finish.F90 background_collisions.o collisions.o constants.o deck.o \
 	diagnostics.o dist_fn.o injectors.o ionise.o laser.o probes.o setup.o window.o \
   electrostatic.o nc_setup.o inductive_heating.o
 helper.o: helper.F90 balance.o boundary.o deltaf_loader.o partlist.o simple_io.o

@@ -68,6 +68,7 @@ CONTAINS
           coll_pairs(jspecies, bg_species) = 1._num
           neutral_coll(bg_species, jspecies) = .TRUE.
           neutral_coll(jspecies, bg_species) = .TRUE.
+          species_list(jspecies)%make_secondary_list = .TRUE.
         END IF
       END DO
     END DO
