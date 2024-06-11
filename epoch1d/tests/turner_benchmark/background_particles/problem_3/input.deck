@@ -1,3 +1,12 @@
+################################################################################
+#                                                                              #
+#  Problem 3 from Turner et al 2013, https://doi.org/10.1063/1.4775084         #
+#  - Helium capcitively coupled plasma                                         #
+#  - The neutral particles are simulated as super-particles, instead of        #
+#  a background gas as originally described in Turner's paper.                 #
+#                                                                              #
+################################################################################
+
 begin:constant
   mass_neutral = 7322.120571611805               # electron mass multiple
   temp_neutral = 300                             # [K]
