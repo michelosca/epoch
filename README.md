@@ -155,7 +155,7 @@ To perform an initial checkout of the code using git, you should issue the
 following command:
 
 ```
-  git clone --recursive https://github.com/Warwick-Plasma/epoch.git
+  git clone --recursive https://github.com/michelosca/epoch
 ```
 
 The "--recursive" flag ensures that not only the "epoch"
