@@ -14,7 +14,7 @@ begin:constant
   L = 0.02                                       # [m]
 
   # PLASMA
-  w = 1e9
+  w = 3e8
   dens_plasma = pcles_per_cell * ncells * w / L  # [m^-3]
   temp_electron = 2.0                            # [eV]
   temp_ion = 0.03                                # [eV]
