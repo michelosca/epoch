@@ -1,0 +1,237 @@
+################################################################################
+#                                                                              #
+#  Argon inductively coupled plasma, Case D                                    #
+#  Results in:                                                                 #
+#   - Meige et al 2005, https://doi.org/10.1063/1.4775084                      #
+#   - Osca Engelbrecht et al 2023, https://doi.org/10.1088/1361-6595/ad0fb1    #
+#                                                                              #
+################################################################################
+
+begin:constant
+  ncells = 1500 
+  pcles_per_cell = 64 
+  L = 0.10                                       # [m]
+
+  # PLASMA
+  w = 1.e9 
+  n_sim_part = ncells * pcles_per_cell
+  dens_plasma = n_sim_part * w / L               # [m^-3]
+  temp_electron = 2.0                            # [eV]
+  temp_ion = 0.03                                # [eV]
+
+  # BACKGROUND GAS
+  mass_neutral = 71457.22865971868               # electron mass multiple
+  temp_neutral = 297                             # [K]
+  press_neutral = 0.13332237                     # [Pa]
+  dens_neutral = press_neutral/kb/temp_neutral   # [m^-3]
+
+  L_min = 0.032
+  L_max = 0.04
+  # WAVEFORM
+  j0_amp = 1.5e6                                 # [A/m]
+  f0 = 10.e6                                     # [Hz]
+
+  period = 1/f0
+  n_cycles = 1000 
+  t_sim_end = period * n_cycles
+
+  av_cycles = 100
+  prob_cycles = 50
+  t_output_start = period * (n_cycles - av_cycles)
+  t_probe_start = period * (n_cycles - prob_cycles)
+  t_av = period * av_cycles
+end:constant
+
+
+begin:control
+  nx = ncells 
+  t_end = t_sim_end                              # [s] 
+  x_start = 0.0                                  # [m]
+  x_end = L                                      # [m]
+  
+  use_random_seed = T 
+  
+  dt_multiplier = 0.95                            # CLF condition multiplier
+  
+  es_dt_fact = 0.4
+  max_perturbation_frequency = f0                # [Hz]
+  neutral_coll_frequency_factor = 0.01
+  max_e_field = 10                            # [V/m]
+  max_energy_ev = 100
+  stdout_frequency = 10000000
+end:control
+
+begin:boundaries
+  bc_x_min_particle = open
+  bc_x_max_particle = open
+  bc_x_min_field = open
+  bc_x_max_field = open
+end:boundaries
+
+
+begin:species
+  name = electrons
+  charge = -1
+  mass = 1
+  npart_per_cell = pcles_per_cell
+  temp_ev = temp_electron
+  density = dens_plasma
+end:species
+
+
+begin:species
+  name = ions
+  charge = 1
+  mass = mass_neutral
+  npart_per_cell = pcles_per_cell
+  temp_ev = temp_ion
+  density = dens_plasma
+end:species
+
+
+begin:background
+  name = neutrals
+  id = 1
+  mass = mass_neutral
+  density = dens_neutral
+  temperature = temp_neutral
+  colliding_species = electrons
+  colliding_species = ions
+  density_profile = 1
+  temperature_profile = 1
+  t_start = 0
+  t_end = t_end
+end:background
+
+begin:electrostatic
+  boundary = x_min
+  amp = 1.e-100 
+  t_profile = 1.0 
+end:electrostatic
+
+begin:inductive
+  amp = j0_amp
+  x_min = L_min
+  x_max = L_max
+  profile = sin(2*pi*f0*time)
+end:inductive
+
+
+begin:collisions
+  use_collisions = T
+  collide = none
+  use_nanbu = T
+end:collisions
+
+begin:output_global
+  force_last_to_be_restartable = T
+end:output_global
+
+begin:output
+  name = stdout
+
+  # output start
+  time_start = 0.0 
+  dump_last = T 
+  dump_first = T
+
+  # output snapshot
+  dt_snapshot = period * prob_cycles 
+
+  # Properties on grid
+  px = always
+  py = always
+  pz = always
+  grid = always
+  ex = always
+  ey = always
+
+  potential = always
+  number_density = always + species
+  temperature = always + species
+  neutral_collisions = always + species
+  ejected_particles = always
+
+  particle_probes = always
+end:output
+
+
+begin:output
+  name = average
+  file_prefix = average
+
+  dt_average = t_av
+
+  # output start
+  time_start = t_output_start
+  dump_last = F
+  dump_first = F
+
+  # output snapshot
+  dt_snapshot = t_av
+
+  # Properties on grid
+  grid = always
+  ex = always + average
+  ey = always + average
+
+  potential = always + average
+  number_density = always + species + average
+  temperature = always + species + average
+  neutral_collisions = always + species + average
+  jx = always + species + average
+  jy = always + species + average
+  power_absorption_x = always + species + average
+  power_absorption_y = always + species + average
+end:output
+
+begin:output
+  name = cycle 
+  file_prefix = cycle
+
+  # output start
+  time_start = period * (n_cycles-1)
+  dump_last = T 
+  dump_first = T
+
+  # output snapshot
+  dt_snapshot = period * 0.01
+
+  # Properties on grid
+  px = always
+  py = always
+  pz = always
+  grid = always
+  ex = always
+  ey = always
+
+  potential = always
+  number_density = always + species
+  neutral_collisions = always + species
+  jx = always + species
+  jy = always + species
+  power_absorption_x = always + species
+  power_absorption_y = always + species
+end:output
+
+begin:probe
+   name = electron_probe_left
+   point = (L/2)
+   normal = (-1.0)
+   ek_min = 0.0
+   ek_max = -1.0
+   include_species:electrons
+   dumpmask = always
+   t_start = t_probe_start
+end:probe
+ 
+begin:probe
+   name = electron_probe_right
+   point = (L/2)
+   normal = (1.0)
+   ek_min = 0.0
+   ek_max = -1.0
+   include_species:electrons
+   dumpmask = always
+   t_start = t_probe_start 
+end:probe
