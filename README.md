@@ -1,11 +1,11 @@
 # *** PLEASE READ THIS NOTE ***
 
 If you are obtaining this code from the github server *DO NOT* use the
-"Download zip" buttons. They will only download the EPOCH code and not the SDF
+"Download zip" buttons. They will only download the EPOCH-LTP code and not the SDF
 subdirectory.
 
 The latest version of the code can be found
-[here](https://github.com/Warwick-Plasma/epoch/releases)
+[here](https://github.com/michelosca/epoch-ltp/releases)
 
 For similar reasons, if cloning the repository using git you *MUST* add the
 "--recursive" flag.
@@ -15,29 +15,17 @@ For similar reasons, if cloning the repository using git you *MUST* add the
 The easiest method of downloading the code is to grab a copy of the latest
 release package, located in the "Releases" section of the GitHub site.
 You can get there by following
-[this link](https://github.com/Warwick-Plasma/epoch/releases)
-
-All EPOCH development is carried out using the [git](https://git-scm.com)
-revision control system. The master repository is hosted on a web-based
-collaborative development site
-[here](https://github.com/Warwick-Plasma/epoch)
-Further details on this are provided below.
+[this link](https://github.com/michelosca/epoch-ltp/releases)
 
 ## Compiling the code
 
 The "Releases" section of the GitHub site contains files in the form
-"epoch-4.4.5.tar.gz". These are tarred and gzipped packages of the code
+"epoch-ltp-1.0.0.tar.gz". These are tarred packages of the code
 which can be unpacked with the command `tar xzf epoch-4.4.5.tar.gz`.
-This will create a directory called "epoch-4.4.5".
+This will create a directory called "epoch-ltp-1.0.0".
 
 Within this directory there are various epochXd subdirectories, each of which
 has a "Makefile" containing the instructions for compiling the code.
-
-Many people will be used to editing Makefiles by hand in order to set them up
-for their own working environment. However, this is not the recommended way
-of working with the EPOCH codebase. In theory, all the changes necessary for
-compiling EPOCH on any given environment should be possible using command-line
-variables.
 
 For most setups, it should only be necessary to set the COMPILER variable to
 correspond to the Fortran compiler to be used. This can either be set as an
@@ -96,13 +84,13 @@ single-precision version with global particle IDs you would type:
 
 ## COMPILING SDF AND THE VISIT READER
 
-The EPOCH codes use a self-describing file format called SDF. The routines
+The EPOCH-LTP codes use a self-describing file format called SDF. The routines
 used in reading and writing such files, along with reader plugins for Matlab,
 IDL, python and VisIt are contained in the SDF directory.
 
-The library used by EPOCH for reading and writing the files is automatically
-built when you first build EPOCH. However, it is important to note that
-whenever you rebuild EPOCH, the SDF library is NOT rebuilt by default. It is
+The library used by EPOCH-LTP for reading and writing the files is automatically
+built when you first build EPOCH-LTP. However, it is important to note that
+whenever you rebuild EPOCH-LTP, the SDF library is NOT rebuilt by default. It is
 also not removed when you type "make clean". Most of the time, this is what
 you want since rebuilding the library adds a significant amount of time to
 the compilation of the code. However, occasionally you might want to force the
@@ -128,11 +116,11 @@ depend on the version of VisIt that you have installed.
 Once these pre-requisites have been met, you should be able to build the
 reader plugin by typing `make visit`. You do not need to do this again unless
 you upgrade your version of the VisIt utility. It is rare that any changes to
-EPOCH will require an update of the VisIt reader, but if you do start to
+EPOCH-LTP will require an update of the VisIt reader, but if you do start to
 encounter errors when reading SDF files then you can try rebuilding the reader
 using the commands `make visitclean` followed by `make visit`.
 
-Note that older versions of EPOCH used the CFD format. This is now obsolete
+Note that older versions of EPOCH-LTP used the CFD format. This is now obsolete
 and current versions of the code no longer contain any reader plugin for this
 format. However, existing installations of the VisIt CFD plugin will happily
 co-exist with the SDF plugin and issuing `make visitclean` will not remove
@@ -146,7 +134,7 @@ quite a steep learning curve for using git, so using this repository is only
 recommended for more advanced users who are comfortable that they can deal with
 a "git conflict".
 
-One other added complication, is that the EPOCH repository also uses git
+One other added complication, is that the EPOCH-LTP repository also uses git
 submodules for tracking the SDF file format. This adds an extra source of
 possible issues. However, once a workflow is established it can all be quite
 straightforward to work with.
