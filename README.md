@@ -81,6 +81,11 @@ single-precision version with global particle IDs you would type:
   $> make DEFINE="-DPARTICLE_ID -DSINGLE"
 ```
 
+In EPOCH-LTP the current "DEFINE" variables available, apart from these in EPOCH, are:
+ - **PETSC**: (default) uses the [PETSc](https://petsc.org/release/) libraries for solving Poisson's equation for electrostatic.
+ - **TRIDIAG**: uses the tridiagonal method for solving Poisson's equation.
+ - **SEE**: activates secondary electron emission and electron emission caused by ion bombardment.   
+ - **PART_PERP_POSITION**: enables super-particle position tracking in the perpendicular position
 
 ## COMPILING SDF AND THE VISIT READER
 
@@ -176,3 +181,12 @@ conflicts. You must now resolve those conflicts and commit the changes.
 After successfully merging in the changes, you can now delete the temporary
 copy of your work branch with `git branch -D workold`.
 
+## TEST PROBLEMS
+Different test problems are available. These are found in
+```
+epoch1d/tests/
+```
+#### Helium capacitively coupled plasmas
+These problems are defined by [Turner et al](https://doi.org/10.1063/1.4775084).
+Two options are available: with the neutral species as a background gas (*background_field* folder), as in
+Turner et al; or with the neutral species as super-particles (background_particles)
