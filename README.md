@@ -1,3 +1,51 @@
+# EPOCH-LTP
+EPOCH-LTP is a particle-in-cell models for the simulation of Low Temperature Plasmas (LTP).
+
+This code is a spin-off of [EPOCH](https://epochpic.github.io/). In general, the
+coding style and coding structures are in line with EPOCH's guidelines. Therefore
+most what is described in [EPOCH's user manual](https://epochpic.github.io/documentation.html)
+applies to EPOCH-LTP. There is also a [Quicke Start](https://epochpic.github.io/quickstart.html)
+guide which is includes instructions on the installation and execution of the program.
+
+Currently only a 1-dimensional version of EPOCH-LTP is available. The main file is in 
+```
+epoch1d/src/epoch1d.F90
+```
+The main subroutines of the electrostatic field solver are in
+```
+epoch1d/src/physics_packages/electrostatic.F90
+```
+and those for the Monte Carlo collision method in
+```
+epoch1d/src/physics_packages/neutral_collisions
+```
+The particle phase-integrator is found in
+```
+epoch1d/src/particles.F90
+```
+
+## LOW TEMPERATURE PLASMA TEST PROBLEMS
+Sample input decks for LTP simulation test cases for capacitively coupled plasmas (CCPs) can be found in
+```
+epoch1d/tests/turner_benchmark
+epoch1d/tests/argon_ccp
+epoch1d/tests/argon_ccp_non_sinusoidal
+```
+and for inductively coupled plasmas (ICPs) in
+```
+epoch1d/tests/inductive_heating
+```
+
+## INSTALLATION AND EXECUTION OF EPOCH-LTP
+```
+make COMPILER=gfortran
+```
+
+Launching EPOCH-LTP from *path/to/epoch1d/*
+```
+mpirun -n <number of processors> ./bin/epoch1d <<< path/to/inputdeck/folder
+```
+
 # *** PLEASE READ THIS NOTE ***
 
 If you are obtaining this code from the github server *DO NOT* use the
@@ -180,13 +228,3 @@ After issuing this last command, there is a fair chance that you will encounter
 conflicts. You must now resolve those conflicts and commit the changes.
 After successfully merging in the changes, you can now delete the temporary
 copy of your work branch with `git branch -D workold`.
-
-## TEST PROBLEMS
-Different test problems are available. These are found in
-```
-epoch1d/tests/
-```
-#### Helium capacitively coupled plasmas
-These problems are defined by [Turner et al](https://doi.org/10.1063/1.4775084).
-Two options are available: with the neutral species as a background gas (*background_field* folder), as in
-Turner et al; or with the neutral species as super-particles (background_particles)
