@@ -56,7 +56,7 @@ Sample input decks for Argon inductively coupled plasma (ICP) test cases are fou
 Output (.SDF format) files can be read using the Matlab scripts located at
 ```./SDF/Matlab/```. The function 
 ```Matlab
-GetDataSDF("path/to/sdf-file")
+GetDataSDF("path/to/file.sdf")
 ```
 returns a ```struct``` class which includes the simulation data. For instance, the ion density would be read as follows
 ```Matlab
