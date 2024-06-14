@@ -27,7 +27,7 @@ available and could theoretically be combined.
 reading these are found in the *./SDF* folder. This folder contains scripts for Matlab and VisIt, among others.
 
 
-## INSTALLATION AND EXECUTION OF EPOCH-LTP
+## Installation and execution of EPOCH-LTP
 The code compilation is executed by the following command
 ```
 make COMPILER=gfortran
@@ -52,6 +52,17 @@ plasmas (CCPs) can be found in
 
 Sample input decks for Argon inductively coupled plasma (ICP) test cases are found in *./epoch1d/tests/inductive_heating/*
 
+## Reading output (.SDF) files
+Output (.SDF format) files can be read using the Matlab scripts located at
+```./SDF/Matlab/```. The function 
+```Matlab
+GetDataSDF("path/to/sdf-file")
+```
+returns a ```struct``` class which includes the simulation data. For instance, the ion density would be read as follows
+```Matlab
+q = GetDataSDF("path/to/file//simulation_data.sdf");
+ni = q.Derived.Number_Density_averaged.ions.data;
+```
 
 # *** PLEASE READ THIS NOTE ***
 
