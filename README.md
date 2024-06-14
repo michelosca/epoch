@@ -5,46 +5,53 @@ This code is a spin-off of [EPOCH](https://epochpic.github.io/). In general, the
 coding style and coding structures are in line with EPOCH's guidelines. Therefore
 most what is described in [EPOCH's user manual](https://epochpic.github.io/documentation.html)
 applies to EPOCH-LTP. There is also a [Quicke Start](https://epochpic.github.io/quickstart.html)
-guide which is includes instructions on the installation and execution of the program.
+guide which is includes instructions on the installation and execution of the
+program.
 
-Currently only a 1-dimensional version of EPOCH-LTP is available. The main file is in 
-```
-epoch1d/src/epoch1d.F90
-```
-The main subroutines of the electrostatic field solver are in
-```
-epoch1d/src/physics_packages/electrostatic.F90
-```
-and those for the Monte Carlo collision method in
-```
-epoch1d/src/physics_packages/neutral_collisions
-```
-The particle phase-integrator is found in
-```
-epoch1d/src/particles.F90
-```
+Currently only a 1-dimensional version of EPOCH-LTP is available. Please note
+that EPOCH-LTP coexists with EPOCH's modules, i.e. the eletromagnetic field solver,
+relativistic particle phase-space integrator, Coulomb collisions, etc. are
+available and could theoretically be combined.
 
-## LOW TEMPERATURE PLASMA TEST PROBLEMS
-Sample input decks for LTP simulation test cases for capacitively coupled plasmas (CCPs) can be found in
-```
-epoch1d/tests/turner_benchmark
-epoch1d/tests/argon_ccp
-epoch1d/tests/argon_ccp_non_sinusoidal
-```
-and for inductively coupled plasmas (ICPs) in
-```
-epoch1d/tests/inductive_heating
-```
+
+## Files and directory structure
+ - The code files are found in *./epoch1d/src/*
+   - The main simulation loop is in *./epoch1d/src/epoch1d.F90*
+   - The particle phase-integrator is found in *./epoch1d/src/particles.F90*
+   - The electrostatic field solver subroutines are in *./epoch1d/src/physics_packages/electrostatic.F90*
+   - The Monte Carlo collision subroutines are in the folder *./epoch1d/src/physics_packages/neutral_collisions*
+   - Subroutines that read the input deck are in *./epoch1d/src/deck/*
+   - Subroutines in charge of generating outputs are in *./epoch1d/src/io/*
+- Simulation test cases are found in *./epoch1d/tests/*
+- The simulation output data files have the *.SDF* extension. Scripts for
+reading these are found in the *./SDF* folder. This folder contains scripts for Matlab and VisIt, among others.
+
 
 ## INSTALLATION AND EXECUTION OF EPOCH-LTP
+The code compilation is executed by the following command
 ```
 make COMPILER=gfortran
 ```
+please see the 'Compiling the code' section below for additional pre-processor flags that switch on/off different physics packages.
+After compilation an executable file called *epoch1d* is generated in *./epoch1d/bin/*
 
-Launching EPOCH-LTP from *path/to/epoch1d/*
+Launching EPOCH-LTP from *./epoch1d/*
 ```
-mpirun -n <number of processors> ./bin/epoch1d <<< path/to/inputdeck/folder
+mpirun -n <number of processors> ./bin/epoch1d <<< /path/to/input/
 ```
+
+
+## Simulation test problems
+Sample input decks for LTP simulation test cases for capacitively coupled
+plasmas (CCPs) can be found in
+ - *./epoch1d/tests/turner_benchmark/* for Helium CCPs
+ - *./epoch1d/tests/argon_ccp/* for Argon CCPs
+ - *./epoch1d/tests/argon_ccp_non_sinusoidal/* for Argon CCPs driven by non-sinusoidal voltage waveform
+   - This test case requires that compilation is executed with the secondary electron emission (SEE) pre-processor flag
+   ```make COMPILER=gfortran -DEFINE="-DSEE"```
+
+Sample input decks for Argon inductively coupled plasma (ICP) test cases are found in *./epoch1d/tests/inductive_heating/*
+
 
 # *** PLEASE READ THIS NOTE ***
 
@@ -130,8 +137,12 @@ single-precision version with global particle IDs you would type:
 ```
 
 In EPOCH-LTP the current "DEFINE" variables available, apart from these in EPOCH, are:
- - **PETSC**: (default) uses the [PETSc](https://petsc.org/release/) libraries for solving Poisson's equation for electrostatic.
- - **TRIDIAG**: uses the tridiagonal method for solving Poisson's equation.
+ - **ELECTROSTATIC**: (by default) enables the electrostatic field solver
+ - **NEUTRAL_COLLISIONS**: (by default) enables charged-neutral and neutral-neutral
+Monte Carlo collisions (does not exclude the existing Coulomb collision method already included in EPOCH)
+ - **PETSC**: (by default) uses the [PETSc](https://petsc.org/release/) libraries for
+solving Poisson's equation for electrostatic.
+ - **TRIDIAG**: alternative to PETSC. Uses the tridiagonal method for solving Poisson's equation.
  - **SEE**: activates secondary electron emission and electron emission caused by ion bombardment.   
  - **PART_PERP_POSITION**: enables super-particle position tracking in the perpendicular position
 
