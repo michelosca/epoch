@@ -207,10 +207,10 @@ To perform an initial checkout of the code using git, you should issue the
 following command:
 
 ```
-  git clone --recursive https://github.com/michelosca/epoch
+  git clone --recursive https://github.com/michelosca/epoch-ltp
 ```
 
-The "--recursive" flag ensures that not only the "epoch"
+The "--recursive" flag ensures that not only the "epoch-ltp"
 repository is checked out, but also the "SDF" submodules.
 
 It is recommended that after checking out a copy of the git repository, users
