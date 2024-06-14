@@ -280,14 +280,15 @@ DEFINES += $(D)NEUTRAL_COLLISIONS
 
 # Choose Poisson's eq. solver method
 ifeq ($(findstring ELECTROSTATIC, $(DEFINES)),ELECTROSTATIC)
+ifneq ($(findstring TRIDIAG, $(DEFINES)),TRIDIAG)
   DEFINES += $(D)PETSC
+endif
+  # Tridiagonal solving method
   #DEFINES += $(D)TRIDIAG
-
   # Secondary electron emission
-  DEFINES += $(D)SEE
-
+  #DEFINES += $(D)SEE
   # Particle perpendicular (y-axis) position
-  DEFINES += $(D)PART_PERP_POSITION
+  #DEFINES += $(D)PART_PERP_POSITION
 endif
 
 # Automatically add -DPARSER_CHECKING for debug builds
